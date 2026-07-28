@@ -426,3 +426,45 @@ for provider 'openai'". Resolution now fills an unnamed provider from the
 environment. The test keys on `provider.name`, not on the `[provider]` table —
 found by running the body, whose `[provider.retry]` block creates that table
 without choosing a vendor and so silently opted itself back out.
+
+---
+
+## 2026-07-28 — A narrowed gate needs an expiry condition
+
+The parity fixtures covered the `[deployment]` block and the site plan. The claim
+they backed was "three implementations produce byte-identical output" — true of
+what was fixtured, false of everything else, and everything else is the part a
+user pastes into their config file.
+
+Widening the golden to the whole generated config exposed two layers of
+divergence, and the way each was handled is the decision worth recording.
+
+**Layer one: the emitters had drifted into different sections.** Rust emitted
+`[edge]` and a hardcoded `[provider]`; the TypeScript port emitted
+`[fleet.lora_serial]`, `[memory]` and a different `[agent]`. Neither was a superset
+of the other. Merged to one canonical output with **the agent's own config schema
+as arbiter** — not a style call, because the root `Config` does not reject unknown
+keys, so a key outside the schema parses cleanly and does nothing. Three had
+accumulated that way, all in the first config a new user reads.
+
+**Layer two: the planners disagreed about what the deployment does.** Given the
+same hardware they assigned different tool sets. That could not be fixed in the
+same change, and the tempting move — widen the fixture to exclude it — is exactly
+what caused the original problem.
+
+So the mask shipped with an **expiry assertion**: a test asserting the divergence
+was *still present*, which fails the moment the mask stops being necessary. It
+fired on the next change. The mask is gone and the comparison is now byte-for-byte
+with nothing excluded.
+
+**A gate narrowed to accommodate a known problem becomes permanent unless
+something fails when the problem goes away.** That is the transferable part.
+
+The alignment itself used the **tool registry** as arbiter, and found invented
+names: the orchestrator was being handed `file_read`, `file_write`, `http_get` and
+`memory_note` (the real tools are `file`, `http`, `memory`), while the TypeScript
+orchestrator lacked the four delegation tools that are the reason an orchestrator
+exists. It also surfaced a real bug the port had already fixed and the core had
+not: `audio_sample` is the *microphone* capability, so testing it for "has a
+speaker" described a listen-only board as playing synthesised speech through a
+speaker it does not have.

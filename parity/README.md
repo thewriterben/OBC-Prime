@@ -39,15 +39,26 @@ parses cleanly and does nothing. Three had accumulated that way (`[memory]
 backend`/`path`, `accessories` on a board entry, `datasheet_dir`, whose only
 consumer had been deleted).
 
-**The hole that remains, named rather than hidden:** the two planners still assign
-different tool sets to the same hardware. Rust gives the vision agent
-`["camera_capture", "sensor_read"]`; the TypeScript port gives it
-`["camera_capture", "vision_analyze"]`. That is a disagreement about what the
-deployment *does*, and it was invisible until this fixture existed. Both suites
-mask the `role` and `tools` lines of `[[orchestrator.agents]]` and say so in the
-test name; the TypeScript side additionally asserts that the divergence is *still
-there*, so the mask fails the moment it becomes unnecessary. Widening that mask is
-not an acceptable way to make a future failure go away.
+**The hole that was here is closed**, and how it closed is the part worth keeping.
+
+The two planners had been assigning different tool sets to the same hardware — a
+disagreement about what the deployment *does*, invisible until this fixture
+existed. Rather than widening the fixture to exclude it, both suites masked the
+`role` and `tools` lines and the TypeScript side carried an **expiry assertion**:
+a test asserting the divergence was *still there*, which would fail the moment the
+mask stopped being necessary. It fired on the next change, and the mask is gone.
+
+That is the pattern to reuse. A gate narrowed to accommodate a known problem
+becomes permanent unless something fails when the problem goes away.
+
+The alignment used the **tool registry** as arbiter, the same way the config schema
+settled the emitter merge, and found names that do not exist: the orchestrator was
+being handed `file_read`, `file_write`, `http_get` and `memory_note` — the real
+tools are `file`, `http` and `memory` — while the TypeScript orchestrator was
+missing the four delegation tools that are the entire reason an orchestrator
+exists. It also surfaced a real bug: `audio_sample` is the *microphone*
+capability, so testing it for "has a speaker" described a listen-only board as
+playing synthesised speech.
 
 The fixtures are **goldens**: inputs paired with byte-exact expected output.
 Not "structurally equivalent", not "semantically the same" — the same bytes.
