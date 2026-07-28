@@ -2,15 +2,22 @@
 
 **An embodied agent system: one brain, a mesh of bodies, and a planner you can trust.**
 
-OBC gives a local language model a body — a mesh of microcontroller nodes,
+OBC gives a language model a body — a mesh of microcontroller nodes,
 cameras, sensors and actuators — plus the reflexes to react without waiting for
 the model, and the judgement to escalate when reflexes aren't enough.
 
-It runs entirely on your own hardware. No cloud, no API keys, no per-token cost.
+**Bring your own model.** Point it at Anthropic, OpenAI, OpenRouter or any
+OpenAI-compatible endpoint with an API key and an ordered fallback chain — or
+run it against a local Ollama and pay nothing per token. The provider is one
+config block; nothing else in the system changes.
 
-> **Status: early.** The core agent runs. This repository is the public home
-> being assembled around it — see [PLAN.md](PLAN.md) for what is landing and in
-> what order. Expect things to move.
+The bodies are yours either way. They run on your hardware, on your network, and
+the reflex layer keeps working when the brain is unreachable.
+
+> **Status: early.** The core agent runs, and is **not yet in this repository** —
+> so there is nothing here to run today. See [PLAN.md](PLAN.md) for what is
+> landing and in what order. Self-hosted first; a hosted option is not
+> foreclosed but is not being built. Expect things to move.
 
 ---
 
