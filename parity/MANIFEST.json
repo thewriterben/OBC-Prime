@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-28T02:01:39+00:00",
+  "generated": "2026-07-28T22:33:58+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -42,6 +42,134 @@
     "wasm/obc-planner/package.json": {
       "sha256": "268801038e637b974e1cb371db9334c4d78ecc4daec3724319ce894fa2d25504",
       "bytes": 421
+    },
+    "firmware/obc-esp32-s3/.cargo/config.toml": {
+      "sha256": "636313d01cfe40b55fde7d2c4c6af9e98b8c35137bd3a54c29bcb4ba389dfe61",
+      "bytes": 883
+    },
+    "firmware/obc-esp32-s3/BRINGUP.md": {
+      "sha256": "49539857f231441378b732b345c62c26aa0fed2b156176ff782c70201bd3774b",
+      "bytes": 11848
+    },
+    "firmware/obc-esp32-s3/CAMERA.md": {
+      "sha256": "2ccab7991183a4b234b65f2f095cb4c4db888f69d4604251b77febaea5a2bb19",
+      "bytes": 2929
+    },
+    "firmware/obc-esp32-s3/Cargo.lock": {
+      "sha256": "5d718ae628c8a152065cbb9c2012ff3397b8325ba2e747b8381d2809699fdd80",
+      "bytes": 42298
+    },
+    "firmware/obc-esp32-s3/Cargo.toml": {
+      "sha256": "3c5594c8dead397abf78df050b3a3e97144bc94bf9a9ce71898f37dc5f9fcc19",
+      "bytes": 3280
+    },
+    "firmware/obc-esp32-s3/build.rs": {
+      "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
+      "bytes": 53
+    },
+    "firmware/obc-esp32-s3/components_esp32s3.lock": {
+      "sha256": "8479771b38ced82368c32fd69a25eb30c08e5ed3fcc65b9a485c74df85df0e59",
+      "bytes": 462
+    },
+    "firmware/obc-esp32-s3/idf_component.yml": {
+      "sha256": "ce6ac5f6b91513d3a8a09a867540a1b08838942246b5f71f01ec603051ad80fb",
+      "bytes": 224
+    },
+    "firmware/obc-esp32-s3/rust-toolchain.toml": {
+      "sha256": "ee2d566a7fb27e1c3e1e0477a6da326a319be384694695b8bff9cf3a41fe6fb1",
+      "bytes": 475
+    },
+    "firmware/obc-esp32-s3/sdkconfig.defaults": {
+      "sha256": "f560270e9c4413b80833cb515197dc8383d9624eea53f9ed35777f72ad37d428",
+      "bytes": 515
+    },
+    "firmware/obc-esp32-s3/src/audio.rs": {
+      "sha256": "7b994b9dd4074ac855a35c8a817e917543c06cd6ed67e264103447b31fab2904",
+      "bytes": 2645
+    },
+    "firmware/obc-esp32-s3/src/camera.rs": {
+      "sha256": "6a7d64a3158146efeaa9182ed89495fcc5017a79ac57cce5391489d6fcf1b318",
+      "bytes": 4495
+    },
+    "firmware/obc-esp32-s3/src/camera_bindings.h": {
+      "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
+      "bytes": 454
+    },
+    "firmware/obc-esp32-s3/src/dht.rs": {
+      "sha256": "affb936c5bcc59ca9c5210707752ef6a93544fbba356a8ba9ca75dc0271fecca",
+      "bytes": 5181
+    },
+    "firmware/obc-esp32-s3/src/main.rs": {
+      "sha256": "8b36f9c5daf79c27c06aad6efc04854cd33f8757b950974907265552ebfce675",
+      "bytes": 58248
+    },
+    "firmware/obc-esp32-s3/src/reflex.rs": {
+      "sha256": "ffa3416a3984493ce58e59313e36d2015cf9ad8df668ccabf5bc52766a412402",
+      "bytes": 10976
+    },
+    "firmware/obc-esp32-s3/src/safety.rs": {
+      "sha256": "2524d9b1237ff83df3d1c15939442f58b5d325c57fd0a68a33426a88b2c43d14",
+      "bytes": 11352
+    },
+    "firmware/obc-esp32-s3/src/safing.rs": {
+      "sha256": "61397954fc1f6837dacf01d101499cb2dc9e427bb03ea43bb56f97054fc15c84",
+      "bytes": 12139
+    },
+    "firmware/obc-esp32-s3/src/sensors.rs": {
+      "sha256": "9b0ac1befb92e227a9f3b884ad1a2ea75dc0f9bac70785f7dd730d2fc3bc1423",
+      "bytes": 15361
+    },
+    "firmware/heltec-lora-linktest/.cargo/config.toml": {
+      "sha256": "e2171eeb9a60fae8800545d26040969ef062447ed9fecf081a5bceca1ea91cad",
+      "bytes": 706
+    },
+    "firmware/heltec-lora-linktest/Cargo.lock": {
+      "sha256": "9ca13d669d6dabfba7a4f62f6857684ec374da3f46b534f1097a504ed200af5f",
+      "bytes": 42281
+    },
+    "firmware/heltec-lora-linktest/Cargo.toml": {
+      "sha256": "4f55022abc6717ba31e0cd804d9d6855ef00859def8f91a77022f6ecde2f6034",
+      "bytes": 671
+    },
+    "firmware/heltec-lora-linktest/build.rs": {
+      "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
+      "bytes": 53
+    },
+    "firmware/heltec-lora-linktest/rust-toolchain.toml": {
+      "sha256": "463b15362f6b6e37f8b8222c65f61239298ee5fbe8436a69c85eae28f8448df5",
+      "bytes": 270
+    },
+    "firmware/heltec-lora-linktest/sdkconfig.defaults": {
+      "sha256": "3c65d5af0736de255ab9082b60a603da1d27d8a242b00027f131d6bac9d56e37",
+      "bytes": 226
+    },
+    "firmware/heltec-lora-linktest/src/main.rs": {
+      "sha256": "73cb87a3e63d59fe32b63d11ae61f30758cf510c805ce7df315cb3e25dff2eeb",
+      "bytes": 12678
+    },
+    "firmware/heltec-lora-linktest/src/spine.rs": {
+      "sha256": "c739892eadce2eab54acd6745c31b9720cb02eb343bd3debd0578684b72dd8ee",
+      "bytes": 12284
+    },
+    "firmware/heltec-lora-linktest/src/sx1262.rs": {
+      "sha256": "231bd684d60a2e22c0cf3b8b9a7f7338d94db1adc8a54b2aac2a547080637d33",
+      "bytes": 14157
+    },
+    "firmware/lora-node/README.md": {
+      "sha256": "b614e7606099cf93b2204af96a58c8b8d1390a8b764db3321799969cf8021b8a",
+      "bytes": 5569
+    },
+    "firmware/lora-node/obc_lora_bridge/obc_lora_bridge.ino": {
+      "sha256": "23c2564f1a3e734bd464c856ce9f44a48f433db0278d11f094b6bd56a57064c4",
+      "bytes": 10462
+    },
+    "firmware/t-deck-terminal/README.md": {
+      "sha256": "a5bcc00fbb8dc9aafd43f2ea49f4a86bb7256406be81d91824cfb6e6a1e716ff",
+      "bytes": 4705
+    },
+    "firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino": {
+      "sha256": "25a7d8751522493e83c8c3150c5be22227d8d2badc7dab9001dd64add3a1ce26",
+      "bytes": 25867
     }
   }
 }

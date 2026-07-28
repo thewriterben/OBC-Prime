@@ -1,0 +1,11 @@
+# ESP-IDF default config.
+#
+# PSRAM is DISABLED by default — it's only needed for the camera, and forcing it
+# on can crash early boot if the mode (octal/quad) doesn't match your module.
+# Re-enable ONLY for the camera build (`--features camera`), matching your module:
+# CONFIG_SPIRAM=y
+# CONFIG_SPIRAM_MODE_OCT=y      # or CONFIG_SPIRAM_MODE_QUAD=y for a quad-SPI module
+# CONFIG_SPIRAM_SPEED_80M=y
+
+# A little more main-task stack for the agent + capture paths (harmless).
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

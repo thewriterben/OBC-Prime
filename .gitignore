@@ -12,6 +12,8 @@ dist/
 
 target/
 *.rs.bk
+# ESP-IDF framework checkout, created by building a firmware crate in place.
+.embuild/
 
 # Local overrides of a reference body: copy config.toml to config.local.toml
 # and edit that, so the committed body stays a clean template.

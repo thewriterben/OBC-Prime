@@ -14,8 +14,9 @@ config block; nothing else in the system changes.
 The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
-> **Status: early.** The core agent runs, and is **not yet in this repository** —
-> so there is nothing here to run today. See [PLAN.md](PLAN.md) for what is
+> **Status: early.** The core agent runs, and is **not yet in this repository**.
+> The firmware is — see [firmware/](firmware/README.md) — so there is something to
+> flash and watch today, but nothing to talk to it with. See [PLAN.md](PLAN.md) for what is
 > landing and in what order. Self-hosted first; a hosted option is not
 > foreclosed but is not being built. Expect things to move.
 
@@ -106,8 +107,12 @@ that can stand on their own — the registry, the parity harness, and a referenc
 body you can read. Commands here that take `--upstream ../core` assume you have
 the agent checked out beside this repo, which for now means you are the author.
 
-`firmware/` is likewise not here yet; node sketches and codegen land once the
-firmware bridge moves over. Better to say so than to ship an empty directory.
+[`firmware/`](firmware/README.md) **is here** — four firmwares with a flashing
+guide. One ESP32-S3 and the Espressif toolchain gets you a node that runs its own
+reflex and safing loops and self-safes with no host connected, which is the part of
+the safety claim you can check yourself. Two LoRa boards get you a link. What you
+cannot do yet is talk to a node from an agent, because the agent is the piece that
+has not moved.
 
 `registry/`, `parity/fixtures/` and `wasm/` are **vendored, not authored here**.
 They are copied from the core agent by `scripts/sync_upstream.py` and verified

@@ -1,0 +1,62 @@
+# This crate is its own workspace root, decoupled from the repo's host CLI
+# workspace, so it resolves the (older) esp-idf crate generation independently on
+# the Espressif Rust toolchain. See the root Cargo.toml `exclude` for why.
+[workspace]
+
+[package]
+name = "obc-esp32-s3"
+version = "0.1.0"
+edition = "2021"
+authors = ["thewriterben"]
+description = "Oh-Ben-Claw firmware for ESP32-S3 — GPIO, camera, microphone, sensors, MQTT, and edge-native LLM agent."
+
+[dependencies]
+# esp-idf-svc 0.52.x (esp-idf-hal 0.46.x, esp-idf-sys 0.37.x) is the generation
+# that fixed the `c_char` (i8/u8) handling for newer Rust toolchains, so it
+# builds on the current Espressif toolchain. Keep svc/hal in sync.
+esp-idf-svc = { version = "0.52", features = ["std", "experimental"] }
+esp-idf-hal = "0.46"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+log = "0.4"
+
+# NOTE: `embuild` is a host build tool (used only in build.rs); it must NOT be a
+# normal dependency, or it — and its host-only deps like `filetime` — get
+# cross-compiled to the chip, which fails (espidf's newlib libc lacks
+# futimes/lutimes/UTIME_OMIT). Keep it in [build-dependencies] only.
+[features]
+# Off by default: the default build needs no PSRAM and no esp32-camera IDF
+# component. Enable with `--features camera` AFTER adding `idf_component.yml` and
+# the PSRAM sdkconfig (see CAMERA.md). The camera SCCB shares pins 4/5 with the
+# default (XIAO) I2C sensor bus, so this feature disables that bus. Not
+# applicable to the Waveshare 2.1 board (no camera connector).
+camera = []
+# Pin map for the Waveshare ESP32-S3-Touch-LCD-2.1 (round 480x480 RGB LCD).
+# That board exposes ONLY GPIO 0/19/20/43/44 (12-pin header) + a hardwired I2C
+# connector on SDA=15/SCL=7; the RGB LCD consumes most other GPIOs, so the
+# default XIAO pin map would drive LCD lines. This feature: safe outputs 43/44
+# (spine UART1 disabled — the XIAO is the mesh-bridged node), DHT22 on GPIO0,
+# I2C sensors on 15/7. Command I/O stays on native USB-Serial-JTAG (19/20).
+board-waveshare-21 = []
+
+[build-dependencies]
+embuild = "0.33"
+
+[[bin]]
+name = "obc-esp32-s3"
+path = "src/main.rs"
+
+# ── Camera component (only meaningful with `--features camera`) ──────────────────
+# esp-idf-sys pulls the esp32-camera managed component and generates Rust bindings
+# from `bindings_header` — `esp_camera.h` is NOT in esp-idf-sys's default bindings,
+# which is why the `camera_*` symbols were missing. This is a BUILD-LEVEL include
+# (not gated by the cargo feature): it pulls the component into every build. Comment
+# this block out — and the PSRAM lines in `sdkconfig.defaults` — for lean non-camera
+# builds. After changing this block, run `cargo clean` so esp-idf-sys regenerates.
+# DISABLED for lean/default builds. Uncomment ALL FOUR lines (and the PSRAM lines in
+# sdkconfig.defaults) only when building the camera with `--features camera`.
+# [[package.metadata.esp-idf-sys.extra_components]]
+# remote_component = { name = "espressif/esp32-camera", version = "2.0.7" }
+# bindings_header = "src/camera_bindings.h"
+# bindings_module = "camera"   # bindings land in their own esp_idf_sys::camera module
