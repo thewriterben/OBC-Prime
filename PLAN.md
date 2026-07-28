@@ -67,10 +67,17 @@ drift gate.
 **A clean public repo with Oh-Ben-Claw as upstream core** — not a rename, not a
 monorepo of all four.
 
-Reasoning: a rename drags 115k lines of changelog and a dozen half-finished
-phases into first contact with the public. A four-way monorepo drags in
-Accelerapp's broken 99%. The clean repo lets you move things over as they
-become defensible, which is also the natural order to write docs in.
+Reasoning: a rename drags a dozen half-finished phases into first contact with
+the public. A four-way monorepo drags in Accelerapp's broken 99%. The clean repo
+lets you move things over as they become defensible, which is also the natural
+order to write docs in.
+
+> **Corrected 2026-07-28.** This paragraph previously said a rename would drag
+> in "115k lines of changelog". `CHANGELOG.md` is **1,548 lines**. The 115k
+> figure appears to have been the source tree (77k LOC today) misremembered as
+> the changelog. The conclusion stands on the half-finished phases; the number
+> did not, and a decision resting on a wrong number is worth re-deriving rather
+> than inheriting.
 
 ```
 obc-prime/
@@ -82,6 +89,61 @@ obc-prime/
   firmware/     # node sketches; Accelerapp's two good modules land here
   docs/
 ```
+
+---
+
+## 3a. Taking core public — what "curated" actually means
+
+Decided 2026-07-28: **the core agent goes public, curated.** Ongoing work stays
+in Oh-Ben-Claw and migrates to Open Body Control as each piece becomes
+defensible — the same forward-migration model `scripts/sync_upstream.py` already
+applies to the vendored artifacts, extended to source.
+
+### Measured, not assumed
+
+77,316 LOC across 42 modules. Modules with **zero references from outside their
+own directory**:
+
+| module | LOC |
+|---|---|
+| a2a | 868 |
+| dashboard | 798 |
+| rag | 367 |
+| satcom | 336 |
+| hooks | 279 |
+| bin | 72 |
+| **total** | **~2,720** |
+
+Plus `memory/personality.rs` — SOUL.md / USER.md, implemented and documented,
+never called (blocker 3 in §6).
+
+So the first cut is **~3.5% of the tree**, not the amputation "clean repo"
+suggests. That is a much easier decision than it looked, and it means the public
+core can be close to the working core rather than a diverged fork.
+
+> **Method note.** A first pass at this flagged *nine* islands including
+> `gateway` — the module that binds the HTTP API. The pattern missed grouped
+> imports (`use oh_ben_claw::{…}`), which is how most modules are pulled in.
+> `gateway`, `runtime` and `tunnel` are live. `scripts/curation_survey.py` in
+> the core repo is the corrected version, and it is a *proxy* for deadness, not
+> a proof: zero external references means "removing it would not break the
+> build", which is where the judgement starts rather than ends.
+
+### What gates the release, in order
+
+1. **Keys out of config.** `ProviderConfig.api_key` accepts an inline string.
+   Env-var and secret-store first; the inline field discouraged or removed. A
+   public config template is the file people paste into issues.
+2. **Cloud-first defaults** that work on a fresh install with one env var, with
+   Ollama documented as the opt-in path rather than the assumed one.
+3. **Cut the six islands + `personality.rs`**, or wire the latter. Shipping
+   documented features that do nothing is worse than not having them.
+4. **A licence**, and a `CONTRIBUTING` that says where work happens.
+5. **No single-user assumptions** in config paths, data locations, or the "one
+   gateway per machine" shape — self-hosted now, hosted not foreclosed.
+
+Explicitly *not* gating: the half-built phases. They can ship as-is provided the
+docs do not claim they work.
 
 ---
 
