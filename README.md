@@ -113,6 +113,13 @@ firmware bridge moves over. Better to say so than to ship an empty directory.
 They are copied from the core agent by `scripts/sync_upstream.py` and verified
 by hash. Editing them by hand is what the drift gate is there to catch.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — in particular, which of the two repos a
+change belongs in. Agent behaviour is developed upstream; the vendored
+artifacts here are copies checked by hash and must not be edited in place.
+
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). The vendored artifacts under `registry/`, `parity/`
+and `wasm/` originate in the core agent repository and carry the same terms.

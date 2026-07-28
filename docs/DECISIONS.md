@@ -232,3 +232,37 @@ into world memory but never to the operator's terminal. That is now logged.
 Warnings went 0 (suppressed) → 32 → **4**, and all four are honest: a field or
 method that is declared and genuinely not used yet. A short list of real
 warnings is worth more than a clean build that means nothing.
+
+---
+
+## 2026-07-28 — Two repos, one statement of which is which
+
+Release gate 4. Both repos were MIT and both had a LICENSE. What neither had
+was a sentence saying which repo a change belongs in — so a stranger looking at
+Oh-Ben-Claw could not tell it was the upstream core of this one, or that
+`registry.json`, the golden fixtures and the planner WASM are emitted there and
+vendored here by hash.
+
+Both now open their CONTRIBUTING with the same routing table, and both READMEs
+link to it. The vendored artifacts get an explicit licence sentence: they
+originate upstream, same author, same terms.
+
+The larger finding was in the four commands the upstream CONTRIBUTING had
+always told contributors to run before opening a PR. Two of them had never
+passed on a clean checkout: `clippy -- -D warnings` (the gate-3 warnings plus
+an unexpected-cfg in the WASM crate) and `cargo fmt --all --check` (736 diff
+hunks across 81 files, because it had never been run). CI ran both, so CI had
+been failing too.
+
+A check that fails on a clean checkout teaches everyone who meets it to ignore
+that check, which then costs nothing to keep failing. That is the same failure
+mode as the crate-wide `allow` removed in gate 3, in a different medium — and
+it is why the fix was to make the commands pass rather than to soften them.
+`-D warnings` stays, and `--all-targets` was *added*, because the survey that
+skipped `tests/` is precisely how a live module nearly got deleted.
+
+Cost, stated: the first `cargo fmt --all` is a 4,796-line mechanical commit
+sitting on top of every `git blame`. Mitigated with `.git-blame-ignore-revs`
+and one line of setup in CONTRIBUTING, not eliminated. Rustfmt defaults were
+kept rather than tuning `max_width` until the diff got small, which would have
+been tailoring the standard to the mess.
