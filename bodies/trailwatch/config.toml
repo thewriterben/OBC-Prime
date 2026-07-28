@@ -1,11 +1,15 @@
 # Trailwatch — reference body
 #
 # A wildlife / perimeter camera deployment that runs with no hardware attached.
-# Point the agent at this file:
-#     OBC_CONFIG=<...>/bodies/trailwatch/config.toml
 #
-# Paths marked EDIT are absolute because the agent resolves them itself rather
-# than relative to the config. Replace <BODY> with this directory.
+# Run this body from its own directory:
+#
+#     cd bodies/trailwatch
+#     OBC_CONFIG=config.toml obc start        # PowerShell: $env:OBC_CONFIG="config.toml"
+#
+# The paths below are relative to the working directory, so there is nothing to
+# edit before first run. Running from here also gives the agent a writable
+# working directory, which it needs on startup.
 
 [agent]
 name = "trailwatch"
@@ -62,14 +66,17 @@ poll_audio = false             # ...and no audio
 poll_analytics = true
 anomaly_z_alert = 2.0
 
+# serve.py is a standalone MCP server over the seeded database: standard
+# library only, no virtualenv, no dependency on the ClawCam project. It is also
+# the readable specification of what a perception source has to implement —
+# seven tools and a three-method JSON-RPC handshake.
+#
+# Swap this for your real gateway when you have one; the agent cannot tell the
+# difference as long as the tool names and payload shapes match.
 [perception.clawcam_poll.server]
 transport = "stdio"
-command = "<BODY>/.venv/Scripts/python.exe"        # EDIT
-args = [
-  "-m", "clawcam_gateway.mcp_server.stdio_server",
-  "--db", "<BODY>/clawcam_gateway.db",             # EDIT
-]
-env = { PYTHONPATH = "<BODY>/gateway" }            # EDIT
+command = "python"                 # "python3" on most Linux distributions
+args = ["serve.py"]
 
 # What counts as worth waking someone for.
 # Change alert_subjects and this becomes a different product entirely.
@@ -85,9 +92,19 @@ horizon_ms = 60000
 # ── Reflexes ─────────────────────────────────────────────────────────────────
 [reflex]
 enabled = true
-safing = true
 interval_ms = 1000
 max_escalations_per_min = 6
+
+# safing appends the standard hardware safety rules, including
+# safe-mesh-node-lost. This body ships with no LoRa mesh, and that rule fires
+# on a loop anyway — then its triage playbook tells the reasoner to call
+# `mesh_status`, which this body doesn't register, so you get a continuous
+# critical alert about nothing followed by "Unknown tool: mesh_status".
+#
+# Turn this on at the same time you uncomment [lora_gateway] below. Verified
+# against an empty world memory: with safing off the only escalations are the
+# two real ones — a verified person on camera, and calibration drift.
+safing = false
 
 # ── Escalation ───────────────────────────────────────────────────────────────
 # The wake budget is not optional. An always-on agent with a noisy sensor and no

@@ -14,34 +14,73 @@ camera detections  ->  world memory  ->  reflex rules  ->  escalation  ->  notif
 
 ## Try it in two minutes
 
-```bash
-# 1. point the agent at this body
-export OBC_CONFIG=$PWD/bodies/trailwatch/config.toml     # PowerShell: $env:OBC_CONFIG=...
+Needs Python 3 (standard library only) and a running model provider. Nothing to
+edit, nothing to install.
 
-# 2. run
+```bash
+cd bodies/trailwatch
+export OBC_CONFIG=config.toml      # PowerShell: $env:OBC_CONFIG="config.toml"
 obc start
 ```
 
-Within seconds of startup you should see, in the log:
+Run it **from this directory** — the paths in `config.toml` are relative to the
+working directory, and the agent also needs somewhere writable to work.
+
+Within a second of startup you should see:
 
 ```
+Loaded config from "config.toml" (explicit)
 ClawCam MCP bridge connected (actuation + poll)
-Phase 18 reflex controller spawned rules=12
-ClawCam detections folded into world memory count=25
-reflex: escalated to System 2 reason="person detected (verified) on a camera"
+ClawCam detections folded into world memory count=50
+reflex: escalate to System 2 reason="person detected (verified) on a camera"
+System 2: waking the slow reasoner
+Gateway listening url=http://127.0.0.1:8090
 ```
 
-That last line is the point. A camera saw a person, a reflex rule fired without
-waking the language model, and only then did it escalate to the model with a
-triage playbook. That's the System 1 / System 2 split working.
+Those middle lines are the point. A camera saw a person, a reflex fired without
+waking the language model, and only then did it escalate — with a triage
+playbook attached. That's the System 1 / System 2 split, running on your
+machine, with nothing plugged in.
+
+Exactly two escalations should appear: the verified person, and a
+calibration-drift warning (the seeded model is deliberately miscalibrated —
+83.9% precision against a 90% target, with 0.79 suggested as a better accept
+threshold). If you see a stream of "mesh node is presumed lost", `safing` has
+been switched on without a mesh attached — see the note in `config.toml`.
 
 ## What's in the body
 
 | File | Purpose |
 |---|---|
 | `config.toml` | The whole deployment: brain, perception, reflexes, escalation, gateway |
-| `clawcam_gateway.db` | Seeded detections — 14 days, ~25 detections, one anomaly spike |
+| `serve.py` | Standalone MCP perception server over the seeded database |
+| `clawcam_gateway.db` | Seeded detections — 13 days, 187 classifications, one anomaly day |
 | `README.md` | This file |
+
+### serve.py
+
+The production perception source for this body is a separate camera gateway
+project with its own virtualenv. Depending on it would mean nobody could try
+Trailwatch without installing something else first, so this body ships its own
+server: standard library only, reading the seeded SQLite.
+
+It is also the shortest readable specification of what a perception source has
+to implement — a three-method JSON-RPC handshake over stdio and seven tools.
+Swap it for your real gateway when you have one; the agent cannot tell the
+difference as long as the tool names and payload shapes match.
+
+One detail worth copying if you write your own: `tools/call` returns
+`{"content": [{"type": "text", "text": "<json>"}]}`, and the agent parses *that
+string* as JSON. The payload is not the JSON-RPC result itself. Getting this
+wrong is the quietest way to have a perception source that connects fine and
+returns nothing.
+
+### What's in the seeded data
+
+187 classifications over 13 days from one camera (`node-001`): white-tailed
+deer (93), red fox (42), coyote (37), person (15). 94 verified by human review,
+18 rejected, 75 unreviewed — which is what makes the calibration report
+meaningful, since only reviewed rows have ground truth.
 
 ## The parts worth stealing
 
