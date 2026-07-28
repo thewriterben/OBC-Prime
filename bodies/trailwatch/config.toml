@@ -95,16 +95,10 @@ enabled = true
 interval_ms = 1000
 max_escalations_per_min = 6
 
-# safing appends the standard hardware safety rules, including
-# safe-mesh-node-lost. This body ships with no LoRa mesh, and that rule fires
-# on a loop anyway — then its triage playbook tells the reasoner to call
-# `mesh_status`, which this body doesn't register, so you get a continuous
-# critical alert about nothing followed by "Unknown tool: mesh_status".
-#
-# Turn this on at the same time you uncomment [lora_gateway] below. Verified
-# against an empty world memory: with safing off the only escalations are the
-# two real ones — a verified person on camera, and calibration drift.
-safing = false
+# Standard hardware safety rules. safe-mesh-node-lost among them watches
+# `mesh.escalated_count >= 1`, and a missing entity does not satisfy that — so
+# on a fresh install, with no mesh configured, it correctly stays quiet.
+safing = true
 
 # ── Escalation ───────────────────────────────────────────────────────────────
 # The wake budget is not optional. An always-on agent with a noisy sensor and no
