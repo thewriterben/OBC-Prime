@@ -44,7 +44,7 @@ whether a physical action is *allowed*. The gate contains no model, no
 heuristics and no natural language — only a table:
 
 ```toml
-[[safety.limit]]
+[[safety.limits]]
 node_id        = "obc-esp32-s3-001"
 tool           = "gpio_write"
 allowed_pins   = [12, 13]     # default-deny: a list present means only these
@@ -52,6 +52,18 @@ value_min      = 0
 value_max      = 1
 min_interval_ms = 500         # per (node, tool, pin)
 ```
+
+**`[safety]` rejects unknown keys, and that is deliberate.** Every other config
+section tolerates stray keys. This one must not: a typo here does not degrade a
+feature, it silently removes an enforcement control while startup still logs the
+gate as active.
+
+That is not hypothetical. Documentation across the core repo wrote this table as
+`[[safety.limit]]` — singular — while the field is `limits`. Serde ignored the
+unknown key, the agent logged `Track 0 safety gate active limits=0`, and the
+gate enforced nothing. Anyone who configured a limit table from the
+documentation got a gate that reported itself armed and was not. The section now
+fails to parse instead, with a line and column.
 
 Three checks, in order: pin allow-list, value range, rate limit. A violation
 returns a typed `SafetyViolation` (`PinNotAllowed`, `ValueOutOfRange`,
@@ -217,7 +229,7 @@ audit_key      = "..."                  # falls back to the pairing secret, then
 dynamic_trust  = true
 taint_mode     = "warn"                 # start here; move to "enforce" once tuned
 
-[[safety.limit]]
+[[safety.limits]]
 node_id         = "obc-esp32-s3-001"
 tool            = "gpio_write"
 allowed_pins    = [12, 13]
@@ -226,12 +238,53 @@ value_max       = 1
 min_interval_ms = 500
 ```
 
-Verify the chain:
+Confirm it took. The limit count is in the startup log and is the only way to
+know the table parsed:
 
-```bash
-obc audit verify --log action_audit.jsonl          # HMAC chain
-obc audit verify-signatures --public <hex>          # Ed25519, if signing enabled
 ```
+Track 0 safety gate active limits=1        # not 0
+Track 0 action audit log active path=action_audit.jsonl
+Track 0 dynamic trust scoring enabled
+Track 0 taint tracking enabled mode=Warn
+```
+
+### What the gate actually covers
+
+The gate is consulted on **node/peripheral commands** — calls carrying a
+`(node, tool, channel/pin, value)` shape, at `agent/mod.rs` and in the
+peripheral command path. `gpio_write` on a physical node is the archetype.
+
+MCP tools without pin/value semantics (`capture_now`, `set_device_state`) are
+**not** covered by the limit table; they are governed by risk class, approval
+scope and the operate tier, and they *are* recorded in the action audit. Do not
+write limits for them expecting enforcement.
+
+### Verifying the log
+
+There is **no CLI yet** — verification is currently a library call
+(`security::audit::verify`, `verify_signatures`). That is a real gap for anyone
+operating this rather than developing it, and it is tracked.
+
+The format is deliberately simple enough to verify independently, which is the
+point of publishing it. A third party needs only the key and ten lines:
+
+```python
+import hashlib, hmac, json
+
+prev, key = "GENESIS", open("audit.key","rb").read()
+for line in open("action_audit.jsonl", encoding="utf-8"):
+    r = json.loads(line)
+    canon = "|".join([str(r["seq"]), str(r["ts_ms"]), r["node_id"], r["tool"],
+                      r["args_sha256"], json.dumps(r["decision"], separators=(",",":")),
+                      prev])
+    assert r["prev_mac"] == prev, f"chain broken at seq {r['seq']}"
+    assert hmac.new(key, canon.encode(), hashlib.sha256).hexdigest() == r["mac"], \
+        f"bad MAC at seq {r['seq']}"
+    prev = r["mac"]
+```
+
+If that script passes, no record has been inserted, deleted, reordered or
+edited since it was written.
 
 **Set `audit_key` explicitly.** The fallback chain ends at a development key,
 which provides tamper-*evidence* against accident but not against an adversary
