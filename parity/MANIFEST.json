@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-28T23:14:36+00:00",
+  "generated": "2026-07-28T23:23:43+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -16,8 +16,8 @@
       "bytes": 785
     },
     "parity/fixtures/deployment/nanopi/expected-config.toml": {
-      "sha256": "2d12f0b749ca0b9fd99924a39a4e0cae7d58788eebf0341ae3cd670907a58af2",
-      "bytes": 3788
+      "sha256": "535ff0f5bb8bed61e107b410c2f4f0d720847f0b17c816b80ca7ba8ccde08821",
+      "bytes": 3672
     },
     "parity/fixtures/siteplan/square/case.json": {
       "sha256": "d9e4cd68d128b55e2a9de22262072e06cd26766b687844e619b313a6e766f639",
