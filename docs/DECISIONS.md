@@ -346,3 +346,41 @@ Three decisions in the fix:
 The console also now says when the gateway URL is plain `http`, because storing
 a secret safely and then putting it on the wire in cleartext is a strange place
 to stop. Not blocked — a trusted LAN is a legitimate deployment — just said.
+
+---
+
+## 2026-07-28 — Firmware is vendored, not moved
+
+The plan said *move* the two Rust firmware crates here. Checking before cutting —
+the habit the `a2a` near-miss bought — showed that moving would have deleted the
+only tests that firmware actually runs.
+
+`heltec-lora-linktest` builds for `xtensa-esp32s3-espidf`, so `cargo test` inside it
+compiles its tests for the microcontroller and cannot execute them. Upstream,
+`tests/firmware_spine_framing.rs` `#[path]`-includes `src/spine.rs` and compiles it
+for the host, which is what puts the frame codec, the relay de-dup ring and the line
+framer under ordinary `cargo test`. That harness exists because of a real incident:
+the bridge transmitted two mid-string fragments after the host wrote two commands
+back to back.
+
+So the firmware joins the registry, the fixtures and the planner WASM as a vendored,
+hash-checked artifact. Cost: contributors edit upstream and re-sync, same as the
+others. Benefit: the flashing guide and the sources it describes cannot drift.
+
+All four firmwares came over, not the two the plan named. Two are Arduino sketches,
+which is the only entry point for the reader who has a board and no Rust toolchain —
+and the first user this project is written for is someone with an ESP32 in a drawer.
+
+### The thing that fell out of it
+
+Vendoring 32 more text files made a latent bug impossible to ignore: **this
+repository has never passed its own drift gate on a fresh Windows clone.** The
+Windows Git installer sets `core.autocrlf=true` and there was no `.gitattributes`,
+so cloning rewrote every text artifact to CRLF and every SHA-256 changed. The gate
+then reported the three planner implementations as disagreeing when nothing had
+diverged at all — on the one claim the README leads with, from the first commit.
+
+Confirmed by cloning to a temporary directory and watching `check` fail on all 42
+artifacts, `registry.json` included, then pass after `* text=auto eol=lf` — the same
+`.gitattributes` the core agent already had, which is exactly why upstream never hit
+this and this repo did.
