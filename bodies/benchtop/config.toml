@@ -41,7 +41,7 @@ max_tool_iterations = 20
 #
 # [provider]
 # name = "anthropic"
-# model = "claude-sonnet-4-5"
+# model = "claude-sonnet-5"
 
 [provider.retry]
 max_retries = 2
