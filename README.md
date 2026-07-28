@@ -83,11 +83,36 @@ seeded database so **it runs before any hardware arrives**.
 | Body | What it is | Hardware needed to try it |
 |---|---|---|
 | [`bodies/trailwatch`](bodies/trailwatch) | Wildlife / perimeter camera. Species detection into world memory, alert reflexes on verified person detections, mesh node health over LoRa. | None — ships with 14 days of seeded data |
-| `bodies/benchtop` *(planned)* | One ESP32-S3 over serial. The five-minute on-ramp. | One dev board |
+| [`bodies/benchtop`](bodies/benchtop) | One ESP32-S3 over serial with a sensor. The smallest deployment that still exercises the whole brain-to-node path. | One dev board + a BME280 |
 
-Start with Trailwatch. It exercises the entire stack — perception → world
-memory → reflex → escalation → notification — in about two minutes, on a
-laptop, with nothing plugged in.
+### Start here
+
+Three steps, each one adding exactly one thing. Stop at any of them.
+
+**1. A brain.** One environment variable, no config file:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY, OPENROUTER_API_KEY
+```
+
+No key at all is also fine — the agent falls back to a local Ollama, which needs
+none. You do not write a config to get started; you write one to pin a choice
+you have already made.
+
+**2. Trailwatch — nothing plugged in.** The whole stack, on a laptop, in about
+two minutes: perception → world memory → reflex → escalation → notification. It
+ships 14 days of real recorded detections, so a camera sees a person, a reflex
+fires *without waking the model*, and only then does it escalate. That System 1 /
+System 2 split is the thing worth seeing before you buy hardware.
+
+**3. Benchtop — one board.** Flash `obc-esp32-s3` (see
+[firmware/](firmware/README.md)), wire a BME280, breathe on it. The reflex fires
+on a real reading you caused. Read Benchtop's verification table first: it says
+which parts have been run and which have not.
+
+> Steps 2 and 3 need the core agent, which is **not in this repository yet** —
+> see [Getting the agent](#getting-the-agent). Step 1 and the firmware are
+> available today.
 
 ## Repository layout
 
