@@ -5,6 +5,40 @@ New entries go at the top.
 
 ---
 
+## 2026-07-28 — Unknown support and no support are different states
+
+`world_facts.derived_from` records the facts a derived belief was computed from
+— Doyle's JTMS in-list. It has three states, and the first two are deliberately
+not merged:
+
+- `NULL` — unknown support. Every row written before the column existed, and
+  every caller that has not been taught to declare its inputs.
+- `[]` — explicitly self-standing. A premise.
+- `[ids…]` — rests on these.
+
+The reason the distinction is load-bearing: `observe()` already defaults to
+`Origin::Derived` as its fail-closed default, so most rows are typed `Derived`
+without anyone having thought about where they came from. If an invalidation
+sweep read `NULL` as "nothing supports this", its first run would retract the
+entire store.
+
+The column is **not backfilled**. `origin` was, partially, from source labels —
+support cannot be, because a wrong in-list is worse than an absent one: the
+absent one is inert, the wrong one gets walked. `dependents()` therefore cannot
+see unknown-support rows at all, so sweeps under-retract rather than
+over-retract. A corrupted in-list parses back to `NULL`, never to `[]`, since
+`[]` is the stronger claim.
+
+`dependents()` is deliberately not transitive. A belief with several supports
+may survive one of them dying (`a+b`) or may not (`a·b`); making the query
+transitive would decide that for every caller.
+
+Cost: the graph is only as good as its coverage, which starts near zero and
+grows one write site at a time. `support_coverage()` reports the gap so it
+cannot be quietly ignored.
+
+---
+
 ## 2026-07-28 — The name is Open Body Control
 
 Keeps the `OBC` acronym, which is already the binary name, the config directory
