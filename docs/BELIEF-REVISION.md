@@ -146,7 +146,8 @@ absence of a recorded in-list is absence of evidence.
 
 This is the **STALE Type II** shape: a belief invalidated by something *underneath*
 it moving rather than by contradiction. The honest claim is that OBC can now
-**answer** that question, not that it eagerly acts on it.
+**answer** that question, not that it eagerly acts on it — and not that it has
+been scored on that benchmark. See §10.
 
 ---
 
@@ -291,15 +292,27 @@ six facts; the real sweep took three.
 
 ## 10. Honest limits
 
-- **`a·b` only.** Alternative justifications need several in-lists per fact.
-- **Coverage is three producers**, out of roughly fifty write sites.
-- **No STALE evaluation yet.** `support_status()` answers the Type II question;
-  nothing has scored it against the published set, and no number should be claimed
-  until something has.
+- ~~**`a·b` only.**~~ Alternative justifications shipped: a fact may carry several
+  in-lists and survives while any one of them stands. The cascade re-checks
+  support at every step rather than assuming arrival implies withdrawal.
+- **Coverage is five producers**, out of roughly fifty raw write sites — though
+  most of those are *boundary* writes that correctly have no in-list, so the real
+  denominator is considerably smaller than fifty.
+- **No STALE evaluation, and there will not be one.** The benchmark's input is
+  150K tokens of dialogue judged by an LLM; OBC's support graph is written by
+  instrumented producers rather than inferred from text. Scoring OBC on it would
+  first require a dialogue→typed-facts-with-in-lists pipeline, at which point the
+  number would measure that pipeline's inference, not this machinery. The two
+  diagnose the same defect from opposite ends: STALE asks whether a model can
+  *infer* that a belief was undercut; this asks what to do once a producer has
+  *declared* what a belief rests on. Neither number transfers.
+  Related correction: the widely-quoted **55.2%** is best-model **overall**
+  accuracy across three probing dimensions, not a Type II figure.
 - **Retention cannot reach an unnamed namespace.** A policy is a claim about a
   prefix, and beliefs outside every prefix age forever.
-- **The reflex change is one hour old at time of writing.** The claim that hourly
-  re-firing stops is structural, not yet observed over a full cycle.
+- **The reflex change held over two full debounce windows** — two boot
+  escalations, then two hourly cycles with none. Structural reasoning confirmed
+  by observation, which is the order it should happen in.
 
 ---
 
