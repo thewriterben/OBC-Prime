@@ -37,7 +37,7 @@ name. Those are already in muscle memory and in every doc.
 
 | Repo | State | Value to a public project |
 |---|---|---|
-| **Oh-Ben-Claw** | Working. Runs on local Ollama, 24 tools, gateway, reflex/System-2 layer, ClawCam perception. Also carries a 115k-line CHANGELOG, half-built subsystems and dead code. | The core. But not shippable as-is. |
+| **Oh-Ben-Claw** | Working. Cloud provider by default with a local Ollama fallback, 24 tools, gateway, reflex/System-2 layer, ClawCam perception, temporal world model with belief revision. Curated 2026-07-28: five unreachable modules and the personality store removed. | The core. Approaching shippable. |
 | **OBC-deployment-generator** | Genuinely working. 124 passing tests. Expo app, 69-board registry, generates config TOML + site plans + compilable ESP32 projects. | **The onboarding story.** This is how a stranger gets from zero to a running deployment. |
 | **Accelerapp** | 99% AI-generated IoT monolith; the headline CLI is broken. 1% is a real, recent, well-tested OBC bridge. | Take `hardware/registry.py` + `firmware/obc_templates.py`. Leave the rest. |
 | **ClawCam** | Working perception source over MCP, with a seeded demo DB. | **The proof.** See §4. |
@@ -73,9 +73,9 @@ lets you move things over as they become defensible, which is also the natural
 order to write docs in.
 
 > **Corrected 2026-07-28.** This paragraph previously said a rename would drag
-> in "115k lines of changelog". `CHANGELOG.md` is **1,548 lines**. The 115k
-> figure appears to have been the source tree (77k LOC today) misremembered as
-> the changelog. The conclusion stands on the half-finished phases; the number
+> in "115k lines of changelog". `CHANGELOG.md` was **1,548 lines** when checked
+> and grows with every commit. The 115k figure appears to have been the source
+> tree (77k LOC then) misremembered as the changelog. The conclusion stands on the half-finished phases; the number
 > did not, and a decision resting on a wrong number is worth re-deriving rather
 > than inheriting.
 

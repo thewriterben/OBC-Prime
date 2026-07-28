@@ -145,7 +145,7 @@ exactly the chatbot association the project is trying to avoid).
 Rather than renaming the existing private repo, or building a monorepo of all
 four projects.
 
-The private repo carries a 115,000-line changelog and a number of subsystems
+The private repo carries a long changelog and a number of subsystems
 that are declared, documented, and not wired up. A rename would make all of
 that the public first impression. A four-way monorepo would additionally drag
 in a codebase whose own headline CLI is broken.
@@ -195,3 +195,40 @@ It also makes the bodies genuinely reusable: Trailwatch becomes a security
 perimeter or a livestock monitor by changing `alert_subjects`, with no code
 change. The reflex rules and escalation playbooks are the transferable part,
 and they are only legible when you can watch them run.
+
+---
+
+## 2026-07-28 — Delete the subsystems that were never wired, and stop hiding them
+
+Release gate 3. `src/lib.rs` opened with
+`#![allow(dead_code, unused_imports, unused_variables)]`. That one line is why
+the curation problem existed at all: the islands were not a historical accident,
+they were invisible **by configuration**. Nothing ever warned.
+
+Removed: `dashboard`, `rag`, `satcom`, `hooks`, and `memory/personality.rs`,
+plus the `[personality]` config section that outlived the store it configured —
+2,036 lines that parsed, documented themselves, and did nothing. A config key
+that loads cleanly and has no effect is worse than a missing feature, because
+the config file is the surface a user actually reads. (Safe on upgrade: the root
+`Config` does not `deny_unknown_fields`, so a leftover `[personality]` block is
+ignored rather than becoming a parse error.)
+
+**Kept, against the survey's advice: `a2a`.** The first pass cut it too. Then
+`tests/evals.rs` — the release-gate eval file — failed to compile with thirteen
+unresolved references. The survey only scanned `src/`. Integration tests are a
+whole category of consumer it never looked at, which is a good argument for not
+trusting a reference count you did not write the scanner for. `scripts/curation_survey.py`
+now scans `tests/`, `examples/` and `benches/` too.
+
+The blanket allow is gone and must not return. Suppression is now narrow, at the
+item or file, with a stated reason: the chat-platform modules carry a scoped
+`#![allow(dead_code)]` because their structs mirror a vendor's webhook payload
+and deleting unread fields would make them a worse description of the wire.
+
+What the lint found once it could speak: a mission could trip a guard, halt
+navigation and end without a single log line saying why. The reason was going
+into world memory but never to the operator's terminal. That is now logged.
+
+Warnings went 0 (suppressed) → 32 → **4**, and all four are honest: a field or
+method that is declared and genuinely not used yet. A short list of real
+warnings is worth more than a clean build that means nothing.
