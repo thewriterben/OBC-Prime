@@ -1,0 +1,38 @@
+# Line endings are load-bearing here, not cosmetic.
+#
+# The vendored artifacts under registry/, parity/, wasm/ and firmware/ are
+# verified by SHA-256 against the core agent repository. Git's autocrlf is on by
+# default in the Windows installer, so without this file a fresh Windows clone
+# rewrites every text artifact to CRLF, every hash changes, and the drift gate
+# reports the planner implementations as disagreeing when nothing has diverged
+# at all. That was true of this repository from its first commit: `git clone`
+# followed by `sync_upstream.py check` failed on Windows, on the one claim the
+# README leads with.
+#
+# `text=auto eol=lf` stores text as LF and checks it out as LF everywhere, so
+# the working tree, the repository and the upstream copy always agree. Matches
+# the core agent's own .gitattributes, which is the point.
+
+* text=auto eol=lf
+
+# Windows batch files must stay CRLF to run at all.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never normalise or diff these as text.
+*.wasm binary
+*.db   binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.bin  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
