@@ -313,3 +313,36 @@ manager, neither of which has ever existed, and the install instructions told a
 new user to run `oh-ben-claw setup` first. Corrected against `--help` output.
 Gate 2 removed the need for a wizard anyway — a provider key in the environment
 and no config file is a working first run.
+
+---
+
+## 2026-07-28 — The operate token belongs in the keychain, and arming is an act
+
+The deployment generator's fleet console held the gateway's **operate token** in
+`AsyncStorage` — a plaintext file in the app sandbox. That token is not a login:
+presenting it on a mutating request lets the holder drive physical hardware
+through a running gateway.
+
+What made it clearly a bug rather than a judgement call was the asymmetry inside
+the same app. `lib/_core/auth.ts` already used `SecureStore` for the session
+token. The token that actuates a robot did not.
+
+Three decisions in the fix:
+
+- **The migration deletes the plaintext copy.** Moving the token into the
+  keychain and leaving the old file behind fixes nothing and fails silently:
+  everything keeps working, and the file everyone was worried about is still
+  there. The test for this was watched failing against a version with the delete
+  removed — a gate never observed failing is not known to work.
+- **Web keeps it in memory only.** `SecureStore` has no web implementation and
+  `localStorage` is no better than what is being replaced. So on web it survives
+  only as long as the tab, and the UI says so rather than implying a protection
+  that is not there.
+- **Arming is no longer automatic.** The saved token is offered back into the
+  input so nobody retypes a secret, but the console does not come up ARMED
+  because it was ARMED yesterday. Elevation to physical control should be
+  something you did, not a state you woke up in.
+
+The console also now says when the gateway URL is plain `http`, because storing
+a secret safely and then putting it on the wire in cleartext is a strange place
+to stop. Not blocked — a trusted LAN is a legitimate deployment — just said.
