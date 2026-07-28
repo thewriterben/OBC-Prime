@@ -1,0 +1,47 @@
+{
+  "generated": "2026-07-28T02:01:39+00:00",
+  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
+  "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
+  "artifacts": {
+    "registry/registry.json": {
+      "sha256": "b4a19524e5b4169ee4536f5838fefbb3a8377fc834ebafb29b287870a8dcbead",
+      "bytes": 41671
+    },
+    "parity/fixtures/deployment/nanopi/inventory.json": {
+      "sha256": "ec15e1a073fe07f4895117241a6f9867f42bc0f2bbfc64956ca2017f07bef5c7",
+      "bytes": 1260
+    },
+    "parity/fixtures/deployment/nanopi/expected-deployment.toml": {
+      "sha256": "5a82afd005ee9f47e9d02036c10207790240669ea9b67b2e8e8f6409badec1e1",
+      "bytes": 785
+    },
+    "parity/fixtures/siteplan/square/case.json": {
+      "sha256": "d9e4cd68d128b55e2a9de22262072e06cd26766b687844e619b313a6e766f639",
+      "bytes": 856
+    },
+    "parity/fixtures/siteplan/square/expected-site.toml": {
+      "sha256": "f98930067f4ee0116a29b62e71962547fc7208462e0f618efecf312801389e29",
+      "bytes": 556
+    },
+    "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
+      "sha256": "914e5000e7cb2a93695398383cc36a59664efff0ccf7ecb302d56fe746fc0230",
+      "bytes": 223822
+    },
+    "wasm/obc-planner/obc_planner_wasm.js": {
+      "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
+      "bytes": 8089
+    },
+    "wasm/obc-planner/obc_planner_wasm.d.ts": {
+      "sha256": "4ec7211a95dfef385c19737e998ba2a8142e1b059066b7dc47d7dfdae5fb4673",
+      "bytes": 323
+    },
+    "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts": {
+      "sha256": "4bfc3876562725360995bd771b659606ecbfee5204b2dcf686f7da9043ec1f30",
+      "bytes": 697
+    },
+    "wasm/obc-planner/package.json": {
+      "sha256": "268801038e637b974e1cb371db9334c4d78ecc4daec3724319ce894fa2d25504",
+      "bytes": 421
+    }
+  }
+}

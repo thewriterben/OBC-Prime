@@ -1,0 +1,13 @@
+{
+  "name": "obc-planner-wasm",
+  "description": "Oh-Ben-Claw deployment planner compiled to WebAssembly (Ecosystem Integration I5) — the same Rust registry/planner/siteplan sources, callable from JS",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "obc_planner_wasm_bg.wasm",
+    "obc_planner_wasm.js",
+    "obc_planner_wasm.d.ts"
+  ],
+  "main": "obc_planner_wasm.js",
+  "types": "obc_planner_wasm.d.ts"
+}

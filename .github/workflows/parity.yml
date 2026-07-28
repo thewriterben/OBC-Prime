@@ -1,0 +1,44 @@
+name: parity
+
+# The three planner implementations (Rust, WASM, TypeScript) must produce
+# byte-identical output. This gate fails the build the moment a vendored
+# artifact stops matching its recorded hash.
+#
+# Without --upstream this only proves nobody hand-edited a vendored file. To
+# also prove the vendored copies still match the core agent, check out the core
+# repo in CI and pass --upstream (see the commented job below).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  manifest:
+    name: vendored artifacts match manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: check
+        run: python scripts/sync_upstream.py check
+
+  # Enable once the core agent repo is reachable from CI.
+  #
+  # upstream:
+  #   name: vendored artifacts match the core agent
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         repository: OWNER/CORE_REPO
+  #         path: core
+  #         token: SECRET_CORE_REPO_TOKEN
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.12'
+  #     - run: python scripts/sync_upstream.py check --upstream core

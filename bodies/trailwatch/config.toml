@@ -1,0 +1,149 @@
+# Trailwatch — reference body
+#
+# A wildlife / perimeter camera deployment that runs with no hardware attached.
+# Point the agent at this file:
+#     OBC_CONFIG=<...>/bodies/trailwatch/config.toml
+#
+# Paths marked EDIT are absolute because the agent resolves them itself rather
+# than relative to the config. Replace <BODY> with this directory.
+
+[agent]
+name = "trailwatch"
+system_prompt = """
+You are the brain of a Trailwatch deployment: a camera and sensor mesh watching
+a site. You have perception (camera detections in world memory), reflexes that
+fire without you, and tools to inspect and command nodes.
+
+When woken by an escalation, work the triage steps in the escalation text in
+order, using read-only tools first. Report what you actually observed. If a
+tool call fails, say so — never describe state you could not read.
+
+Be brief. Confirm before any command that moves hardware or changes thresholds.
+"""
+max_tool_iterations = 10
+
+# ── Brain ────────────────────────────────────────────────────────────────────
+# Any provider works. Local Ollama shown; the adapter sends no temperature or
+# num_ctx, so the server's own context setting applies.
+[provider]
+name = "ollama"
+model = "qwen3-coder:30b"
+
+[[provider.fallbacks]]
+name = "ollama"
+model = "gemma4:12b-it-qat"
+
+[provider.retry]
+max_retries = 2
+initial_backoff_ms = 500
+max_backoff_ms = 5000
+backoff_multiplier = 2.0
+
+# ── Spine ────────────────────────────────────────────────────────────────────
+# "p2p" needs no broker. Switch to "mqtt" when nodes span hosts.
+[spine]
+kind = "p2p"
+tool_timeout_secs = 30
+
+# ── Senses ───────────────────────────────────────────────────────────────────
+[perception]
+world_memory = true
+
+# The detection source, over MCP. Any server that lists observations can be
+# swapped in here. interval_ms is 60s because the seeded DB is static — a fast
+# poll re-folds the same rows forever. Tune to your capture rate when live.
+[perception.clawcam_poll]
+enabled = true
+tool = "list_species_detections"
+args = { min_confidence = 0.6 }
+interval_ms = 60000
+poll_health = false            # seeded data has no health records
+poll_audio = false             # ...and no audio
+poll_analytics = true
+anomaly_z_alert = 2.0
+
+[perception.clawcam_poll.server]
+transport = "stdio"
+command = "<BODY>/.venv/Scripts/python.exe"        # EDIT
+args = [
+  "-m", "clawcam_gateway.mcp_server.stdio_server",
+  "--db", "<BODY>/clawcam_gateway.db",             # EDIT
+]
+env = { PYTHONPATH = "<BODY>/gateway" }            # EDIT
+
+# What counts as worth waking someone for.
+# Change alert_subjects and this becomes a different product entirely.
+[perception.vision_rules]
+enabled = true
+alert_subjects = ["person"]
+require_state = "verified"     # "unreviewed" alerts before human review
+debounce_ms = 3600000          # static seed data re-fires forever at 10s
+capture_node = "node-001"
+rate_threshold = 5.0
+horizon_ms = 60000
+
+# ── Reflexes ─────────────────────────────────────────────────────────────────
+[reflex]
+enabled = true
+safing = true
+interval_ms = 1000
+max_escalations_per_min = 6
+
+# ── Escalation ───────────────────────────────────────────────────────────────
+# The wake budget is not optional. An always-on agent with a noisy sensor and no
+# cap will wake the model continuously and pin the GPU.
+[system2]
+enabled = true
+novelty_window_ms = 600000
+max_wakes_per_hour = 6
+
+[notifications]
+enabled = true
+log_to_world_memory = true
+dedup_window_ms = 300000
+digest_interval_ms = 86400000
+speak_escalations = false      # true needs a TTS endpoint configured
+speak_min_severity = "warning"
+# webhook_url = "http://localhost:5678/webhook/obc-alerts"
+
+# ── Mesh (off until hardware exists) ─────────────────────────────────────────
+# With no board attached every node reads as "presumed lost" and escalates on a
+# loop — a critical alert for the fact that nothing is plugged in.
+# [lora_gateway]
+# port = "COM3"                # /dev/ttyUSB0 on Linux
+# baud = 115200
+#
+# [mesh_supervisor]
+# enabled = true
+# stale_ms = 30000
+# tick_ms = 5000
+# recover = "capabilities"
+# escalate_after_ms = 120000
+
+# ── Gateway ──────────────────────────────────────────────────────────────────
+# 127.0.0.1 by default. Set a token before binding 0.0.0.0.
+[gateway]
+enabled = true
+host = "127.0.0.1"
+port = 8090
+serve_pwa = true
+# api_token     = "<openssl rand -hex 32>"
+# operate_token = "<openssl rand -hex 32>"   # required for mutating calls
+
+[autonomy]
+level = "full"                 # irreversible / high-blast still asks per call
+
+[security]
+require_pairing = false
+vault_enabled = false
+
+[[security.policies]]
+name = "audit-shell"
+tool_pattern = "shell"
+action = "audit"
+
+[browser]
+enabled = false
+
+[clawhub]
+enabled = false

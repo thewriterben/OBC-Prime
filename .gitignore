@@ -1,0 +1,25 @@
+# Vendored artifacts ARE committed on purpose — registry/, parity/fixtures/ and
+# wasm/ must be in the tree for the drift gate to have anything to check.
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+node_modules/
+dist/
+.expo/
+
+target/
+*.rs.bk
+
+# Local overrides of a reference body: copy config.toml to config.local.toml
+# and edit that, so the committed body stays a clean template.
+bodies/*/config.local.toml
+bodies/*/*.db-wal
+bodies/*/*.db-shm
+
+.DS_Store
+Thumbs.db
+*.log
+.env
