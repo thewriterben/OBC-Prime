@@ -5,6 +5,87 @@ New entries go at the top.
 
 ---
 
+## 2026-07-28 — Retention is declared; everything else is a consequence of the world
+
+Three mechanisms withdraw a belief because something changed: a newer value
+arrived, its author stopped reporting, or something it rested on went away.
+Retention is the fourth, and the only one that fires because a human wrote a
+rule. That asymmetry drives its whole design.
+
+An agent's own note is unreachable by the other three — nothing rewrites
+`incident.<subject>`, the agent does not stop existing, and an assertion rests on
+nothing recorded. Six such notes were still believed ten days after the
+investigation that produced them concluded. So the mechanism has to exist.
+
+But its blast radius is a string someone typed, so it only ever does what it is
+told: nothing expires by default, an empty prefix is rejected rather than treated
+as "everything", malformed policies are reported at `ERROR` rather than skipped,
+`source.*` can never be expired, and `due()` is a dry run.
+
+Age comes from `ingested_at`, not `valid_from` — the latter is a caller-supplied
+tool parameter, so postdating a claim would otherwise buy it immortality.
+
+On a shared namespace the origin filter is the entire safeguard: `mesh.` holds
+the radio's evidence alongside the agent's notes, and `origins = ["asserted"]` is
+what keeps a retention rule from ageing out the mesh itself.
+
+---
+
+## 2026-07-28 — Debounce is a rate limit, not a novelty test
+
+A reflex asked "has enough time passed since I last fired?". For a condition that
+stays true, the answer is eventually always yes, so a rule watching a standing
+state re-fires forever at the debounce interval. In practice the vision rules
+escalated to a 30B reasoner every hour, indefinitely, on images from 6 July,
+because "a verified person was detected" never stopped being true.
+
+Snapshots now carry the **row id** of each fact, not just its value, and a rule
+may require those ids to differ from the ids at its last fire. Two ticks reading
+the same row are the same observation; two ticks reading different rows with equal
+values are not.
+
+Opt-in, and it must stay that way. A safing rule *should* keep firing while a
+dangerous state holds — "the battery is still critical" is worth repeating, and
+suppressing it because the reading has not changed is exactly backwards. Only the
+vision rules opt in.
+
+A snapshot with no ids never suppresses: value-only snapshots (a node, a
+simulation) cannot speak to evidence identity, and missing identity is not
+evidence of sameness.
+
+Cost: the wire format grows a field, defaulted for compatibility, and rule state
+grows a second map.
+
+---
+
+## 2026-07-28 — Restating a belief is not new evidence
+
+Applied at both write boundaries, for the same reason and with very different
+volumes.
+
+Every write supersedes: it closes the open row and appends a new one with a fresh
+timestamp. So a writer that reads a fact and writes it back makes a stale belief
+look freshly confirmed — and if that writer is the agent, by an agent that learned
+it from that same belief. It also defeats source liveness directly, since an echo
+lands under `agent`, and a silent source the agent keeps restating never looks
+silent.
+
+The agent's `world_memory` tool now refuses a no-op restatement, and says what is
+already there rather than returning an error to work around.
+
+The same rule at the perception boundary is where the volume was: the ClawCam
+poll re-read its source every 60 s and recorded everything it saw, turning 50
+distinct events into 9,600 rows and a deer count of 5,418 from 28 real detections.
+Ingest is idempotent on event id; dedup is per entity, not global, since one event
+yielding two subjects is two beliefs; a detection with no event id is written
+through, because duplicates are recoverable and missing detections are not.
+
+Counters were an accumulator, so the error compounded rather than washing out and
+had to be repaired by a recount from distinct events. Corrected, not deleted — the
+inflated values remain in `history()`.
+
+---
+
 ## 2026-07-28 — Unknown support and no support are different states
 
 `world_facts.derived_from` records the facts a derived belief was computed from
