@@ -60,6 +60,11 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
     ("tests/fixtures/deployment/nanopi/expected-deployment.toml",
      "parity/fixtures/deployment/nanopi/expected-deployment.toml",
      "tests/fixtures/deployment/nanopi/expected-deployment.toml"),
+    # The whole generated config, not just its [deployment] block. Added after the
+    # narrower golden was found to have hidden a real divergence for months.
+    ("tests/fixtures/deployment/nanopi/expected-config.toml",
+     "parity/fixtures/deployment/nanopi/expected-config.toml",
+     "tests/fixtures/deployment/nanopi/expected-config.toml"),
     ("tests/fixtures/siteplan/square/case.json",
      "parity/fixtures/siteplan/square/case.json",
      "tests/fixtures/siteplan/square/case.json"),

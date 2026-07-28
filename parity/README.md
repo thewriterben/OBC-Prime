@@ -20,19 +20,34 @@ fixtures/deployment/nanopi/    an inventory, and the exact TOML it must produce
 fixtures/siteplan/square/      a site case, and the exact site plan it must produce
 ```
 
-### What the fixtures actually cover
+### What the fixtures cover, and the one hole that is left
 
-Read this before repeating the byte-identical claim, because it is narrower than
-it sounds. The goldens cover the **`[deployment]` block** and the **site plan**.
-They do **not** cover the rest of the config preview — `[agent]`, `[provider]`,
-`[spine]`, `[orchestrator]`.
+The goldens cover the **site plan** and the **whole generated config** — not just
+its `[deployment]` block, which is all they covered until 2026-07-28.
 
-That gap has already produced a real divergence: the TypeScript port emitted
-`[agent] model = "grok-4"` and `max_iterations`, neither of which is a key the
-agent reads, while the Rust planner emitted the correct schema and a `[provider]`
-section. Byte-identical where fixtured, silently divergent where not — and the
-divergent half is the part a user pastes into their config file. Fixed
-downstream; widening the fixture so it cannot recur is open work.
+That narrower version had hidden a real divergence for months. The TypeScript port
+emitted `[agent] model = "grok-4"` and `max_iterations` — neither a key the agent
+reads — plus `[memory]` and `[fleet.lora_serial]`; the Rust planner emitted a
+different `[agent]`, a hardcoded `[provider]` and `[edge]`. Byte-identical where
+fixtured, structurally different where not, and the divergent half was the part a
+user pastes into their config file.
+
+Both emitters were merged to one canonical output, with **the agent's own config
+schema as the arbiter for every disagreement** — which is not a style preference:
+the root `Config` does not reject unknown keys, so a key that is not in the schema
+parses cleanly and does nothing. Three had accumulated that way (`[memory]
+backend`/`path`, `accessories` on a board entry, `datasheet_dir`, whose only
+consumer had been deleted).
+
+**The hole that remains, named rather than hidden:** the two planners still assign
+different tool sets to the same hardware. Rust gives the vision agent
+`["camera_capture", "sensor_read"]`; the TypeScript port gives it
+`["camera_capture", "vision_analyze"]`. That is a disagreement about what the
+deployment *does*, and it was invisible until this fixture existed. Both suites
+mask the `role` and `tools` lines of `[[orchestrator.agents]]` and say so in the
+test name; the TypeScript side additionally asserts that the divergence is *still
+there*, so the mask fails the moment it becomes unnecessary. Widening that mask is
+not an acceptable way to make a future failure go away.
 
 The fixtures are **goldens**: inputs paired with byte-exact expected output.
 Not "structurally equivalent", not "semantically the same" — the same bytes.
