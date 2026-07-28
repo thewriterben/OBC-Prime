@@ -266,3 +266,50 @@ sitting on top of every `git blame`. Mitigated with `.git-blame-ignore-revs`
 and one line of setup in CONTRIBUTING, not eliminated. Rustfmt defaults were
 kept rather than tuning `max_width` until the diff got small, which would have
 been tailoring the standard to the mess.
+
+---
+
+## 2026-07-28 — One data root, resolved once, movable by one variable
+
+Release gate 5. The gateway turned out to be fine — host and port are config,
+so "one per machine" was never welded in. The data was the problem, and it was
+worse than a single-user assumption: there were two conventions running at the
+same time.
+
+Half the state used the platform data directory. The other half — approval
+grants, harness records, the skill-evolution log, the install audit, the rollout
+record, the gateway's staging directory — hardcoded `$HOME/.oh-ben-claw` by
+reading `HOME`/`USERPROFILE` directly. The documentation named `~/.oh-ben-claw`
+throughout, describing neither arrangement on Windows.
+
+Consequence: a user's data was split across two directories, the docs named a
+third, and nothing could move any of it. `OBC_CONFIG` relocated the config file;
+there was no equivalent for data. Two agents on one machine shared one database,
+one audit chain and one set of standing permission-to-act grants.
+
+Now: `OBC_DATA_DIR` → `[paths].data_dir` → platform convention, resolved in one
+module, twelve call sites through it. The platform convention rather than a home
+dotdir, because `~/.oh-ben-claw` is a Linux habit that is wrong on the other two
+platforms this project runs on.
+
+The config search gains `config.toml` in the data root, above the platform
+directory, which is what makes a relocated instance self-contained. The
+environment beats the config key deliberately: a config file gets checked in and
+copied between machines, and starting a second instance should not require
+editing one the first instance reads.
+
+**This is not multi-tenancy and is not claimed as such.** It removes the
+single-tenant assumption from a dozen call sites so that a hosted deployment
+needing per-tenant isolation changes a resolver instead of excavating. That was
+the whole ask: don't foreclose it.
+
+Verified by running two instances side by side, not by reading the code — one
+relocated with its own config, database and agent name, the other untouched on
+the platform default. `doctor` now prints the resolved root and which of the
+three sources chose it.
+
+Also found: the upstream README documented a `setup` wizard and a `service`
+manager, neither of which has ever existed, and the install instructions told a
+new user to run `oh-ben-claw setup` first. Corrected against `--help` output.
+Gate 2 removed the need for a wizard anyway — a provider key in the environment
+and no config file is a working first run.
