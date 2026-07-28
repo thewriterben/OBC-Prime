@@ -140,39 +140,69 @@ standalone tool or lift the two good modules into `firmware/` and move on.
 
 ## 6. Blockers to fix before anything is public
 
-Found while getting the system running — all of these are load-bearing:
+Found while getting the system running — all of these are load-bearing.
 
-1. **`Scheduler::new(&config.agent.name)`** in `main.rs` passes a *name* where a
-   *path* is expected, then `.unwrap()`s the fallback. OBC panics on startup
-   whenever the working directory isn't writable — which is every service
-   manager on every OS. This will break the first thing a stranger tries.
-2. **A failed gateway bind is only a WARN.** OBC keeps running headless with no
-   API. Looks healthy, answers nothing. Should be fatal, or at minimum retried.
+**Fixed** (core commit "Fix three startup failures that only bite outside a dev
+shell", verified against a service-manager-style start):
+
+1. ~~**`Scheduler::new(&config.agent.name)`** passed a *name* where a *path* was
+   expected, then `.unwrap()`ed the fallback — so the agent panicked on startup
+   whenever the working directory wasn't writable.~~ Now resolves a path in the
+   data dir and degrades to an in-memory scheduler rather than dying.
+2. ~~**A failed gateway bind was only a WARN**, so the agent ran headless with
+   no API: healthy-looking process, nothing answering.~~ Now an ERROR naming
+   host, port and the likely cause.
+4. ~~**Config path was undocumented and surprising** — a config in the
+   documented `~/.oh-ben-claw/config.toml` was silently ignored and the agent
+   fell back to defaults naming a *cloud* provider.~~ That path is now third in
+   the search order, and the fallback warns and names the provider it chose.
+
+**Still open:**
+
 3. **`SOUL.md` / `USER.md` are dead code.** `memory/personality.rs` implements
    and documents them; nothing calls it. Either wire it into `build_context()`
    or delete it — shipping documented features that do nothing is worse than
    not having them.
-4. **Config path is undocumented and surprising.** The doc comment says
-   `~/.oh-ben-claw/config.toml`; the code resolves `OBC_CONFIG` →
-   `%APPDATA%\thewriterben\...`. A config in the documented location is silently
-   ignored and the agent falls back to `openai/gpt-4o` — i.e. it quietly tries
-   to spend money.
 5. **Tool argument names are inconsistent** — `vision_analyze` takes `source`,
    `audio_transcribe` takes `path`, `file` takes `action`+`path`. Local models
    get this wrong, and then *confabulate rather than report the failure*
-   (observed: an invented description of an image the tool never read).
-   Worth normalising before external users write tools against it.
+   (observed: an invented description of an image the tool never read). Worked
+   around downstream by naming the exact call shape in the prompt; the
+   inconsistency itself is untouched and worth normalising before external
+   users write tools against it.
 
 ---
 
 ## 7. Suggested order
 
-1. Fix blockers 1, 2 and 4 — they're small and they're the difference between
-   "works" and "works for someone else."
-2. Stand up `obc-prime` with `core/`, `registry/`, `parity/` and the sync script.
-   Make the tri-implementation parity claim the README headline.
-3. Package **Trailwatch** as the first Reference Body, seeded DB included.
-4. Wire Trailwatch into the deployment generator as a template; de-Manus the
-   generator (OAuth, package name, license) at the same time.
-5. Lift Accelerapp's two good modules into `firmware/`.
-6. Decide on `SOUL.md`: wire it or cut it.
+1. ~~Fix blockers 1, 2 and 4.~~ **Done** — see §6.
+2. ~~Stand up `obc-prime` with `registry/`, `parity/` and the sync script; make
+   the tri-implementation parity claim the README headline.~~ **Done.** The gate
+   verifies all 10 artifacts byte-identical across manifest, core and generator,
+   and was itself verified by deliberately corrupting a file and watching it
+   fail. `core/` is not vendored — the agent is still private, and the README
+   says so rather than implying otherwise.
+3. ~~Package **Trailwatch** as the first Reference Body, seeded DB included.~~
+   **Done**, and the quickstart is real: it ships `serve.py`, a stdlib MCP
+   server over the seeded database, so it has no dependency on the private
+   camera-gateway project. Verified from a clean working directory with the
+   live data dir moved aside.
+4. ~~Wire Trailwatch into the deployment generator as a template.~~ **Done.**
+   De-Manusing the generator (OAuth, package name, license) is **still open**.
+5. Lift Accelerapp's two good modules into `firmware/`. **Open.**
+6. Decide on `SOUL.md`: wire it or cut it. **Open.**
+
+Also still open, in rough order of how much they'd embarrass a visitor:
+
+- **The generator is still private and still Manus-bound.** Its OAuth is hard-
+  wired to a sandbox portal, `package.json` is named `"app-template"`, and there
+  is no licence. It cannot be published as-is, which means the onboarding story
+  the README leans on isn't reachable yet.
+- **CI only checks the manifest.** The `--upstream` job is written but commented
+  out, because the core repo isn't readable from CI. Drift against the core
+  agent is therefore *not* caught today — only hand-edits are.
+- **`bodies/benchtop` has no runtime half**, only a generator inventory.
+- **The operate token is stored in plaintext AsyncStorage** in the generator's
+  fleet console, though `expo-secure-store` is already a dependency and is
+  already used for the session token. That token authorises remote tool
+  execution.

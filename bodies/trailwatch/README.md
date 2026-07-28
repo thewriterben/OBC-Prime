@@ -45,8 +45,14 @@ machine, with nothing plugged in.
 Exactly two escalations should appear: the verified person, and a
 calibration-drift warning (the seeded model is deliberately miscalibrated —
 83.9% precision against a 90% target, with 0.79 suggested as a better accept
-threshold). If you see a stream of "mesh node is presumed lost", `safing` has
-been switched on without a mesh attached — see the note in `config.toml`.
+threshold).
+
+If you also see a stream of "a mesh node is presumed lost", that is **not** this
+body — it means the agent's world memory already holds a
+`mesh.escalated_count >= 1` from some earlier deployment on the same machine.
+The rule is doing its job; the fact is stale. Clear that entity, or start with a
+fresh data directory. On a clean install this body produces no mesh escalations
+at all, because a missing entity never satisfies the condition.
 
 ## What's in the body
 
@@ -106,9 +112,11 @@ sensor will wake the model continuously and pin your GPU.
   cameras, tune to your capture rate.
 - **`debounce_ms` is doing real work.** At 10s against static data the same
   person detection escalated every eleven seconds. It's 1h here.
-- **`mesh_supervisor` is off by default.** With no LoRa board attached, every
-  node reads as "presumed lost" and escalates on a loop — a critical alert for
-  the fact that nothing is plugged in. Turn it on when you have a mesh.
+- **`mesh_supervisor` is off by default.** It is what *writes*
+  `mesh.escalated_count`, so with no LoRa board attached it would mark every
+  configured node lost and escalate on a loop — a critical alert for the fact
+  that nothing is plugged in. Turn it on when you actually have a mesh. The
+  safing rule that reads that count stays enabled, and is silent until then.
 - **Vision costs a model swap.** Image analysis loads a vision model; on a 12GB
   card that evicts the main model. Expect a pause on the way in and out.
 

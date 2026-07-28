@@ -10,7 +10,11 @@ own.
 | Body | What it is | Hardware to try it |
 |---|---|---|
 | [`trailwatch`](trailwatch) | Wildlife / perimeter camera. Detections into world memory, reflexes on verified person detections, mesh node health over LoRa. | None — ships with 14 days of seeded data |
-| `benchtop` | One ESP32-S3 over serial with a sensor, plus a small Linux host. The five-minute on-ramp. | A host SBC and one dev board |
+| `benchtop` *(planned)* | One ESP32-S3 over serial with a sensor, plus a small Linux host. The five-minute on-ramp. | A host SBC and one dev board |
+
+Benchtop currently exists only as an inventory in the deployment generator —
+it has no runtime half here yet, because it needs real hardware to be worth
+shipping and cannot be verified the way Trailwatch was.
 
 ## Two halves
 

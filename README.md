@@ -70,10 +70,19 @@ registry/    board + accessory registry (69 boards, 34 accessories) — SSOT, em
 parity/      golden fixtures + manifest that hold the three planners to identical output
 wasm/        the planner compiled to WASM, so a browser plans exactly as the device does
 bodies/      ready-to-run reference deployments
-firmware/    node sketches and codegen
 scripts/     sync + drift tooling
 docs/        design decisions and their reasoning
 ```
+
+## Getting the agent
+
+**The core agent is not public yet.** This repository currently holds the parts
+that can stand on their own — the registry, the parity harness, and a reference
+body you can read. Commands here that take `--upstream ../core` assume you have
+the agent checked out beside this repo, which for now means you are the author.
+
+`firmware/` is likewise not here yet; node sketches and codegen land once the
+firmware bridge moves over. Better to say so than to ship an empty directory.
 
 `registry/`, `parity/fixtures/` and `wasm/` are **vendored, not authored here**.
 They are copied from the core agent by `scripts/sync_upstream.py` and verified
