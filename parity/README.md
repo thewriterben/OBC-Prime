@@ -20,6 +20,20 @@ fixtures/deployment/nanopi/    an inventory, and the exact TOML it must produce
 fixtures/siteplan/square/      a site case, and the exact site plan it must produce
 ```
 
+### What the fixtures actually cover
+
+Read this before repeating the byte-identical claim, because it is narrower than
+it sounds. The goldens cover the **`[deployment]` block** and the **site plan**.
+They do **not** cover the rest of the config preview — `[agent]`, `[provider]`,
+`[spine]`, `[orchestrator]`.
+
+That gap has already produced a real divergence: the TypeScript port emitted
+`[agent] model = "grok-4"` and `max_iterations`, neither of which is a key the
+agent reads, while the Rust planner emitted the correct schema and a `[provider]`
+section. Byte-identical where fixtured, silently divergent where not — and the
+divergent half is the part a user pastes into their config file. Fixed
+downstream; widening the fixture so it cannot recur is open work.
+
 The fixtures are **goldens**: inputs paired with byte-exact expected output.
 Not "structurally equivalent", not "semantically the same" — the same bytes.
 TOML has enough freedom in key order, quoting and float formatting that

@@ -1,0 +1,188 @@
+# Benchtop — reference body
+#
+# One ESP32-S3 on a USB cable with an environmental sensor, and a small Linux
+# host to run the brain. The smallest deployment that still exercises the whole
+# brain-to-node path: the agent reads a real sensor, a reflex fires on a real
+# threshold, and a Track 0 limit refuses a real command.
+#
+# Run this body from its own directory:
+#
+#     cd bodies/benchtop
+#     OBC_CONFIG=config.toml obc start        # PowerShell: $env:OBC_CONFIG="config.toml"
+#
+# UNLIKE TRAILWATCH, THIS BODY NEEDS HARDWARE. It has no seeded database,
+# because a benchtop deployment's whole point is the live path — a fabricated
+# sensor history would be teaching you to trust numbers nobody measured.
+# See README.md for exactly what has and has not been verified.
+#
+# The [deployment], [peripherals] and [orchestrator] sections below are the
+# output of the deployment planner for the Benchtop inventory, not hand-written.
+
+[agent]
+name = "benchtop"
+system_prompt = """
+You are the brain of a Benchtop deployment: one microcontroller node on a
+serial cable with an environmental sensor. You have world memory, a reflex
+layer that acts without waking you, and tools to read and command the node.
+
+When woken by an escalation, read before you act, and report what you actually
+observed. If a tool call fails, say so — never describe state you could not
+read. Confirm before any command that changes a pin or a threshold.
+
+Be brief. This is a bench, not a production site: saying "I don't know yet" is
+a useful answer here.
+"""
+max_tool_iterations = 20
+
+# ── Brain ────────────────────────────────────────────────────────────────────
+# No [provider] block on purpose. Export ANTHROPIC_API_KEY, OPENAI_API_KEY or
+# OPENROUTER_API_KEY and the agent uses that provider; with no key anywhere it
+# falls back to a local Ollama. Uncomment to pin one instead.
+#
+# [provider]
+# name = "anthropic"
+# model = "claude-sonnet-4-5"
+
+[provider.retry]
+max_retries = 2
+initial_backoff_ms = 500
+
+# ── Spine ────────────────────────────────────────────────────────────────────
+# "p2p" needs no broker, which is right for one host and one cable. The planner
+# emits "mqtt" for this inventory; that is the multi-host default and it would
+# mean installing a broker to talk to a board on your desk.
+[spine]
+kind = "p2p"
+tool_timeout_secs = 30
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+# Set `path` to the port your board actually enumerates as: /dev/ttyACM0 or
+# /dev/ttyUSB0 on Linux, COM3 or similar on Windows. This is the one line you
+# must edit before first run.
+[peripherals]
+
+[[peripherals.boards]]
+board = "nanopi-neo3"
+transport = "native"
+node_id = "bench-host"
+
+[[peripherals.boards]]
+board = "dfrobot-firebeetle2-esp32s3"
+transport = "serial"
+path = "/dev/ttyACM0"
+node_id = "bench-001"
+accessories = ["bme280"]
+
+# ── Perception ───────────────────────────────────────────────────────────────
+[perception]
+world_memory = true
+
+# What the agent is shown about its own beliefs each turn. Small here: one node
+# does not produce many facts, and the point is that you can read the whole
+# preamble and check it against the board.
+[perception.context]
+enabled = true
+max_facts = 12
+max_withdrawals = 3
+max_chars = 1200
+
+# The agent's own notes expire; sensor readings never do — they are superseded
+# by the next reading instead, which is a different mechanism. Nothing under
+# `source.` ever expires.
+[[perception.expiry]]
+prefix = "note."
+max_age_ms = 604800000         # 7 days from when it was recorded
+origins = ["asserted"]
+
+# ── Reflexes ─────────────────────────────────────────────────────────────────
+# System 1: fast local rules over world state, acting without waking the model.
+[reflex]
+enabled = true
+safing = true
+interval_ms = 1000
+max_escalations_per_min = 6
+
+# A real threshold on a real reading. Breathe on the sensor and this fires —
+# which is the point of a benchtop body: the whole System 1 loop is observable
+# in one action, with nothing simulated.
+#
+# `when` and `then` are internally tagged, so each needs its `type`. Getting
+# that wrong is a parse error rather than a silent no-op, which is the right way
+# round for a rule that decides whether hardware moves.
+[[reflex.rules]]
+id = "humidity-spike"
+debounce_ms = 60000
+# Events, not states: re-firing on the same reading tells you nothing new. See
+# the note on `fire_on_change` in src/agent/reflex.rs for why this is opt-in and
+# must stay so — a safing rule *should* keep repeating while danger holds.
+fire_on_change = true
+when = { type = "sensor", entity = "sensor.humidity", op = "gt", value = 75.0 }
+then = { type = "escalate", reason = "humidity above 75% on bench-001" }
+
+# No `fire_on_change` here on purpose. A node that is still too hot is worth
+# saying again.
+[[reflex.rules]]
+id = "thermal-warning"
+debounce_ms = 300000
+when = { type = "sensor", entity = "sensor.temperature", op = "gt", value = 45.0 }
+then = { type = "escalate", reason = "bench node above 45C — check ventilation before continuing" }
+
+# System 2: escalations wake the model, novelty-gated so a standing condition
+# does not wake it forever. Low caps here because a bench sensor sitting above
+# a threshold will otherwise wake the model until you notice the bill.
+[system2]
+enabled = true
+novelty_window_ms = 600000
+max_wakes_per_hour = 4
+
+# ── Safety (Track 0) ─────────────────────────────────────────────────────────
+# Deterministic limits, enforced in code before any command reaches hardware —
+# not instructions to a model, which can be argued out of. The node enforces its
+# own copy too, so a compromised host cannot exceed these.
+#
+# NOTE the plural. `[[safety.limit]]` parses as an unknown key and silently
+# leaves the gate with zero limits.
+[safety]
+enabled = true
+dynamic_trust = true
+taint_mode = "warn"
+
+[[safety.limits]]
+node_id = "bench-001"
+tool = "gpio_write"
+allowed_pins = [12, 13]
+value_min = 0
+value_max = 1
+min_interval_ms = 500
+
+# ── Gateway ──────────────────────────────────────────────────────────────────
+[gateway]
+enabled = true
+host = "127.0.0.1"
+port = 8090
+
+# ── Deployment ───────────────────────────────────────────────────────────────
+# Emitted by the deployment planner from the Benchtop inventory in the
+# generator's lib/reference-bodies.ts. Do not hand-edit: change the inventory
+# there and re-emit, or the two halves of this body stop describing the same
+# deployment.
+[deployment]
+enabled = true
+scenario = "Benchtop"
+auto_plan = true
+feature_desires = ["environmental_sensing"]
+
+[[deployment.hardware]]
+name = "Bench host"
+board_name = "nanopi-neo3"
+transport = "native"
+node_id = "bench-host"
+role = "host"
+
+[[deployment.hardware]]
+name = "Bench node"
+board_name = "dfrobot-firebeetle2-esp32s3"
+transport = "serial"
+node_id = "bench-001"
+role = "sensing"
+accessories = ["bme280"]

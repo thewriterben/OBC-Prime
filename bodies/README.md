@@ -10,11 +10,15 @@ own.
 | Body | What it is | Hardware to try it |
 |---|---|---|
 | [`trailwatch`](trailwatch) | Wildlife / perimeter camera. Detections into world memory, reflexes on verified person detections, mesh node health over LoRa. | None — ships with 14 days of seeded data |
-| `benchtop` *(planned)* | One ESP32-S3 over serial with a sensor, plus a small Linux host. The five-minute on-ramp. | A host SBC and one dev board |
+| [`benchtop`](benchtop) | One ESP32-S3 over serial with a sensor, plus a small Linux host. The five-minute on-ramp. | A host SBC and one dev board |
 
-Benchtop currently exists only as an inventory in the deployment generator —
-it has no runtime half here yet, because it needs real hardware to be worth
-shipping and cannot be verified the way Trailwatch was.
+**Benchtop needs hardware, and says so.** It ships no seeded database, because a
+fabricated sensor history would be teaching you to trust numbers nobody measured.
+Its README carries a table of what has been verified (the config parses and
+starts, the `[deployment]` block is planner-emitted, the hardware resolves with
+zero gaps) and what has not (the sensor actually firing the reflex, the Track 0
+limit refusing a command on a physical node). A reference body you cannot run is
+still worth shipping if it is honest about which half you are getting.
 
 ## Two halves
 

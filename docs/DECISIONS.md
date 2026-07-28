@@ -384,3 +384,45 @@ Confirmed by cloning to a temporary directory and watching `check` fail on all 4
 artifacts, `registry.json` included, then pass after `* text=auto eol=lf` — the same
 `.gitattributes` the core agent already had, which is exactly why upstream never hit
 this and this repo did.
+
+---
+
+## 2026-07-28 — Benchtop ships without hardware verification, and says which half
+
+Trailwatch runs with nothing plugged in because it carries 14 days of real
+recorded detections. Benchtop cannot: its whole point is the live path, and a
+fabricated sensor history would be teaching a reader to trust numbers nobody
+measured — the failure the bodies README already warns about.
+
+The alternative to shipping it dishonestly was not shipping it, and that was
+worse: the body existed as an inventory in the generator with no runtime half,
+so the two places a Reference Body is supposed to live disagreed.
+
+So it ships with a verification table at the top. Verified: the config parses and
+the agent starts from it (`doctor` reports 0 errors, 2 reflex rules); the
+`[deployment]` block is planner-emitted rather than hand-written; the hardware
+resolves with zero capability gaps. Not verified: a BME280 actually firing the
+reflex, and the Track 0 limit refusing a command on a physical node. **A
+reference body you cannot fully run is worth shipping if it is honest about which
+half you are getting.**
+
+### Two findings from generating it rather than writing it
+
+**The generator's emitted config had two dead keys and no brain.** `[agent] model
+= "grok-4"` — `model` is not an `[agent]` key — and `max_iterations`, which is
+spelled `max_tool_iterations`. Unknown keys are not rejected, so both parsed and
+did nothing, in the first config a stranger ever receives. No `[provider]` block
+at all. The Rust planner emits the correct schema, so this was TypeScript-only
+drift that the parity gate never saw, because the fixtures cover the
+`[deployment]` block and the site plan — **not** the config preview. The
+byte-identical claim is true of what is fixtured and was not true of the section
+a user pastes. `parity/README.md` now says so; widening the fixture is open work.
+
+**An absent `[provider]` is not a stated one.** Gate 2 said an explicit config is
+never second-guessed. Right about the file, wrong about a section it does not
+contain: `serde`'s default supplied `openai/gpt-4o`, so a body that deliberately
+left the brain unspecified greeted an Anthropic-key holder with "No API key found
+for provider 'openai'". Resolution now fills an unnamed provider from the
+environment. The test keys on `provider.name`, not on the `[provider]` table —
+found by running the body, whose `[provider.retry]` block creates that table
+without choosing a vendor and so silently opted itself back out.
