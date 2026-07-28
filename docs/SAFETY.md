@@ -224,7 +224,10 @@ is governed only by approval scopes and autonomy level.
 ```toml
 [safety]
 enabled        = true
-audit_log_path = "action_audit.jsonl"   # defaults to the data dir
+# audit_log_path: leave unset. It defaults to an absolute path in the data dir.
+# A relative value is resolved against the *working directory*, so the log would
+# follow wherever the agent was launched from — a tamper-evident log that can
+# silently fork into several files is not one.
 audit_key      = "..."                  # falls back to the pairing secret, then a dev key
 dynamic_trust  = true
 taint_mode     = "warn"                 # start here; move to "enforce" once tuned
