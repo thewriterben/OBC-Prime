@@ -37,6 +37,24 @@ it.
 
 ---
 
+## Safety
+
+An agent that can move things needs its safety story stated, not implied.
+[docs/SAFETY.md](docs/SAFETY.md) covers the threat model and every control —
+including the two that are unusual:
+
+- **The deterministic limit table is enforced on the microcontroller as well as
+  the host.** A compromised host, a poisoned skill or a hallucinated tool call
+  still cannot drive an actuator outside the bounds the node itself holds. The
+  host is not in the trusted computing base for bounds enforcement.
+- **Every physical action, including every refusal, is recorded in a hash-chained
+  HMAC log** with optional Ed25519 detached signatures for third-party
+  verification.
+
+That document is equally explicit about what is *not* covered — semantic safety,
+an unauthenticated spine, OCR'd text reaching the reasoner, and stale beliefs. If
+you are evaluating this for anything that matters, read §4 first.
+
 ## Anatomy
 
 The vocabulary is load-bearing — it maps directly onto the code.
