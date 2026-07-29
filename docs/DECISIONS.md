@@ -468,3 +468,51 @@ exists. It also surfaced a real bug the port had already fixed and the core had
 not: `audio_sample` is the *microphone* capability, so testing it for "has a
 speaker" described a listen-only board as playing synthesised speech through a
 speaker it does not have.
+
+---
+
+## 2026-07-29 — CI was red, and only on the platform nobody was building on
+
+Three CI jobs were failing. All three were invisible locally, because the author
+develops on Windows and CI runs `ubuntu-latest`. Reproduced by exporting the tree
+into a Linux container and running the CI steps verbatim rather than reading the
+YAML.
+
+**The wasm crate could never have compiled on Linux.** `#[path]` inside an
+*inline* `mod peripherals { … }` block resolves against a directory named after
+the module — which did not exist. Windows normalises the `..` components lexically
+before touching the filesystem, so it resolved anyway. Linux requires every
+component of a path to exist. The first step of build-and-test therefore failed on
+every push.
+
+That is the worst shape a build failure can have: **green for the only person who
+can fix it.** Fixed by making the shim directories real.
+
+**Four security advisories, for a feature that does not exist.** `rustls-webpki
+0.102.8` carries four RUSTSEC advisories in certificate and CRL handling, arriving
+solely through `rumqttc`'s `use-rustls` feature, with no upgrade path — rumqttc
+0.25.1 pins the same version.
+
+It was also unreachable: `src/spine/mod.rs` never calls `set_transport`, so
+MQTT-over-TLS has never worked. The project was shipping a vulnerable
+certificate-validation stack for a capability it does not have. Dropping the
+feature removes the advisories rather than suppressing them.
+
+Which forced the honest half: **`[spine] tls = true` now refuses to start.** Every
+other dead config key in this codebase merely did nothing. This one told an
+operator their broker link was encrypted when it was cleartext — and three tests
+asserted the reassuring warnings it produced, which is how the missing feature
+stayed hidden. A warning would not be enough; someone who set that key made a
+security decision and is entitled to learn it did not take effect.
+
+### The transferable part
+
+A green local build is not evidence about CI when the two run different operating
+systems, and neither is reading the workflow file. The cheap version of this check
+is to run the CI steps on the CI platform once, which took one export and a
+container.
+
+Stated as not-verified: the aarch64 cross-compile job could not be reproduced —
+`static.rust-lang.org` is unreachable from the sandbox, so the target's std would
+not install. It runs on Linux and would have hit the same `#[path]` failure at step
+one, so it is *probably* fixed by the same change. Probably is the honest word.
