@@ -375,6 +375,49 @@ WASM_SOURCES: list[str] = [
 
 WASM_REBUILD_CMD = "wasm-pack build planner-wasm --target nodejs"
 
+# Vendored files that a *fresh checkout* of upstream does not contain, and why.
+#
+# `check --upstream` compares each vendored file to the same path in an upstream
+# working copy. That silently assumes the upstream copy is a git checkout plus
+# nothing — and on a developer machine it is a checkout plus every build output
+# and ignored file that has ever been produced there. Locally every one of these
+# resolved and matched. In CI, against a real checkout, all seven failed.
+#
+#   planner-wasm/pkg/       ignored by planner-wasm/pkg/.gitignore (`*`)
+#   firmware/*/Cargo.lock   ignored by the root .gitignore (`Cargo.lock`)
+#
+# Rebuilding the bundle in CI does not rescue the comparison, which was the
+# first attempt: wasm-pack output is not byte-reproducible across toolchains, so
+# a fresh build differs from the vendored one for reasons that have nothing to
+# do with drift. The bundle is still covered, twice over and better:
+#
+#   * the `behaviour` job executes it against the vendored goldens, which is a
+#     statement about output rather than bytes, and is what would actually catch
+#     a wrong planner;
+#   * `wasm_build` records the hashes of the *sources* it was compiled from, and
+#     those are ordinary tracked files, so staleness is caught by comparing them
+#     — which is the check that found the six-week-old bundle in the first place.
+#
+# Skips are printed on every run. A check that quietly declines to check is worse
+# than one that fails.
+UNCOMPARABLE_UPSTREAM: dict[str, str] = {
+    "wasm/obc-planner/obc_planner_wasm_bg.wasm":
+        "build output, gitignored upstream; not byte-reproducible across toolchains",
+    "wasm/obc-planner/obc_planner_wasm.js":
+        "build output, gitignored upstream",
+    "wasm/obc-planner/obc_planner_wasm.d.ts":
+        "build output, gitignored upstream",
+    "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts":
+        "build output, gitignored upstream",
+    "wasm/obc-planner/package.json":
+        "build output, gitignored upstream; embeds the wasm-pack version",
+    "firmware/obc-esp32-s3/Cargo.lock":
+        "gitignored upstream (root .gitignore: Cargo.lock)",
+    "firmware/heltec-lora-linktest/Cargo.lock":
+        "gitignored upstream (root .gitignore: Cargo.lock)",
+}
+
+
 # Directories whose contents are vendored in their entirety, mapped to the few
 # files inside them that belong to this repository instead.
 #
@@ -626,6 +669,7 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     recorded = manifest.get("artifacts", {})
     problems: list[str] = []
+    skipped: list[str] = []
     checked = 0
 
     for up, local, peer_rel in ARTIFACTS:
@@ -649,10 +693,16 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
                 f"actual {digest[:16]}\n"
                 f"      regenerate with: {hint_for(local)}")
 
-        if upstream:
+        if upstream and local in UNCOMPARABLE_UPSTREAM:
+            skipped.append(f"{local}: {UNCOMPARABLE_UPSTREAM[local]}")
+        elif upstream:
             src = upstream / up
             if not src.exists():
-                problems.append(f"{local}: upstream source missing ({up})")
+                problems.append(
+                    f"{local}: upstream source missing ({up}).\n"
+                    f"      If it is a build output or gitignored upstream, it cannot be\n"
+                    f"      compared against a checkout — say so in UNCOMPARABLE_UPSTREAM\n"
+                    f"      rather than removing it from ARTIFACTS.")
             elif sha256(src) != digest:
                 problems.append(
                     f"{local}: DRIFTED from upstream\n"
@@ -711,6 +761,12 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
             f"      Either it was retired upstream and this copy should go, or it\n"
             f"      was added here by hand. Both are drift; neither is visible to\n"
             f"      a hash check, because nothing is hashing it.")
+
+    if skipped:
+        print(f"{DIM}not compared against upstream ({len(skipped)}):{RESET}")
+        for k in skipped:
+            print(f"  {DIM}-{RESET} {k}")
+        print()
 
     scope = ["manifest"]
     if upstream:
