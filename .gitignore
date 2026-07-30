@@ -25,3 +25,10 @@ bodies/*/*.db-shm
 Thumbs.db
 *.log
 .env
+
+# Scratch landing area. The Cowork device bridge cannot unlink files, so an
+# agent working in this repo moves things here instead of deleting them. Twice
+# now that has ended with scratch files committed by accident, because they show
+# up as pending changes and get swept into a commit. Ignoring the directory
+# removes the temptation rather than relying on nobody clicking it.
+_to_delete/
