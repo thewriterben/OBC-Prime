@@ -66,16 +66,25 @@ jobs:
     # Covers the 11 artifacts the generator also carries (registry, fixtures,
     # wasm); the 32 firmware files have no peer copy.
     #
-    # Corrected 2026-07-30: an earlier version of this job asserted "the
-    # generator is public and needs no token". PLAN.md says the opposite, and
-    # nothing had checked. The token expression below works either way — for a
-    # public repo `github.token` suffices; for a private one, set a PAT as the
-    # PEER_REPO_TOKEN secret. If the repo is private and the secret is unset,
-    # this job fails on checkout with a clear 404 rather than a confusing drift
-    # report, which is the right failure.
+    # **The generator repository is private.** Settled 2026-07-30 by running this
+    # job, not by reading anything: it failed on the peer checkout, and setting
+    # PEER_REPO_TOKEN turned all four jobs green. An earlier version of this job
+    # asserted "the generator is public and needs no token" with nothing having
+    # checked; the correction below is a measurement.
+    #
+    # `github.token` is scoped to THIS repository and can read another one only
+    # if that repository is public — so the `||` fallback exists for symmetry and
+    # will not work here. PEER_REPO_TOKEN is a fine-grained PAT with
+    # `Contents: read` on thewriterben/OBC-deployment-generator and nothing else.
+    #
+    # It has an expiry. When it lapses this job fails on checkout with
+    # "Repository not found", which reads like drift and is not — a drift failure
+    # names a file and two hashes. Re-issue the PAT rather than debugging the
+    # manifest.
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: check out the generator (needs PEER_REPO_TOKEN; the repo is private)
+        uses: actions/checkout@v4
         with:
           repository: thewriterben/OBC-deployment-generator
           path: peer
