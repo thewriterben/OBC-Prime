@@ -69,6 +69,20 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
      "registry/registry.json",
      "lib/registry.json"),
 
+    # The shared firmware template set (Ecosystem Integration I6): one starter
+    # sketch per flashable registry board, exported from the same tables as
+    # registry.json. Vendored here from 2026-07-30 — it was always a cross-repo
+    # artifact, carried by the generator and Accelerapp and hashed by neither.
+    #
+    # It became load-bearing when obc-planner arrived: the crate's
+    # `committed_templates_json_is_current` walks up from its own directory
+    # looking for this file and fails loudly if it cannot find it, which is the
+    # correct behaviour for a guard and would have turned the `substrate` job red
+    # on the commit that vendored the crate.
+    ("firmware-templates/templates.json",
+     "firmware-templates/templates.json",
+     "lib/firmware-templates.json"),
+
     ("tests/fixtures/deployment/nanopi/inventory.json",
      "parity/fixtures/deployment/nanopi/inventory.json",
      "tests/fixtures/deployment/nanopi/inventory.json"),
@@ -158,6 +172,62 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
      None),
     ("crates/obc-memory/src/vector.rs",
      "crates/obc-memory/src/vector.rs",
+     None),
+
+    # ── The planner ──────────────────────────────────────────────────────────
+    # The second piece to move here (2026-07-30), on the same terms as the memory
+    # substrate: vendored, hash-checked, and compiled by the `substrate` job
+    # rather than merely stored.
+    #
+    # It matters more than obc-memory did, because this repository already
+    # carried a *build* of this code — the bundle under wasm/ — without carrying
+    # the source. The README leads with three planner implementations agreeing;
+    # two of the three were a compiled blob and a TypeScript port, and the Rust
+    # the blob came from lived in another repository. Vendoring the crate makes
+    # that a comparison rather than a promise, and WASM_SOURCES hashes exactly
+    # these files.
+
+    ("crates/obc-planner/Cargo.toml",
+     "crates/obc-planner/Cargo.toml",
+     None),
+    ("crates/obc-planner/src/lib.rs",
+     "crates/obc-planner/src/lib.rs",
+     None),
+    ("crates/obc-planner/src/config.rs",
+     "crates/obc-planner/src/config.rs",
+     None),
+    ("crates/obc-planner/src/geo/mod.rs",
+     "crates/obc-planner/src/geo/mod.rs",
+     None),
+    ("crates/obc-planner/src/geo/anchor.rs",
+     "crates/obc-planner/src/geo/anchor.rs",
+     None),
+    ("crates/obc-planner/src/siteplan/mod.rs",
+     "crates/obc-planner/src/siteplan/mod.rs",
+     None),
+    ("crates/obc-planner/src/peripherals/mod.rs",
+     "crates/obc-planner/src/peripherals/mod.rs",
+     None),
+    ("crates/obc-planner/src/peripherals/registry.rs",
+     "crates/obc-planner/src/peripherals/registry.rs",
+     None),
+    ("crates/obc-planner/src/deployment/mod.rs",
+     "crates/obc-planner/src/deployment/mod.rs",
+     None),
+    ("crates/obc-planner/src/deployment/advisor.rs",
+     "crates/obc-planner/src/deployment/advisor.rs",
+     None),
+    ("crates/obc-planner/src/deployment/firmware_scaffold.rs",
+     "crates/obc-planner/src/deployment/firmware_scaffold.rs",
+     None),
+    ("crates/obc-planner/src/deployment/inventory.rs",
+     "crates/obc-planner/src/deployment/inventory.rs",
+     None),
+    ("crates/obc-planner/src/deployment/planner.rs",
+     "crates/obc-planner/src/deployment/planner.rs",
+     None),
+    ("crates/obc-planner/src/deployment/scheme.rs",
+     "crates/obc-planner/src/deployment/scheme.rs",
      None),
 
     # ── Node firmware ────────────────────────────────────────────────────────
@@ -276,18 +346,31 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
 # hardcoded `[provider] openai / gpt-4o` in it. Hashing the build inputs is the
 # only way a hash gate can see that.
 WASM_SOURCES: list[str] = [
+    # Updated 2026-07-30, when the core repo extracted crates/obc-planner. These
+    # were src/geo, src/siteplan, src/deployment/* and src/peripherals/registry.rs,
+    # compiled into planner-wasm verbatim through `#[path]`; that crate now has an
+    # ordinary dependency, and the two shim mod.rs files listed here no longer
+    # exist. Ten of the twelve entries pointed at paths that were gone.
+    #
+    # `geo/anchor.rs` is deliberately absent: it sits behind obc-planner's
+    # `world-anchor` feature, which wasm builds do not enable, so it is not an
+    # input to this bundle. Being part of the crate and being part of the build
+    # are different questions, and only the second one belongs here.
     "planner-wasm/Cargo.toml",
     "planner-wasm/src/lib.rs",
-    "planner-wasm/src/deployment/mod.rs",
-    "planner-wasm/src/peripherals/mod.rs",
-    "src/geo/mod.rs",
-    "src/siteplan/mod.rs",
-    "src/deployment/advisor.rs",
-    "src/deployment/firmware_scaffold.rs",
-    "src/deployment/inventory.rs",
-    "src/deployment/planner.rs",
-    "src/deployment/scheme.rs",
-    "src/peripherals/registry.rs",
+    "crates/obc-planner/Cargo.toml",
+    "crates/obc-planner/src/lib.rs",
+    "crates/obc-planner/src/config.rs",
+    "crates/obc-planner/src/geo/mod.rs",
+    "crates/obc-planner/src/siteplan/mod.rs",
+    "crates/obc-planner/src/peripherals/mod.rs",
+    "crates/obc-planner/src/peripherals/registry.rs",
+    "crates/obc-planner/src/deployment/mod.rs",
+    "crates/obc-planner/src/deployment/advisor.rs",
+    "crates/obc-planner/src/deployment/firmware_scaffold.rs",
+    "crates/obc-planner/src/deployment/inventory.rs",
+    "crates/obc-planner/src/deployment/planner.rs",
+    "crates/obc-planner/src/deployment/scheme.rs",
 ]
 
 WASM_REBUILD_CMD = "wasm-pack build planner-wasm --target nodejs"
