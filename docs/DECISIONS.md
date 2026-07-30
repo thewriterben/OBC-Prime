@@ -5,6 +5,120 @@ New entries go at the top.
 
 ---
 
+## 2026-07-30 — Hashes prove identity; only execution proves correctness
+
+The stale-build entry below fixed the *detection* of a bundle built from old
+sources. Confirming that fix exposed the gap one level up: **nothing in this
+repository ran the bundle.** Every gate here compares hashes, which answers "is
+this the file we recorded" and cannot answer "is this the right file".
+
+The assertion that would have caught the original bug lived in the generator's
+vitest suite — a different repository, which has no CI at all, and which needs an
+npm install to run. So the public project could not check its own headline claim
+without a private sibling and a toolchain.
+
+`parity/verify_wasm.cjs` closes that. It loads the vendored bundle, runs
+`plan_deployment`, `deployment_toml` and `plan_site` against the vendored
+fixtures, and compares the whole generated config byte for byte. It needs node
+and nothing else — the bundle is a CommonJS `--target nodejs` build and the
+fixtures are in this repo — so it runs as a CI job rather than as a thing someone
+remembers to do. Verified in both directions: green on the current bundle, and
+failing with a line-by-line diff against the pre-rebuild one recovered from
+`git show HEAD:`.
+
+The manifest also now records the **toolchain** that built the bundle (rustc,
+wasm-pack, and wasm-bindgen from the lockfile). It is not a gate and does not
+fail anything: a compiler bump legitimately rewrites the `.wasm` with no source
+change, and the drift gate is right to stay green for it. It is there so that a
+200 KB binary moving for no visible reason is a one-line diff rather than an
+hour of archaeology. It populates on the next `--rebuild-wasm`; back-filling it
+with a guessed rustc version would be a wrong number written down, which this
+file already records two instances of.
+
+One process note, worth more than the code. The stale bundle was first
+"confirmed still broken" after the rebuild — against a cached copy of the *old*
+file, in a scratch directory, while the correct new file sat on disk a few paths
+away. The wrong conclusion was reached with real evidence, cleanly presented. The
+fix was to stop testing copies: `verify_wasm.cjs` runs against the vendored path
+in the repository, and the artifact under test is never staged, mirrored or moved
+first. Verifying a copy verifies the copy.
+
+---
+
+## 2026-07-29 — A hash gate cannot see a stale build
+
+The parity mechanism hashes every vendored artifact and fails on any change. It
+had been verified by corrupting a file and watching it fail. It was still blind
+to the largest divergence in the repository, and blind by construction: **a
+compiled artifact cannot drift from its own hash.**
+
+`wasm/obc-planner/` was built on 11 July. On 28 July `src/deployment/planner.rs`
+was rewritten three times — "one canonical config, fixtured whole", "align role
+assignment, and delete the mask", and the `claude-sonnet-5` pin — and
+`expected-config.toml` was re-blessed with it. Every hash in `MANIFEST.json`
+still matched. `check --upstream --peer` reported all 43 artifacts identical.
+The bundle emitted a 79-line config where the golden had 119, carrying the old
+system prompt and a hardcoded `[provider] name = "openai" / model = "gpt-4o"`.
+
+The test that should have caught it was the narrow-gate failure this project has
+already documented once. `planner-parity.test.ts` carries a long comment about
+how a golden covering only `[deployment]` hid a real divergence for months, and
+that comment sits above an assertion comparing the *whole* config byte for byte.
+Twenty lines away, `wasm-planner.test.ts` checked
+`expect(scheme.config_toml).toContain("[peripherals]")`. The lesson was written
+down, applied to one leg, and not carried to the other. Writing down a lesson is
+not the same as applying it everywhere it holds, and the second leg is exactly
+where nobody looks.
+
+Two changes, because the two failure modes are different:
+
+- **The manifest now hashes the WASM's build inputs**, not only its output —
+  the twelve upstream sources `planner-wasm` compiles via `#[path]`, declared as
+  `WASM_SOURCES`. `check --upstream` fails if any has changed since the recorded
+  build. This is the only way a hash gate can see the age of a build.
+- **`wasm-planner.test.ts` compares the whole generated config** to the golden,
+  matching the assertion on the TypeScript leg.
+
+Both were verified by observing them fail: the missing-build-inputs branch
+against the real manifest, and the stale-source branch by injecting a
+pre-rewrite hash for `planner.rs` and confirming the error names that file.
+
+Cost, and it is a real one: **the gate is red until the bundle is rebuilt.**
+`wasm-pack build planner-wasm --target nodejs`, then `sync --upstream`. It is
+red because the repository is in the state it describes, and a gate that goes
+green on a known-stale artifact to spare the commit would be the original bug
+with extra steps.
+
+> **Resolved 2026-07-30.** Rebuilt and re-synced. All four legs green; the
+> vendored bundle now renders the 119-line golden config, and `verify_wasm.cjs`
+> confirms it by execution. Only `obc_planner_wasm_bg.wasm` changed
+> (223,822 → 235,572 bytes) — the JS glue, `.d.ts` and `package.json` are
+> byte-identical, so `wasm-bindgen` had not moved and there was no API drift. The
+> goldens did **not** need re-blessing: the planner sources were always right, it
+> was only the build that was old.
+>
+> Two things were found while confirming it, and both are now closed:
+>
+> 1. **`sync` could clear the gate without earning it.** Recording the current
+>    source hashes next to a bundle it had merely copied would launder the exact
+>    staleness the mechanism exists to catch. The `wasm_build` block is now
+>    written *only* by `--rebuild-wasm`, in the run that invoked wasm-pack, and
+>    carries `built_by_this_script: true`. A plain `sync` carries the previous
+>    hashes forward untouched.
+> 2. **`sync` never updated the generator's mirrors.** Only `check` knew about
+>    `--peer`, so a rebuild would land here and leave the generator's copy behind
+>    — and the error message said `fix with: sync`, which for that case was
+>    false. `sync --peer` now exists.
+
+Two smaller things fell out of the same pass. The documented regeneration
+command said `--target web`; the bundle is `--target nodejs` and the test
+`require()`s it, so following the printed hint produced a bundle that broke the
+suite. And `parity/README.md` called this "three implementations" running one
+"in a browser" — it is two implementations in three executables, and the browser
+one is not built.
+
+---
+
 ## 2026-07-28 — Retention is declared; everything else is a consequence of the world
 
 Three mechanisms withdraw a belief because something changed: a newer value
@@ -167,12 +281,21 @@ test failing afterwards, in a different repository, for a reason that looked
 unrelated.
 
 Now: one declarative list of vendored artifacts, a manifest of SHA-256 hashes,
-and a CI job that fails on any divergence — from the manifest, from upstream,
-or from the generator app's mirrors.
+and a check that fails on any divergence — from the manifest, from upstream, or
+from the generator app's mirrors.
 
 The gate was verified by deliberately corrupting a vendored file and confirming
 a non-zero exit with an actionable message, then restoring it. A gate that has
 never been observed failing is not known to work.
+
+> **Corrected 2026-07-29.** This said "a CI job that fails on any divergence".
+> The *script* checks all three; **CI runs only the first**. `parity.yml` invokes
+> a bare `check`, and the `--upstream` job is commented out. There has never been
+> a `--peer` job at all. So on any given push, a hand-edit to a vendored file is
+> caught and drift against the core agent is not — which is the more likely
+> failure of the two, because the core agent is where the work happens. The
+> capability was described as if the wiring existed. See §"A hash gate cannot see
+> a stale build" for the second, worse gap in the same mechanism.
 
 Deliberate limitation: a bare `check` can only prove nobody hand-edited a
 vendored file. It cannot prove the manifest itself is current — that needs
