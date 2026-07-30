@@ -5,12 +5,20 @@ Three implementations of the deployment planner must produce identical output:
 | Implementation | Where it runs | Why it exists |
 |---|---|---|
 | Rust planner | inside the agent, on the device | the one that actually deploys |
-| WASM build of it | in a browser | so a planning UI needs no backend |
-| TypeScript port | in the generator app | so the UI stays responsive offline |
+| WASM build of it | under Node (`--target nodejs`) | so a planning service needs no Rust |
+| TypeScript port | in the generator app | so the UI stays responsive offline, and in React Native, where there is no WASM |
 
-Two of those are compiled from the same source. The third is a hand-written
-port, and hand-written ports drift. This directory is the mechanism that stops
-that drift being discovered by a user.
+Two of those are compiled from the same source, so this is **two
+implementations in three executables** — not three independent ones. The
+hand-written port is the one that can disagree on logic; the WASM build is the
+one that can disagree on *age*. Both failure modes are gated, differently, and
+§Drift below says how.
+
+> Corrected 2026-07-29. This table previously said the WASM build runs "in a
+> browser". It cannot: the vendored bundle is built `--target nodejs` and ends
+> in a CommonJS `require('fs').readFileSync(...)`, which is also why the
+> generator's test suite can `require()` it. A browser build is a `--target web`
+> rebuild away, and nothing here depends on one.
 
 ## What's here
 
@@ -69,6 +77,9 @@ output is the property that lets you plan in one place and run in another.
 ## Running the gate
 
 ```bash
+# the bundle BEHAVES as the goldens say (node only — no npm install, no Rust)
+node parity/verify_wasm.cjs
+
 # vendored files still match the manifest
 python scripts/sync_upstream.py check
 
@@ -82,6 +93,59 @@ python scripts/sync_upstream.py check --upstream ../core --peer ../generator
 Bare `check` only proves nobody hand-edited a vendored file. It cannot prove the
 manifest is current — for that it needs `--upstream`. The script says so rather
 than implying a stronger guarantee than it verified.
+
+And none of the `check` legs prove the bundle is *correct*, only that it is the
+file we recorded. Those are different claims. `verify_wasm.cjs` is the one that
+executes it: it runs `plan_deployment`, `deployment_toml` and `plan_site` against
+the vendored fixtures and compares the whole generated config byte for byte. It
+was verified by running it against the pre-2026-07-30 bundle, which it fails with
+a line-by-line diff. It runs in CI (the `behaviour` job) because it needs nothing
+but node.
+
+Note the sibling-directory names. `CONTRIBUTING.md` writes these as
+`../Oh-Ben-Claw` and `../OBC-deployment-generator`, which are the real repository
+names; `../core` and `../generator` here are placeholders for whatever you
+cloned them as. Use your actual paths.
+
+## Putting everything back in step
+
+One command. It rebuilds the WASM in the core repo, copies all 43 artifacts
+here, updates the generator's 11 mirrors, and records what the bundle was
+compiled from:
+
+```bash
+python scripts/sync_upstream.py sync \
+    --upstream ../Oh-Ben-Claw \
+    --peer ../OBC-deployment-generator \
+    --rebuild-wasm
+```
+
+Prerequisites, once per machine:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+```
+
+Then confirm all four legs:
+
+```bash
+python scripts/sync_upstream.py check --upstream ../Oh-Ben-Claw --peer ../OBC-deployment-generator
+cd ../OBC-deployment-generator && npm test    # 143 tests, incl. the whole-config wasm assertion
+cd ../Oh-Ben-Claw && cargo test --workspace
+```
+
+### Why `--rebuild-wasm` is not optional for the WASM leg
+
+`sync` will happily copy a bundle it did not build. When it does, it **carries
+the previous build-input hashes forward untouched** rather than recording the
+current sources — because a run that only copied a bundle has no standing to say
+what that bundle was compiled from, and writing today's hashes next to an old
+`.wasm` would clear the gate on exactly the staleness it exists to catch.
+
+So the `wasm_build` block in `MANIFEST.json` is only ever written by
+`--rebuild-wasm`, in the same run that invoked `wasm-pack`. That block carries
+`"built_by_this_script": true` to say so.
 
 ## When it fails
 
@@ -99,7 +163,7 @@ copy. The vendored copy is a cache; the core agent is the source of truth.
 | Artifact | Regenerated upstream by |
 |---|---|
 | `registry/registry.json` | `cargo run --bin emit-registry` |
-| `wasm/obc-planner/*` | `wasm-pack build planner-wasm --target web` |
+| `wasm/obc-planner/*` | `wasm-pack build planner-wasm --target nodejs` |
 | `parity/fixtures/*` | committed goldens — a change here is a deliberate behaviour change |
 
 If a fixture legitimately changes, that is a planner behaviour change and every

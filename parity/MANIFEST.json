@@ -1,6 +1,6 @@
 {
-  "generated": "2026-07-28T23:41:29+00:00",
-  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
+  "generated": "2026-07-30T04:43:09+00:00",
+  "upstream": "/sessions/rcw-01m14aukcdwvs7114qppgewv/mnt/Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
@@ -28,8 +28,8 @@
       "bytes": 556
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
-      "sha256": "914e5000e7cb2a93695398383cc36a59664efff0ccf7ecb302d56fe746fc0230",
-      "bytes": 223822
+      "sha256": "c399b759d9454a67a168d32fb8892b77be45f77e22e186383d66a0a5997d2df6",
+      "bytes": 235572
     },
     "wasm/obc-planner/obc_planner_wasm.js": {
       "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
@@ -46,6 +46,58 @@
     "wasm/obc-planner/package.json": {
       "sha256": "268801038e637b974e1cb371db9334c4d78ecc4daec3724319ce894fa2d25504",
       "bytes": 421
+    },
+    "crates/obc-paths/Cargo.toml": {
+      "sha256": "d951d6adcbb8b765511122e35dbc0435245c5456837137fbf3cbddb66fb04e5b",
+      "bytes": 434
+    },
+    "crates/obc-paths/src/lib.rs": {
+      "sha256": "70372913ef90e42ed2e217df53ee003c61885129bf2417b76a2f0e30e5cda50d",
+      "bytes": 9316
+    },
+    "crates/obc-memory/Cargo.toml": {
+      "sha256": "a812cb4e6f808dd2732962850efcd15b5052091287fac2cc07b3013b12609a0f",
+      "bytes": 1721
+    },
+    "crates/obc-memory/src/lib.rs": {
+      "sha256": "5211128eef611ee4b804782ea67a5f353194061ac05500ac3d6f7a471f0512a9",
+      "bytes": 14348
+    },
+    "crates/obc-memory/src/world.rs": {
+      "sha256": "e6869eda344a9ba28f7ec43450e5510b198dc647f00291d935eeafac622ebaca",
+      "bytes": 66043
+    },
+    "crates/obc-memory/src/liveness.rs": {
+      "sha256": "1c17afa67b73e5e2a56974b584e1534bffed270c5c20b7cc87b1f2fb93f99228",
+      "bytes": 33655
+    },
+    "crates/obc-memory/src/expiry.rs": {
+      "sha256": "c4573765f2f83b4368cc9f16ef224a3c2aa7f712e45774b77195b99968ac0930",
+      "bytes": 15977
+    },
+    "crates/obc-memory/src/trajectory.rs": {
+      "sha256": "f6355d2ab2d70c47a7d321cc92e324549a983712982304053edd3c9c9728518c",
+      "bytes": 28746
+    },
+    "crates/obc-memory/src/embed.rs": {
+      "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
+      "bytes": 1601
+    },
+    "crates/obc-memory/src/heartbeat.rs": {
+      "sha256": "1f4ac3869e144e918d91e513a81fdeb08d44f0e7a9f3b8db86bbf3c8696f7ac0",
+      "bytes": 9510
+    },
+    "crates/obc-memory/src/image.rs": {
+      "sha256": "ffbc8942cb0a69da6cc4c4ced8c2487f46575dbf9013f7edaec8429a70e4ef6f",
+      "bytes": 17998
+    },
+    "crates/obc-memory/src/journal.rs": {
+      "sha256": "de1837b22cfc3eba88951dd74bcdf474259bb2a2f205209b3a5950639aa817b6",
+      "bytes": 8902
+    },
+    "crates/obc-memory/src/vector.rs": {
+      "sha256": "73049de6540f08016e55c5745dc5d03ed392968245a72b319d22f926b29a21a6",
+      "bytes": 16680
     },
     "firmware/obc-esp32-s3/.cargo/config.toml": {
       "sha256": "636313d01cfe40b55fde7d2c4c6af9e98b8c35137bd3a54c29bcb4ba389dfe61",
@@ -174,6 +226,25 @@
     "firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino": {
       "sha256": "25a7d8751522493e83c8c3150c5be22227d8d2badc7dab9001dd64add3a1ce26",
       "bytes": 25867
+    }
+  },
+  "wasm_build": {
+    "note": "sha256 of the upstream sources the vendored WASM bundle is compiled from. Written by `sync --rebuild-wasm`, which built the bundle in the same run. `check --upstream` fails if any of them has changed since.",
+    "rebuild": "wasm-pack build planner-wasm --target nodejs",
+    "built_by_this_script": true,
+    "sources": {
+      "planner-wasm/Cargo.toml": "d9f9a97d6622344bef3b94d03dfac9397101a50cb32dfcdf7a0527fbec222c82",
+      "planner-wasm/src/lib.rs": "06baaae3d7390345c008c6d837e7b49ea15f390e747999243345155430c167b0",
+      "planner-wasm/src/deployment/mod.rs": "c3028f9e6517230aded5f75374c3a6de7b937dcfab542098fa7ea404963edf0f",
+      "planner-wasm/src/peripherals/mod.rs": "65c93ecc441382ddfa19ec5bec42509e7c1e443246a016fb20048a54107847f3",
+      "src/geo/mod.rs": "88e552902ad4f9d0727641da0989316a0e6c500c3138b34b6b1e5b6207519283",
+      "src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
+      "src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
+      "src/deployment/firmware_scaffold.rs": "41108a752c31ced1b60cadcade11c4c70816431dc59d32f893eda3cb434689de",
+      "src/deployment/inventory.rs": "744d20036d33d1d79b96a639127a5a9765a04ee5c7a3d64359a1e5f76d22d7ce",
+      "src/deployment/planner.rs": "a4dfb39c0c0b6e03140c415a9a753451f9aae247322a72c5ca1f1861ce1cc7a5",
+      "src/deployment/scheme.rs": "92a5f9b1149bf69da37f3641dee518dc15c247e86b5aee7a11fee6494fa1a8a5",
+      "src/peripherals/registry.rs": "5cce2dfa70f196ec06101153a72fa053b337d576348b24715d57b6a7f97e62c3"
     }
   }
 }

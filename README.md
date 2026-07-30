@@ -14,7 +14,11 @@ config block; nothing else in the system changes.
 The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
-> **Status: early.** The core agent runs, and is **not yet in this repository**.
+> **Status: early.** Most of the core agent runs and is **not yet in this
+> repository** — but the first piece of it now is. `crates/obc-memory` and
+> `crates/obc-paths` are here, vendored and hash-checked, and CI builds and tests
+> them: 103 tests plus doctests of the bitemporal world model, belief revision,
+> liveness and expiry this repository's docs already described.
 > The firmware is — see [firmware/](firmware/README.md) — so there is something to
 > flash and watch today, but nothing to talk to it with. See [PLAN.md](PLAN.md) for what is
 > landing and in what order. Self-hosted first; a hosted option is not
@@ -117,6 +121,7 @@ which parts have been run and which have not.
 ## Repository layout
 
 ```
+crates/      the agent's memory substrate — vendored source this repo builds and tests
 registry/    board + accessory registry (69 boards, 34 accessories) — SSOT, emitted by the core
 parity/      golden fixtures + manifest that hold the three planners to identical output
 wasm/        the planner compiled to WASM, so a browser plans exactly as the device does
@@ -124,6 +129,29 @@ bodies/      ready-to-run reference deployments
 scripts/     sync + drift tooling
 docs/        design decisions and their reasoning
 ```
+
+### The memory substrate
+
+`crates/obc-memory` is the first piece of the agent to move here, and the first
+vendored artifact this repository can *run* rather than only hash:
+
+```bash
+cargo test --workspace     # 103 tests + 3 doctests
+```
+
+It is the bitemporal world model with provenance and a support graph, the four
+withdrawal mechanisms — supersession, source liveness, dependency withdrawal,
+retention — and the liveness and expiry machinery described in
+[docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) and
+[docs/MEMORY-2026-07.md](docs/MEMORY-2026-07.md). Those documents were here for
+two days before the code was, which is the wrong order and is now corrected.
+
+It knows nothing about tools, providers, the spine or the agent loop. That is
+what made it the first thing separable enough to move: 5,878 lines with two
+references to the rest of the tree, against twenty-three modules depending on it.
+
+Like everything under `registry/`, `parity/` and `wasm/`, these are **copies** —
+authored in the core repo, verified by SHA-256, and not to be edited here.
 
 ## Getting the agent
 
