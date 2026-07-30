@@ -132,7 +132,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: jetli/wasm-pack-action@v0
+      # wasm-pack via its own installer rather than a third-party action. The
+      # commented-out version of this job referenced jetli/wasm-pack-action@v0,
+      # which was carried forward here unverified and does not resolve — there is
+      # no `v0` tag. Pinning a different tag would be the same guess again, and
+      # this sandbox cannot reach GitHub to check. The rustwasm installer needs
+      # no version at all, and lands the binary in ~/.cargo/bin, already on PATH.
+      - name: install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
       - name: build the planner bundle from upstream sources
         run: wasm-pack build planner-wasm --target nodejs
         working-directory: core
