@@ -10,5 +10,5 @@
 # `python scripts/sync_upstream.py sync --upstream ../Oh-Ben-Claw`; the drift
 # gate exists to catch exactly that mistake.
 [workspace]
-members = ["crates/obc-paths", "crates/obc-memory"]
+members = ["crates/obc-paths", "crates/obc-memory", "crates/obc-planner"]
 resolver = "2"

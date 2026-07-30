@@ -94,28 +94,54 @@ jobs:
           python-version: '3.12'
       - run: python scripts/sync_upstream.py check --peer peer
 
-  # Enable once the core agent repo is reachable from CI.
-  #
-  # Two things block this, not one. The access token is the known blocker. The
-  # other: `planner-wasm/pkg/` is gitignored upstream (`pkg/.gitignore` is `*`),
-  # so a plain checkout of the core repo has no WASM bundle and all five wasm
-  # artifacts fail as "upstream source missing". This job therefore needs a
-  # wasm-pack build step before the check, not just repo access.
-  #
-  # upstream:
-  #   name: vendored artifacts match the core agent
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         repository: OWNER/CORE_REPO
-  #         path: core
-  #         token: SECRET_CORE_REPO_TOKEN
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.12'
-  #     - uses: jetli/wasm-pack-action@v0
-  #     - run: wasm-pack build planner-wasm --target nodejs
-  #       working-directory: core
-  #     - run: python scripts/sync_upstream.py check --upstream core
+  upstream:
+    name: vendored artifacts match the core agent
+    runs-on: ubuntu-latest
+    # The check this repository most needed and least had. Without it, `check`
+    # compares every vendored file to its own recorded hash and passes — which a
+    # file deleted upstream passes trivially, and a bundle built from stale
+    # sources passes by construction. Both happened. `crates/obc-memory/src/image.rs`
+    # sat here for two commits after upstream deleted it, compiling into the
+    # `substrate` job, with every gate green; and the WASM bundle was six weeks
+    # stale while all 43 artifacts reported identical.
+    #
+    # Enabled 2026-07-30, once the two things blocking it were actually solved
+    # rather than noted:
+    #
+    #   * Repo access. Same pattern as the `peer` job, proven the same day:
+    #     `github.token` can only read another repository if it is public, so a
+    #     fine-grained PAT with `Contents: read` goes in as CORE_REPO_TOKEN.
+    #   * The WASM bundle. `planner-wasm/pkg/` is gitignored upstream, so a plain
+    #     checkout has no bundle and all five wasm artifacts fail as "upstream
+    #     source missing". Hence the wasm-pack build step below — it reproduces
+    #     the bundle from the checked-out sources, which is also a stronger check
+    #     than copying one: if the vendored bundle does not match a fresh build of
+    #     upstream's current sources, that is precisely the staleness we are here
+    #     to catch.
+    steps:
+      - uses: actions/checkout@v4
+      - name: check out the core agent (needs CORE_REPO_TOKEN if it is private)
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Oh-Ben-Claw
+          path: core
+          token: ${{ secrets.CORE_REPO_TOKEN || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      # wasm-pack via its own installer rather than a third-party action. The
+      # commented-out version of this job referenced jetli/wasm-pack-action@v0,
+      # which was carried forward here unverified and does not resolve — there is
+      # no `v0` tag. Pinning a different tag would be the same guess again, and
+      # this sandbox cannot reach GitHub to check. The rustwasm installer needs
+      # no version at all, and lands the binary in ~/.cargo/bin, already on PATH.
+      - name: install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - name: build the planner bundle from upstream sources
+        run: wasm-pack build planner-wasm --target nodejs
+        working-directory: core
+      - name: vendored artifacts match the core agent
+        run: python scripts/sync_upstream.py check --upstream core

@@ -1,0 +1,693 @@
+//! Hardware inventory — describes the physical hardware available for a deployment.
+//!
+//! The `HardwareInventory` is the input to the `DeploymentPlanner`.  It lists
+//! every board and accessory that is present in the target deployment, along
+//! with the role the operator wants each piece of hardware to play and the
+//! high-level feature desires they want the deployment to fulfil.
+
+use serde::{Deserialize, Serialize};
+
+// ── Feature Desires ───────────────────────────────────────────────────────────
+
+/// A high-level capability the operator wants the deployment to provide.
+///
+/// Feature desires are mapped to specific hardware capability tokens and agent
+/// roles during planning.  Unsatisfied desires produce suggestions for missing
+/// hardware.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureDesire {
+    /// Agent can see — requires `camera_capture` hardware.
+    Vision,
+    /// Agent can hear — requires `audio_sample` hardware.
+    Listening,
+    /// Agent can speak — requires `audio_sample` (TTS playback) or `display` hardware.
+    Speech,
+    /// Agent can sense the environment — requires `sensor_read` hardware.
+    EnvironmentalSensing,
+    /// Agent can display information — requires `display` hardware.
+    DisplayOutput,
+    /// Agent can accept touch input — requires `touch` hardware.
+    TouchInput,
+    /// Agent runs locally without a cloud LLM — requires a capable host board.
+    EdgeInference,
+    /// Agent mesh communicates wirelessly — requires `wifi` hardware.
+    WirelessMesh,
+    /// Agent persists context across sessions — requires a host with storage.
+    PersistentMemory,
+    /// Agent runs inference on a dedicated AI accelerator — satisfied by any
+    /// accelerator token (`cuda`, `tensor_rt`, `npu`, `edge_tpu`, `hailo`,
+    /// `kpu`, `nn_accel`). Distinct from [`EdgeInference`], which is host-level
+    /// and can run on a CPU-only board.
+    ///
+    /// [`EdgeInference`]: FeatureDesire::EdgeInference
+    AcceleratedInference,
+    /// Agent communicates over long-range radio — requires `lora` hardware.
+    LongRangeRadio,
+    /// A human operator can command the fleet in the field from a handheld
+    /// device — requires `keyboard` hardware (satisfied by e.g. the LILYGO
+    /// T-Deck / T-Deck Plus running `firmware/t-deck-terminal`).
+    OperatorConsole,
+    /// Agent knows its position — requires `gps` hardware.
+    Localization,
+    /// Agent drives physical actuators (servos/motors) — requires `actuate`.
+    Actuation,
+    /// A custom feature desire described by a free-form string.
+    Custom(String),
+}
+
+impl FeatureDesire {
+    /// Return the capability tokens that must be present to satisfy this desire.
+    pub fn required_capabilities(&self) -> &'static [&'static str] {
+        match self {
+            Self::Vision => &["camera_capture"],
+            Self::Listening => &["audio_sample"],
+            Self::Speech => &["audio_sample"],
+            Self::EnvironmentalSensing => &["sensor_read"],
+            Self::DisplayOutput => &["display"],
+            Self::TouchInput => &["touch"],
+            Self::EdgeInference => &[],
+            Self::WirelessMesh => &["wifi"],
+            Self::PersistentMemory => &[],
+            // OR-semantics: any one accelerator token satisfies the desire.
+            Self::AcceleratedInference => &[
+                "cuda",
+                "tensor_rt",
+                "npu",
+                "edge_tpu",
+                "hailo",
+                "kpu",
+                "nn_accel",
+            ],
+            Self::LongRangeRadio => &["lora"],
+            Self::OperatorConsole => &["keyboard"],
+            Self::Localization => &["gps"],
+            Self::Actuation => &["actuate"],
+            Self::Custom(_) => &[],
+        }
+    }
+
+    /// Human-readable description of this desire.
+    pub fn description(&self) -> String {
+        match self {
+            Self::Vision => "visual perception via camera".to_string(),
+            Self::Listening => "audio input via microphone".to_string(),
+            Self::Speech => "speech output via speaker or TTS".to_string(),
+            Self::EnvironmentalSensing => {
+                "environmental sensing (temperature, humidity, etc.)".to_string()
+            }
+            Self::DisplayOutput => "display output on a screen".to_string(),
+            Self::TouchInput => "capacitive or resistive touch input".to_string(),
+            Self::EdgeInference => "on-device LLM inference without cloud dependency".to_string(),
+            Self::WirelessMesh => "wireless P2P node mesh networking".to_string(),
+            Self::PersistentMemory => "persistent conversation memory across sessions".to_string(),
+            Self::AcceleratedInference => {
+                "hardware-accelerated on-device inference (NPU/TPU/VPU/GPU)".to_string()
+            }
+            Self::LongRangeRadio => "long-range radio link (LoRa/LoRaWAN)".to_string(),
+            Self::OperatorConsole => {
+                "handheld operator console (keyboard + display, in-field fleet control)".to_string()
+            }
+            Self::Localization => "geospatial localization via GNSS/GPS".to_string(),
+            Self::Actuation => "physical actuation (servos, motors)".to_string(),
+            Self::Custom(s) => s.clone(),
+        }
+    }
+}
+
+// ── Item Role ─────────────────────────────────────────────────────────────────
+
+/// The operator-assigned role for a hardware item in the deployment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemRole {
+    /// Primary host: runs the main Oh-Ben-Claw agent process.
+    Host,
+    /// Display and/or sound output node.
+    Display,
+    /// Vision node — captures images or video.
+    Vision,
+    /// Listening node — captures audio or provides mic array.
+    Listening,
+    /// Environmental sensing node — reads temperature, humidity, pressure, etc.
+    Sensing,
+    /// General-purpose peripheral — GPIO expansion, actuator control, etc.
+    Peripheral,
+    /// Handheld operator console — a keyboard+display device (e.g. LILYGO
+    /// T-Deck) a human uses to observe and command the fleet in the field.
+    Console,
+    /// Unassigned — role will be inferred by the planner.
+    #[default]
+    Unassigned,
+}
+
+impl std::str::FromStr for ItemRole {
+    type Err = std::convert::Infallible;
+
+    /// The exact inverse of [`Display`], written against it rather than against
+    /// the serde attribute.
+    ///
+    /// `to_deployment_toml` emits roles with `item.role.to_string()`, so
+    /// `Display` — not `#[serde(rename_all)]` — is the format that actually
+    /// reaches the file. Deriving the parse from serde instead would work today
+    /// and silently diverge the moment someone changes one and not the other.
+    ///
+    /// Unknown text maps to [`ItemRole::Unassigned`], which is the same thing an
+    /// absent `role` key means: let the planner infer it. That makes this
+    /// infallible on purpose — a role we do not recognise is a hint we can drop,
+    /// not a reason to refuse to start.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim() {
+            "host" => Self::Host,
+            "display" => Self::Display,
+            "vision" => Self::Vision,
+            "listening" => Self::Listening,
+            "sensing" => Self::Sensing,
+            "peripheral" => Self::Peripheral,
+            "console" => Self::Console,
+            _ => Self::Unassigned,
+        })
+    }
+}
+
+impl std::fmt::Display for ItemRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Host => write!(f, "host"),
+            Self::Display => write!(f, "display"),
+            Self::Vision => write!(f, "vision"),
+            Self::Listening => write!(f, "listening"),
+            Self::Sensing => write!(f, "sensing"),
+            Self::Peripheral => write!(f, "peripheral"),
+            Self::Console => write!(f, "console"),
+            Self::Unassigned => write!(f, "unassigned"),
+        }
+    }
+}
+
+// ── Hardware Item ─────────────────────────────────────────────────────────────
+
+/// A single piece of hardware (board or accessory) in the deployment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareItem {
+    /// Human-readable label (e.g., `"nanopi-neo3"`, `"xiao-esp32s3-sense"`).
+    pub name: String,
+    /// The board registry name — matches a `BoardInfo::name` entry or an
+    /// `AccessoryInfo::name` entry.  Used to look up capabilities.
+    pub board_name: String,
+    /// How this item connects to the host: `"native"`, `"serial"`, `"mqtt"`, etc.
+    pub transport: String,
+    /// Serial port path, if applicable.
+    pub path: Option<String>,
+    /// MQTT node ID, if applicable.
+    pub node_id: Option<String>,
+    /// Operator-assigned role.  When `Unassigned`, the planner infers the role.
+    #[serde(default)]
+    pub role: ItemRole,
+    /// Accessories (sensors, modules) connected to this board.
+    #[serde(default)]
+    pub accessories: Vec<String>,
+    /// Capabilities provided by this item.  When empty, looked up from the registry.
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
+impl HardwareItem {
+    /// Create a new hardware item with the given board name.
+    pub fn new(
+        name: impl Into<String>,
+        board_name: impl Into<String>,
+        transport: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            board_name: board_name.into(),
+            transport: transport.into(),
+            path: None,
+            node_id: None,
+            role: ItemRole::Unassigned,
+            accessories: Vec::new(),
+            capabilities: Vec::new(),
+        }
+    }
+
+    /// Assign an explicit role to this item.
+    pub fn with_role(mut self, role: ItemRole) -> Self {
+        self.role = role;
+        self
+    }
+
+    /// Add accessories to this item.
+    pub fn with_accessories(mut self, accessories: Vec<String>) -> Self {
+        self.accessories = accessories;
+        self
+    }
+
+    /// Override capabilities (e.g., for non-registry boards).
+    pub fn with_capabilities(mut self, capabilities: Vec<String>) -> Self {
+        self.capabilities = capabilities;
+        self
+    }
+
+    /// Resolve capabilities: use explicit list if provided, otherwise look up
+    /// from the board registry.
+    pub fn resolved_capabilities(&self) -> Vec<String> {
+        if !self.capabilities.is_empty() {
+            return self.capabilities.clone();
+        }
+        // Look up in board registry
+        use crate::peripherals::registry::{known_accessories, known_boards};
+        let board_caps: Vec<String> = known_boards()
+            .iter()
+            .filter(|b| b.name == self.board_name.as_str())
+            .flat_map(|b| b.capabilities.iter().map(|s| s.to_string()))
+            .collect();
+
+        // Also collect accessory capabilities
+        let acc_caps: Vec<String> = self
+            .accessories
+            .iter()
+            .flat_map(|acc_name| {
+                known_accessories()
+                    .iter()
+                    .filter(move |a| a.name == acc_name.as_str())
+                    .flat_map(|a| a.capabilities.iter().map(|s| s.to_string()))
+            })
+            .collect();
+
+        let mut all: Vec<String> = board_caps;
+        for cap in acc_caps {
+            if !all.contains(&cap) {
+                all.push(cap);
+            }
+        }
+        all
+    }
+
+    /// Check if this item provides a specific capability.
+    pub fn has_capability(&self, cap: &str) -> bool {
+        self.resolved_capabilities()
+            .iter()
+            .any(|c| c.as_str() == cap)
+    }
+}
+
+// ── Hardware Inventory ────────────────────────────────────────────────────────
+
+/// A complete description of the hardware available for a deployment, plus the
+/// feature desires the operator wants to fulfil.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareInventory {
+    /// Human-readable name for this deployment scenario.
+    pub scenario_name: String,
+    /// The hardware items (boards and accessories) available.
+    pub items: Vec<HardwareItem>,
+    /// The high-level features the operator wants to achieve.
+    pub feature_desires: Vec<FeatureDesire>,
+}
+
+impl HardwareInventory {
+    /// Create a new, empty inventory with the given scenario name.
+    pub fn new(scenario_name: impl Into<String>) -> Self {
+        Self {
+            scenario_name: scenario_name.into(),
+            items: Vec::new(),
+            feature_desires: Vec::new(),
+        }
+    }
+
+    /// Add a hardware item to the inventory.
+    pub fn add_item(&mut self, item: HardwareItem) {
+        self.items.push(item);
+    }
+
+    /// Add a feature desire to the inventory.
+    pub fn add_desire(&mut self, desire: FeatureDesire) {
+        self.feature_desires.push(desire);
+    }
+
+    /// Return the first item whose role matches, if any.
+    pub fn find_role(&self, role: &ItemRole) -> Option<&HardwareItem> {
+        self.items.iter().find(|i| &i.role == role)
+    }
+
+    /// Return all items that provide a given capability.
+    pub fn items_with_capability(&self, cap: &str) -> Vec<&HardwareItem> {
+        self.items
+            .iter()
+            .filter(|i| i.has_capability(cap))
+            .collect()
+    }
+
+    /// Return all capability tokens provided by the entire inventory (union).
+    pub fn all_capabilities(&self) -> Vec<String> {
+        let mut caps: Vec<String> = Vec::new();
+        for item in &self.items {
+            for cap in item.resolved_capabilities() {
+                if !caps.contains(&cap) {
+                    caps.push(cap);
+                }
+            }
+        }
+        caps
+    }
+
+    /// Render this inventory as the **real runtime `[deployment]` schema** —
+    /// a `[deployment]` table plus one `[[deployment.hardware]]` per item,
+    /// paste-ready into `~/.oh-ben-claw/config.toml` (parsed by
+    /// `config::DeploymentConfig` / `DeploymentHardwareConfig`).
+    ///
+    /// This is the **cross-repo parity contract** (Ecosystem Integration I2):
+    /// the OBC-deployment-generator's TypeScript emitter must produce
+    /// byte-identical output for the same inventory, pinned by the shared
+    /// golden fixtures in `tests/fixtures/deployment/`. Emission rules:
+    /// deterministic field order (`name`, `board_name`, `transport`, `path?`,
+    /// `node_id?`, `role?`, `accessories?`); optional fields omitted when
+    /// absent (`role` when unassigned, `accessories` when empty); feature
+    /// desires as their serde snake_case tokens in inventory order.
+    pub fn to_deployment_toml(&self) -> String {
+        fn desire_token(d: &FeatureDesire) -> String {
+            // Unit variants serialize to their snake_case token; Custom(s)
+            // serializes to a map — render its free-form string directly.
+            match serde_json::to_value(d) {
+                Ok(serde_json::Value::String(s)) => s,
+                _ => match d {
+                    FeatureDesire::Custom(s) => s.clone(),
+                    _ => String::new(),
+                },
+            }
+        }
+
+        let mut out = String::new();
+        out.push_str("[deployment]\n");
+        out.push_str("enabled = true\n");
+        out.push_str(&format!("scenario = {:?}\n", self.scenario_name));
+        out.push_str("auto_plan = true\n");
+        let desires: Vec<String> = self
+            .feature_desires
+            .iter()
+            .map(desire_token)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("{:?}", s))
+            .collect();
+        out.push_str(&format!("feature_desires = [{}]\n", desires.join(", ")));
+
+        for item in &self.items {
+            out.push_str("\n[[deployment.hardware]]\n");
+            out.push_str(&format!("name = {:?}\n", item.name));
+            out.push_str(&format!("board_name = {:?}\n", item.board_name));
+            out.push_str(&format!("transport = {:?}\n", item.transport));
+            if let Some(path) = &item.path {
+                out.push_str(&format!("path = {:?}\n", path));
+            }
+            if let Some(node_id) = &item.node_id {
+                out.push_str(&format!("node_id = {:?}\n", node_id));
+            }
+            if item.role != ItemRole::Unassigned {
+                out.push_str(&format!("role = {:?}\n", item.role.to_string()));
+            }
+            if !item.accessories.is_empty() {
+                let accs: Vec<String> = item
+                    .accessories
+                    .iter()
+                    .map(|a| format!("{:?}", a))
+                    .collect();
+                out.push_str(&format!("accessories = [{}]\n", accs.join(", ")));
+            }
+        }
+        out
+    }
+
+    /// Rebuild an inventory from a parsed `[deployment]` block — the inverse of
+    /// [`to_deployment_toml`].
+    ///
+    /// Until this existed the `[deployment]` schema was write-only. The planner
+    /// emitted it, the TypeScript emitter in OBC-deployment-generator emitted a
+    /// byte-identical copy, golden fixtures pinned both, and OBC-Prime hashed
+    /// those fixtures across three repositories — and nothing ever read one back.
+    /// The only consumer was a test asserting the emitted TOML deserialises,
+    /// which checks serde and not the contract.
+    ///
+    /// With the inverse the contract is a fixed point — `emit → parse → rebuild
+    /// → emit` reproduces the original text — which is the property the goldens
+    /// are reaching for. See the host crate's
+    /// `tests/deployment_config_roundtrip.rs`.
+    ///
+    /// It sits here, next to its inverse, only since the crate extraction. While
+    /// this file was compiled verbatim into `planner-wasm` a `crate::config::`
+    /// reference broke that build, so the function had to live a module away from
+    /// the thing it undoes.
+    ///
+    /// **`capabilities` is deliberately not round-tripped.** It is absent from
+    /// the emitted schema by design: capabilities come from the board registry,
+    /// so carrying them in the config would let a stale file override it. A
+    /// rebuilt item has empty `capabilities` and `resolved_capabilities()` fills
+    /// them from the registry, exactly as for a hand-built inventory.
+    ///
+    /// [`to_deployment_toml`]: HardwareInventory::to_deployment_toml
+    pub fn from_deployment_config(cfg: &crate::config::DeploymentConfig) -> Self {
+        let mut inv = Self::new(cfg.scenario.clone());
+
+        for want in &cfg.feature_desires {
+            // The exact inverse of `desire_token` above: unit variants round-trip
+            // through their snake_case token, and anything the enum does not know
+            // becomes Custom — which is what Custom is for, and keeps an
+            // operator's own desire from being silently dropped on the way in.
+            let desire =
+                serde_json::from_value::<FeatureDesire>(serde_json::Value::String(want.clone()))
+                    .unwrap_or_else(|_| FeatureDesire::Custom(want.clone()));
+            inv.add_desire(desire);
+        }
+
+        for hw in &cfg.hardware {
+            inv.add_item(HardwareItem {
+                name: hw.name.clone(),
+                board_name: hw.board_name.clone(),
+                transport: hw.transport.clone(),
+                path: hw.path.clone(),
+                node_id: hw.node_id.clone(),
+                role: hw.role.parse().unwrap_or_default(),
+                accessories: hw.accessories.clone(),
+                capabilities: Vec::new(),
+            });
+        }
+
+        inv
+    }
+
+    /// Build the standard NanoPi + ESP32-S3 Touch LCD + XIAO + Sipeed mic + DHT22 scenario.
+    ///
+    /// This is the reference deployment scenario described in the Oh-Ben-Claw
+    /// Phase 13 roadmap and matching the hardware list in the problem statement.
+    pub fn nanopi_scenario() -> Self {
+        let mut inv = Self::new("NanoPi-Neo3 Reference Deployment");
+
+        // ── Host ─────────────────────────────────────────────────────────────
+        inv.add_item(
+            HardwareItem::new("nanopi-neo3", "nanopi-neo3", "native")
+                .with_role(ItemRole::Host)
+                .with_accessories(vec!["dht22".to_string()]),
+        );
+
+        // ── Display / Sound ───────────────────────────────────────────────────
+        inv.add_item(
+            HardwareItem::new(
+                "waveshare-esp32-s3-touch-lcd-2.1",
+                "waveshare-esp32-s3-touch-lcd-2.1",
+                "serial",
+            )
+            .with_role(ItemRole::Display),
+        );
+
+        // ── Vision ────────────────────────────────────────────────────────────
+        inv.add_item(
+            HardwareItem::new("xiao-esp32s3-sense", "xiao-esp32s3-sense", "serial")
+                .with_role(ItemRole::Vision),
+        );
+
+        // ── Listening ─────────────────────────────────────────────────────────
+        inv.add_item(
+            HardwareItem::new(
+                "sipeed-6plus1-mic-array",
+                "sipeed-6plus1-mic-array",
+                "serial",
+            )
+            .with_role(ItemRole::Listening),
+        );
+
+        // ── Feature desires ───────────────────────────────────────────────────
+        inv.add_desire(FeatureDesire::Vision);
+        inv.add_desire(FeatureDesire::Listening);
+        inv.add_desire(FeatureDesire::Speech);
+        inv.add_desire(FeatureDesire::EnvironmentalSensing);
+        inv.add_desire(FeatureDesire::DisplayOutput);
+        inv.add_desire(FeatureDesire::TouchInput);
+        inv.add_desire(FeatureDesire::WirelessMesh);
+        inv.add_desire(FeatureDesire::PersistentMemory);
+
+        inv
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hardware_item_resolves_capabilities_from_registry() {
+        let item = HardwareItem::new("xiao", "xiao-esp32s3-sense", "serial");
+        let caps = item.resolved_capabilities();
+        assert!(
+            caps.iter().any(|c| c == "camera_capture"),
+            "expected camera_capture in {:?}",
+            caps
+        );
+        assert!(
+            caps.iter().any(|c| c == "audio_sample"),
+            "expected audio_sample in {:?}",
+            caps
+        );
+        assert!(
+            caps.iter().any(|c| c == "wifi"),
+            "expected wifi in {:?}",
+            caps
+        );
+    }
+
+    #[test]
+    fn hardware_item_resolves_accessory_capabilities() {
+        let item = HardwareItem::new("host", "nanopi-neo3", "native")
+            .with_accessories(vec!["dht22".to_string()]);
+        let caps = item.resolved_capabilities();
+        assert!(
+            caps.iter().any(|c| c == "sensor_read"),
+            "expected sensor_read from dht22 in {:?}",
+            caps
+        );
+    }
+
+    #[test]
+    fn hardware_item_has_capability_check() {
+        let item = HardwareItem::new("display", "waveshare-esp32-s3-touch-lcd-2.1", "serial");
+        assert!(item.has_capability("display"));
+        assert!(item.has_capability("touch"));
+        assert!(!item.has_capability("camera_capture"));
+    }
+
+    #[test]
+    fn inventory_finds_items_by_role() {
+        let inv = HardwareInventory::nanopi_scenario();
+        assert!(inv.find_role(&ItemRole::Host).is_some());
+        assert_eq!(
+            inv.find_role(&ItemRole::Host).unwrap().board_name,
+            "nanopi-neo3"
+        );
+        assert!(inv.find_role(&ItemRole::Vision).is_some());
+        assert!(inv.find_role(&ItemRole::Listening).is_some());
+    }
+
+    #[test]
+    fn inventory_items_with_capability() {
+        let inv = HardwareInventory::nanopi_scenario();
+        let vision_items = inv.items_with_capability("camera_capture");
+        assert_eq!(vision_items.len(), 1);
+        assert_eq!(vision_items[0].board_name, "xiao-esp32s3-sense");
+    }
+
+    #[test]
+    fn nanopi_scenario_has_all_expected_hardware() {
+        let inv = HardwareInventory::nanopi_scenario();
+        assert_eq!(inv.items.len(), 4);
+        let names: Vec<_> = inv.items.iter().map(|i| i.board_name.as_str()).collect();
+        assert!(names.contains(&"nanopi-neo3"));
+        assert!(names.contains(&"waveshare-esp32-s3-touch-lcd-2.1"));
+        assert!(names.contains(&"xiao-esp32s3-sense"));
+        assert!(names.contains(&"sipeed-6plus1-mic-array"));
+    }
+
+    #[test]
+    fn nanopi_scenario_has_feature_desires() {
+        let inv = HardwareInventory::nanopi_scenario();
+        assert!(inv.feature_desires.contains(&FeatureDesire::Vision));
+        assert!(inv.feature_desires.contains(&FeatureDesire::Listening));
+        assert!(inv
+            .feature_desires
+            .contains(&FeatureDesire::EnvironmentalSensing));
+    }
+
+    #[test]
+    fn feature_desire_required_capabilities() {
+        assert_eq!(
+            FeatureDesire::Vision.required_capabilities(),
+            &["camera_capture"]
+        );
+        assert_eq!(
+            FeatureDesire::Listening.required_capabilities(),
+            &["audio_sample"]
+        );
+        assert_eq!(
+            FeatureDesire::DisplayOutput.required_capabilities(),
+            &["display"]
+        );
+    }
+
+    #[test]
+    fn accelerated_inference_requires_any_accelerator_token() {
+        let caps = FeatureDesire::AcceleratedInference.required_capabilities();
+        for t in [
+            "cuda",
+            "tensor_rt",
+            "npu",
+            "edge_tpu",
+            "hailo",
+            "kpu",
+            "nn_accel",
+        ] {
+            assert!(caps.contains(&t), "AcceleratedInference missing token {t}");
+        }
+        // EdgeInference stays host-level (satisfiable on a CPU-only host).
+        assert!(FeatureDesire::EdgeInference
+            .required_capabilities()
+            .is_empty());
+    }
+
+    #[test]
+    fn operator_console_desire_and_role() {
+        // The desire keys off the `keyboard` capability token (T-Deck family).
+        assert_eq!(
+            FeatureDesire::OperatorConsole.required_capabilities(),
+            &["keyboard"]
+        );
+        // A T-Deck Plus item can carry the Console role.
+        let item = HardwareItem::new("field-console", "lilygo-t-deck-plus", "serial")
+            .with_role(ItemRole::Console);
+        assert_eq!(item.role.to_string(), "console");
+    }
+
+    #[test]
+    fn new_radio_sense_act_desires_map_to_tokens() {
+        assert_eq!(
+            FeatureDesire::LongRangeRadio.required_capabilities(),
+            &["lora"]
+        );
+        assert_eq!(
+            FeatureDesire::Localization.required_capabilities(),
+            &["gps"]
+        );
+        assert_eq!(
+            FeatureDesire::Actuation.required_capabilities(),
+            &["actuate"]
+        );
+        // Every new variant has a non-empty human description.
+        for d in [
+            FeatureDesire::AcceleratedInference,
+            FeatureDesire::LongRangeRadio,
+            FeatureDesire::Localization,
+            FeatureDesire::Actuation,
+        ] {
+            assert!(!d.description().is_empty());
+        }
+    }
+}
