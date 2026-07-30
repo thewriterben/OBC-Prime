@@ -5,6 +5,54 @@ New entries go at the top.
 
 ---
 
+## 2026-07-30 — The peer check keeps a credential, because the alternative is trusting a mirror
+
+The `peer` job checks the 11 artifacts the deployment generator mirrors. It went
+red on PR #2 and stayed red, and the interesting part is how long it took to stop
+looking for drift.
+
+Everything measurable said the mirrors were identical: 56 artifacts passing
+locally; passing against `git archive main` of the generator, which is
+byte-for-byte what `actions/checkout` produces; no CR anywhere; the same hash for
+`registry.json` across the OBC-Prime worktree, the generator worktree, and the
+generator's committed blob; the 13 crate artifacts correctly carrying no peer
+path. Every one of those checks was about the comparison. The failure was
+upstream of the comparison — the checkout — and no amount of hashing reaches it.
+
+**The generator repository is private.** That is now measured rather than
+asserted: the job failed on the peer checkout, a fine-grained PAT with
+`Contents: read` went in as `PEER_REPO_TOKEN`, and all four jobs went green. An
+earlier version of this workflow asserted the opposite — "the generator is public
+and needs no token" — with nothing having checked, and `PLAN.md` saying otherwise
+in the same tree.
+
+The decision was whether to keep the job at all. The case for deleting it is real:
+when it was written the generator had no CI, and it does now — `ci.yml` runs the
+same four planner-parity tests against the same goldens, including the widened
+`wasm-planner.test.ts` that compares the whole config instead of asserting it
+contains `[peripherals]`. So this leg is no longer the only guard, and it is a
+guard that needs a credential with an expiry to function.
+
+Kept anyway. The generator's own CI proves its planner agrees with the goldens
+*it has*; this job proves the goldens it has are the ones this repository
+published. Those are different claims, and the second one is the entire point of a
+mirror. A vendored copy nobody compares is a copy that has already forked and has
+not been told.
+
+The cost is honest and written into the workflow: when the PAT expires this job
+fails on checkout with "Repository not found", which reads exactly like drift and
+is not. A drift failure names a file and two hashes. That sentence is in
+`parity.yml` so the next person spends a minute rather than an afternoon.
+
+### The transferable part
+
+When a check that compares two things fails, the reflex is to interrogate the two
+things. The comparison was never reached. Read the log before reproducing the
+comparison — one line of it would have replaced an hour of hashing, and the hour
+of hashing produced only evidence that everything it could see was fine.
+
+---
+
 ## 2026-07-30 — Hashes prove identity; only execution proves correctness
 
 The stale-build entry below fixed the *detection* of a bundle built from old
