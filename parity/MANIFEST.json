@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-28T23:41:29+00:00",
+  "generated": "2026-07-30T01:12:34+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -28,8 +28,8 @@
       "bytes": 556
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
-      "sha256": "914e5000e7cb2a93695398383cc36a59664efff0ccf7ecb302d56fe746fc0230",
-      "bytes": 223822
+      "sha256": "c399b759d9454a67a168d32fb8892b77be45f77e22e186383d66a0a5997d2df6",
+      "bytes": 235572
     },
     "wasm/obc-planner/obc_planner_wasm.js": {
       "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
@@ -174,6 +174,25 @@
     "firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino": {
       "sha256": "25a7d8751522493e83c8c3150c5be22227d8d2badc7dab9001dd64add3a1ce26",
       "bytes": 25867
+    }
+  },
+  "wasm_build": {
+    "note": "sha256 of the upstream sources the vendored WASM bundle is compiled from. Written by `sync --rebuild-wasm`, which built the bundle in the same run. `check --upstream` fails if any of them has changed since.",
+    "rebuild": "wasm-pack build planner-wasm --target nodejs",
+    "built_by_this_script": true,
+    "sources": {
+      "planner-wasm/Cargo.toml": "d9f9a97d6622344bef3b94d03dfac9397101a50cb32dfcdf7a0527fbec222c82",
+      "planner-wasm/src/lib.rs": "06baaae3d7390345c008c6d837e7b49ea15f390e747999243345155430c167b0",
+      "planner-wasm/src/deployment/mod.rs": "c3028f9e6517230aded5f75374c3a6de7b937dcfab542098fa7ea404963edf0f",
+      "planner-wasm/src/peripherals/mod.rs": "65c93ecc441382ddfa19ec5bec42509e7c1e443246a016fb20048a54107847f3",
+      "src/geo/mod.rs": "88e552902ad4f9d0727641da0989316a0e6c500c3138b34b6b1e5b6207519283",
+      "src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
+      "src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
+      "src/deployment/firmware_scaffold.rs": "41108a752c31ced1b60cadcade11c4c70816431dc59d32f893eda3cb434689de",
+      "src/deployment/inventory.rs": "744d20036d33d1d79b96a639127a5a9765a04ee5c7a3d64359a1e5f76d22d7ce",
+      "src/deployment/planner.rs": "a4dfb39c0c0b6e03140c415a9a753451f9aae247322a72c5ca1f1861ce1cc7a5",
+      "src/deployment/scheme.rs": "92a5f9b1149bf69da37f3641dee518dc15c247e86b5aee7a11fee6494fa1a8a5",
+      "src/peripherals/registry.rs": "5cce2dfa70f196ec06101153a72fa053b337d576348b24715d57b6a7f97e62c3"
     }
   }
 }
