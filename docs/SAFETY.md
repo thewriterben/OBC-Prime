@@ -310,6 +310,12 @@ Stated because a safety document that only lists strengths is marketing.
   CVE-2026-27509/27510 — unauthenticated DDS publish on Unitree Go2 giving root
   RCE with physical actuation, persistent across reboot, patched 24 Feb 2026.
   **Treat the spine network as trusted, and make sure that is actually true.**
+  A design for closing this is in [SPINE-AUTH.md](SPINE-AUTH.md) — per-message
+  HMAC with a replay counter, sized against the 240-byte LoRa frame budget. It is
+  a design and not an implementation, and this section changes when that changes.
+  Note also that MQTT is cleartext by construction: `spine.tls = true` is a hard
+  error because MQTT-over-TLS is not implemented, which is deliberate and is not
+  the same as being encrypted.
 - **Perception content in the planning path.** Taint tracking guards tool
   *arguments*. Text recovered from an image by `vision_analyze` still reaches the
   reasoner as prose. Nothing currently strips or sandboxes OCR'd instructions.
