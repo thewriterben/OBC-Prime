@@ -113,6 +113,14 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
     # this is worth doing rather than just publishing the docs.
     #
     # No peer column: the generator is a TypeScript app and has no use for them.
+    #
+    # `src/image.rs` was here until 2026-07-30 and is gone because upstream
+    # deleted it — multimodal image memory was cut as documented-but-never-run.
+    # This list did not notice for two commits, and neither did CI: `check`
+    # without --upstream compares vendored files to their own recorded hashes,
+    # which a deleted-upstream file passes trivially. Its own output says so
+    # ("not that the manifest is current"). The `upstream` job below is now
+    # enabled precisely so that sentence stops being the only warning.
 
     ("crates/obc-paths/Cargo.toml",
      "crates/obc-paths/Cargo.toml",
@@ -144,9 +152,6 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
      None),
     ("crates/obc-memory/src/heartbeat.rs",
      "crates/obc-memory/src/heartbeat.rs",
-     None),
-    ("crates/obc-memory/src/image.rs",
-     "crates/obc-memory/src/image.rs",
      None),
     ("crates/obc-memory/src/journal.rs",
      "crates/obc-memory/src/journal.rs",
@@ -286,6 +291,45 @@ WASM_SOURCES: list[str] = [
 ]
 
 WASM_REBUILD_CMD = "wasm-pack build planner-wasm --target nodejs"
+
+# Directories whose contents are vendored in their entirety, mapped to the few
+# files inside them that belong to this repository instead.
+#
+# ARTIFACTS answers "is everything we declared still correct". It cannot answer
+# "is everything present still declared", and on 2026-07-30 that gap had teeth:
+# upstream deleted crates/obc-memory/src/image.rs, this repository kept its copy
+# and kept compiling it, and every gate stayed green because `check` only ever
+# walks ARTIFACTS. The crate here had quietly become a different crate from the
+# one upstream builds.
+#
+# Removing an entry from ARTIFACTS does not remove the file either — `sync`
+# copies, it never deletes — so the same hole opens from the other direction the
+# moment something is retired. This closes both.
+VENDORED_TREES: dict[str, set[str]] = {
+    "crates": set(),
+    "wasm": set(),
+    "registry": set(),
+    # This repo's own prose about the vendored firmware, not a vendored file.
+    "firmware": {"firmware/README.md"},
+}
+
+
+def undeclared_vendored_files() -> list[str]:
+    """Files sitting in a vendored tree that ARTIFACTS does not declare."""
+    declared = {local for _up, local, _peer in ARTIFACTS}
+    found: list[str] = []
+    for tree, own in VENDORED_TREES.items():
+        base = ROOT / tree
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(ROOT).as_posix()
+            if rel not in declared and rel not in own:
+                found.append(rel)
+    return found
+
 
 # How each artifact is produced upstream. Printed on drift so the fix is
 # obvious instead of requiring archaeology.
@@ -577,6 +621,13 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
                         f"      artifact check, and it is still wrong.\n"
                         f"      fix with: python scripts/sync_upstream.py sync \\\n"
                         f"                    --upstream <core> --peer <generator> --rebuild-wasm")
+
+    for rel in undeclared_vendored_files():
+        problems.append(
+            f"{rel}: present in a vendored tree but absent from ARTIFACTS.\n"
+            f"      Either it was retired upstream and this copy should go, or it\n"
+            f"      was added here by hand. Both are drift; neither is visible to\n"
+            f"      a hash check, because nothing is hashing it.")
 
     scope = ["manifest"]
     if upstream:
