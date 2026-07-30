@@ -108,9 +108,15 @@ jobs:
     # Enabled 2026-07-30, once the two things blocking it were actually solved
     # rather than noted:
     #
-    #   * Repo access. Same pattern as the `peer` job, proven the same day:
-    #     `github.token` can only read another repository if it is public, so a
-    #     fine-grained PAT with `Contents: read` goes in as CORE_REPO_TOKEN.
+    #   * Repo access — which turned out not to be a blocker at all. The core
+    #     agent repository is public, so `github.token` can read it and no
+    #     secret is required. The CORE_REPO_TOKEN fallback below stays for the
+    #     day that changes; it is inert while the repo is public.
+    #
+    #     Worth saying plainly, because this job sat commented out for weeks
+    #     partly on the belief that access was the hard part. Nobody had asked.
+    #     The sibling `peer` job needed a real PAT and this one needed nothing,
+    #     and the difference was one question.
     #   * The WASM bundle. `planner-wasm/pkg/` is gitignored upstream, so a plain
     #     checkout has no bundle and all five wasm artifacts fail as "upstream
     #     source missing". Hence the wasm-pack build step below — it reproduces
@@ -120,7 +126,7 @@ jobs:
     #     to catch.
     steps:
       - uses: actions/checkout@v4
-      - name: check out the core agent (needs CORE_REPO_TOKEN if it is private)
+      - name: check out the core agent (public; no token needed)
         uses: actions/checkout@v4
         with:
           repository: thewriterben/Oh-Ben-Claw
