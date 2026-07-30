@@ -7,6 +7,11 @@ name: parity
 # Without --upstream this only proves nobody hand-edited a vendored file. To
 # also prove the vendored copies still match the core agent, check out the core
 # repo in CI and pass --upstream (see the commented job below).
+#
+# --upstream also checks that the vendored WASM is not a build of stale planner
+# sources, which the artifact hashes structurally cannot see. Until that job is
+# enabled, run it by hand before a release:
+#   python scripts/sync_upstream.py check --upstream ../Oh-Ben-Claw --peer ../OBC-deployment-generator
 
 on:
   push:
@@ -26,7 +31,53 @@ jobs:
       - name: check
         run: python scripts/sync_upstream.py check
 
+  behaviour:
+    name: vendored wasm behaves as the goldens say
+    runs-on: ubuntu-latest
+    # The hash jobs prove the bundle is the file we recorded. This proves it is
+    # the right file. Those are different claims, and for six weeks only the
+    # first one was checked — see docs/DECISIONS.md, "A hash gate cannot see a
+    # stale build". Needs node and nothing else: the bundle is a CommonJS
+    # --target nodejs build and the fixtures are in this repo.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node parity/verify_wasm.cjs
+
+  peer:
+    name: generator mirrors match
+    runs-on: ubuntu-latest
+    # Covers the 11 artifacts the generator also carries (registry, fixtures,
+    # wasm); the 32 firmware files have no peer copy.
+    #
+    # Corrected 2026-07-30: an earlier version of this job asserted "the
+    # generator is public and needs no token". PLAN.md says the opposite, and
+    # nothing had checked. The token expression below works either way — for a
+    # public repo `github.token` suffices; for a private one, set a PAT as the
+    # PEER_REPO_TOKEN secret. If the repo is private and the secret is unset,
+    # this job fails on checkout with a clear 404 rather than a confusing drift
+    # report, which is the right failure.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thewriterben/OBC-deployment-generator
+          path: peer
+          token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/sync_upstream.py check --peer peer
+
   # Enable once the core agent repo is reachable from CI.
+  #
+  # Two things block this, not one. The access token is the known blocker. The
+  # other: `planner-wasm/pkg/` is gitignored upstream (`pkg/.gitignore` is `*`),
+  # so a plain checkout of the core repo has no WASM bundle and all five wasm
+  # artifacts fail as "upstream source missing". This job therefore needs a
+  # wasm-pack build step before the check, not just repo access.
   #
   # upstream:
   #   name: vendored artifacts match the core agent
@@ -41,4 +92,7 @@ jobs:
   #     - uses: actions/setup-python@v5
   #       with:
   #         python-version: '3.12'
+  #     - uses: jetli/wasm-pack-action@v0
+  #     - run: wasm-pack build planner-wasm --target nodejs
+  #       working-directory: core
   #     - run: python scripts/sync_upstream.py check --upstream core

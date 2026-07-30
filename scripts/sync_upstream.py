@@ -17,15 +17,29 @@ gives CI a way to fail fast when any copy diverges.
 
 Usage
 -----
-    python scripts/sync_upstream.py sync    --upstream <path-to-core-repo>
+    python scripts/sync_upstream.py sync    --upstream <path-to-core-repo> [--peer <path>]
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
-`sync`  copies upstream -> here and rewrites parity/MANIFEST.json.
+`sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
+        also updates the generator app's mirrors (11 of the 43 artifacts).
+        With --rebuild-wasm it runs wasm-pack in the upstream repo first and
+        records what the bundle was compiled from. Without it, the previous
+        build-input hashes are carried forward unchanged.
+
+The one command that puts everything in step:
+
+    python scripts/sync_upstream.py sync --upstream ../Oh-Ben-Claw \
+        --peer ../OBC-deployment-generator --rebuild-wasm
 `check` verifies, in order:
           1. every vendored file matches the manifest hash   (always)
           2. every vendored file matches upstream            (if --upstream)
-          3. every peer mirror matches too                   (if --peer)
+          3. the WASM bundle's build inputs are unchanged    (if --upstream)
+          4. every peer mirror matches too                   (if --peer)
         Exits non-zero on any mismatch. This is the CI gate.
+
+        (3) exists because (1) and (2) structurally cannot catch a stale build:
+        a compiled artifact never drifts from its own hash. Only the sources it
+        was compiled from can show that it is out of date.
 
 Paths may also come from OBC_UPSTREAM / OBC_PEER environment variables.
 """
@@ -37,6 +51,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -192,11 +207,39 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
      None),
 ]
 
+# The upstream sources the WASM bundle is *compiled from*, via the `#[path]`
+# shims in `planner-wasm/src/`. These are NOT vendored — they are hashed so that
+# a planner change without a rebuild is caught.
+#
+# Why this exists: the manifest hashes the built `.wasm`, and a built artifact
+# cannot drift from itself. On 2026-07-11 the bundle was built; on 2026-07-28
+# `src/deployment/planner.rs` was rewritten three times and the goldens with it.
+# Every hash in the manifest still matched, every parity check still passed, and
+# the vendored bundle emitted a 79-line config where the golden had 119 — with a
+# hardcoded `[provider] openai / gpt-4o` in it. Hashing the build inputs is the
+# only way a hash gate can see that.
+WASM_SOURCES: list[str] = [
+    "planner-wasm/Cargo.toml",
+    "planner-wasm/src/lib.rs",
+    "planner-wasm/src/deployment/mod.rs",
+    "planner-wasm/src/peripherals/mod.rs",
+    "src/geo/mod.rs",
+    "src/siteplan/mod.rs",
+    "src/deployment/advisor.rs",
+    "src/deployment/firmware_scaffold.rs",
+    "src/deployment/inventory.rs",
+    "src/deployment/planner.rs",
+    "src/deployment/scheme.rs",
+    "src/peripherals/registry.rs",
+]
+
+WASM_REBUILD_CMD = "wasm-pack build planner-wasm --target nodejs"
+
 # How each artifact is produced upstream. Printed on drift so the fix is
 # obvious instead of requiring archaeology.
 REGENERATE = {
     "registry/registry.json": "cargo run --bin emit-registry",
-    "wasm/obc-planner/": "wasm-pack build planner-wasm --target web",
+    "wasm/obc-planner/": "wasm-pack build planner-wasm --target nodejs",
     "parity/fixtures/": "cargo test  (fixtures are committed goldens)",
     "firmware/": "(hand-authored upstream — edit there, then sync)",
 }
@@ -233,9 +276,75 @@ def hint_for(local: str) -> str:
     return "(unknown — see parity/README.md)"
 
 
-def do_sync(upstream: Path) -> int:
-    copied, missing = [], []
-    for up, local, _peer in ARTIFACTS:
+def rebuild_wasm(upstream: Path) -> bool:
+    """Run wasm-pack in the upstream repo. Returns True on success.
+
+    This exists so that recording the build-input hashes cannot be a guess. A
+    plain `sync` copies whatever bundle is on disk; if that bundle is stale,
+    recording the *current* source hashes alongside it would launder the exact
+    staleness this mechanism was added to catch — the gate would go green on a
+    bundle that is still wrong. So `sync` never writes fresh hashes unless it
+    built the bundle itself, in this function, moments earlier.
+    """
+    print(f"{DIM}$ {WASM_REBUILD_CMD}{RESET}  (in {upstream})")
+    try:
+        proc = subprocess.run(WASM_REBUILD_CMD.split(), cwd=upstream)
+    except FileNotFoundError:
+        print(f"{RED}error{RESET}: wasm-pack not found on PATH.\n"
+              f"       install it with: cargo install wasm-pack\n"
+              f"       (it also needs the wasm target: "
+              f"rustup target add wasm32-unknown-unknown)")
+        return False
+    if proc.returncode != 0:
+        print(f"{RED}error{RESET}: wasm-pack exited {proc.returncode} — "
+              f"not recording build inputs")
+        return False
+    print(f"{GREEN}built{RESET} {upstream / 'planner-wasm' / 'pkg'}")
+    return True
+
+
+def toolchain_versions(upstream: Path) -> dict:
+    """What built the bundle, so a binary diff with no source diff is explainable.
+
+    The build inputs say which *sources* went in. They say nothing about the
+    compiler, and a rustc or wasm-bindgen bump rewrites the `.wasm` — and
+    sometimes the JS glue — with no source change at all. The drift gate is right
+    to stay green for that, but a 200 KB binary moving for no visible reason is
+    the kind of thing that costs an hour to re-derive. Recording it turns that
+    into a one-line diff.
+    """
+    def probe(cmd: list[str]) -> str | None:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return None
+        if r.returncode != 0 or not r.stdout.strip():
+            return None
+        return r.stdout.strip().splitlines()[0]
+
+    versions = {
+        "rustc": probe(["rustc", "--version"]),
+        "wasm-pack": probe(["wasm-pack", "--version"]),
+    }
+    # wasm-bindgen is the one that rewrites the JS glue, and it is pinned by the
+    # lockfile rather than by anything on PATH.
+    lock = upstream / "Cargo.lock"
+    if lock.exists():
+        text = lock.read_text(encoding="utf-8", errors="replace")
+        i = text.find('name = "wasm-bindgen"')
+        if i != -1:
+            for line in text[i:i + 400].splitlines():
+                if line.startswith("version = "):
+                    versions["wasm-bindgen"] = line.split('"')[1]
+                    break
+    return {k: v for k, v in versions.items() if v}
+
+
+def do_sync(upstream: Path, peer: Path | None = None, rebuild: bool = False) -> int:
+    if rebuild and not rebuild_wasm(upstream):
+        return 1
+    copied, missing, mirrored = [], [], []
+    for up, local, peer_rel in ARTIFACTS:
         src, dst = upstream / up, ROOT / local
         if not src.exists():
             missing.append(up)
@@ -244,11 +353,50 @@ def do_sync(upstream: Path) -> int:
         shutil.copy2(src, dst)
         copied.append((local, sha256(dst), dst.stat().st_size))
 
+        # The generator carries its own copy of 11 of these. `sync` used to write
+        # only this repo, so a rebuilt WASM landed here and the generator kept the
+        # old one — `check --peer` then reported drift that `sync` could not fix,
+        # and the documented remedy ("fix with: sync") was wrong for that case.
+        if peer and peer_rel:
+            mirror = peer / peer_rel
+            mirror.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, mirror)
+            mirrored.append(peer_rel)
+
     if missing:
         print(f"{RED}missing upstream artifacts:{RESET}")
         for m in missing:
             print(f"  {m}")
         return 1
+
+    # Record what the WASM was built from, so `check --upstream` can tell that a
+    # later planner edit invalidated the bundle.
+    #
+    # Only written when this run did the build (--rebuild-wasm). Otherwise the
+    # previous block is carried forward untouched: a sync that merely copies a
+    # bundle it did not build has no standing to say what that bundle was
+    # compiled from, and guessing is how the gate would clear itself.
+    prior = {}
+    if MANIFEST.exists():
+        try:
+            prior = json.loads(MANIFEST.read_text(encoding="utf-8")).get("wasm_build") or {}
+        except (json.JSONDecodeError, OSError):
+            prior = {}
+
+    if rebuild:
+        wasm_build = {
+            "note": "sha256 of the upstream sources the vendored WASM bundle is "
+                    "compiled from. Written by `sync --rebuild-wasm`, which built "
+                    "the bundle in the same run. `check --upstream` fails if any "
+                    "of them has changed since.",
+            "rebuild": WASM_REBUILD_CMD,
+            "built_by_this_script": True,
+            "toolchain": toolchain_versions(upstream),
+            "sources": {rel: (sha256(upstream / rel) if (upstream / rel).exists() else None)
+                        for rel in WASM_SOURCES},
+        }
+    else:
+        wasm_build = prior or None
 
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST.write_text(json.dumps({
@@ -258,12 +406,35 @@ def do_sync(upstream: Path) -> int:
                 "run scripts/sync_upstream.py sync.",
         "artifacts": {local: {"sha256": digest, "bytes": size}
                       for local, digest, size in copied},
+        **({"wasm_build": wasm_build} if wasm_build else {}),
     }, indent=2) + "\n", encoding="utf-8")
 
     total = sum(size for _, _, size in copied)
     print(f"{GREEN}synced{RESET} {len(copied)} artifacts ({total:,} bytes) from {upstream}")
+    if rebuild:
+        print(f"{GREEN}recorded{RESET} {len(wasm_build['sources'])} WASM build-input "
+              f"hashes for a bundle built by this run")
+        tc = wasm_build.get("toolchain") or {}
+        if tc:
+            print("         toolchain: " + ", ".join(f"{k} {v}" for k, v in tc.items()))
+        else:
+            print(f"{YELLOW}         could not determine the build toolchain{RESET}")
+    elif wasm_build:
+        print(f"{YELLOW}note{RESET}: carried forward the existing WASM build-input "
+              f"hashes. This run did not rebuild the bundle, so it cannot vouch "
+              f"for it. Use --rebuild-wasm to refresh them.")
+    else:
+        print(f"{YELLOW}note{RESET}: no WASM build-input hashes recorded — "
+              f"`check --upstream` will fail until you run with --rebuild-wasm.")
     for local, digest, size in copied:
         print(f"  {DIM}{digest[:12]}{RESET}  {size:>7,}  {local}")
+    if peer:
+        print(f"{GREEN}mirrored{RESET} {len(mirrored)} artifacts into {peer}")
+    else:
+        print(f"{YELLOW}note{RESET}: no --peer given — the generator's mirrors were "
+              f"not updated. If a vendored file changed, `check --peer` will now "
+              f"report drift until you re-run with --peer.")
+
     print(f"\nmanifest -> {MANIFEST.relative_to(ROOT)}")
     return 0
 
@@ -318,9 +489,46 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
                     f"{local}: peer mirror DRIFTED ({peer_rel})\n"
                     f"      peer {sha256(mirror)[:16]}  here {digest[:16]}")
 
+    # ── WASM build inputs ───────────────────────────────────────────────────
+    # A built artifact cannot drift from itself, so the artifact hashes above
+    # cannot detect a stale bundle. These can.
+    if upstream:
+        wasm_build = manifest.get("wasm_build")
+        if not wasm_build:
+            problems.append(
+                "wasm/obc-planner/: MANIFEST.json records no build inputs, so the\n"
+                "      bundle cannot be shown to match the planner it claims to be a\n"
+                "      build of. This is the state the manifest was in when the\n"
+                "      vendored bundle was 17 days behind src/deployment/planner.rs.\n"
+                "      fix with: python scripts/sync_upstream.py sync \\\n"
+                "                    --upstream <core> --peer <generator> --rebuild-wasm")
+        else:
+            recorded_src = wasm_build.get("sources", {})
+            for rel in WASM_SOURCES:
+                src = upstream / rel
+                if not src.exists():
+                    problems.append(f"wasm build input missing upstream: {rel}")
+                    continue
+                was = recorded_src.get(rel)
+                now = sha256(src)
+                if was is None:
+                    problems.append(
+                        f"wasm build input not recorded: {rel}\n"
+                        f"      re-run sync after rebuilding the bundle")
+                elif was != now:
+                    problems.append(
+                        f"wasm/obc-planner/: STALE BUILD — {rel} changed since the "
+                        f"bundle was built\n"
+                        f"      recorded {was[:16]}  upstream now {now[:16]}\n"
+                        f"      The vendored .wasm is a build of older sources. It will\n"
+                        f"      still hash-match the manifest and still pass every\n"
+                        f"      artifact check, and it is still wrong.\n"
+                        f"      fix with: python scripts/sync_upstream.py sync \\\n"
+                        f"                    --upstream <core> --peer <generator> --rebuild-wasm")
+
     scope = ["manifest"]
     if upstream:
-        scope.append("upstream")
+        scope += ["upstream", "wasm build inputs"]
     if peer:
         scope.append("peer")
 
@@ -346,10 +554,18 @@ def main() -> int:
     ap.add_argument("mode", choices=["sync", "check"])
     ap.add_argument("--upstream", help="path to the core agent repo")
     ap.add_argument("--peer", help="path to the deployment generator repo")
+    ap.add_argument("--rebuild-wasm", action="store_true",
+                    help="(sync) run wasm-pack in the upstream repo first, then "
+                         "record the build-input hashes. The only way the manifest "
+                         "gets a wasm_build block.")
     args = ap.parse_args()
 
     if args.mode == "sync":
-        return do_sync(resolve(args.upstream, "OBC_UPSTREAM", "upstream", required=True))
+        return do_sync(
+            resolve(args.upstream, "OBC_UPSTREAM", "upstream", required=True),
+            resolve(args.peer, "OBC_PEER", "peer", required=False),
+            rebuild=args.rebuild_wasm,
+        )
     return do_check(
         resolve(args.upstream, "OBC_UPSTREAM", "upstream", required=False),
         resolve(args.peer, "OBC_PEER", "peer", required=False),
