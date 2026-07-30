@@ -1,6 +1,6 @@
 {
-  "generated": "2026-07-30T01:12:34+00:00",
-  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
+  "generated": "2026-07-30T04:43:09+00:00",
+  "upstream": "/sessions/rcw-01m14aukcdwvs7114qppgewv/mnt/Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
@@ -46,6 +46,58 @@
     "wasm/obc-planner/package.json": {
       "sha256": "268801038e637b974e1cb371db9334c4d78ecc4daec3724319ce894fa2d25504",
       "bytes": 421
+    },
+    "crates/obc-paths/Cargo.toml": {
+      "sha256": "d951d6adcbb8b765511122e35dbc0435245c5456837137fbf3cbddb66fb04e5b",
+      "bytes": 434
+    },
+    "crates/obc-paths/src/lib.rs": {
+      "sha256": "70372913ef90e42ed2e217df53ee003c61885129bf2417b76a2f0e30e5cda50d",
+      "bytes": 9316
+    },
+    "crates/obc-memory/Cargo.toml": {
+      "sha256": "a812cb4e6f808dd2732962850efcd15b5052091287fac2cc07b3013b12609a0f",
+      "bytes": 1721
+    },
+    "crates/obc-memory/src/lib.rs": {
+      "sha256": "5211128eef611ee4b804782ea67a5f353194061ac05500ac3d6f7a471f0512a9",
+      "bytes": 14348
+    },
+    "crates/obc-memory/src/world.rs": {
+      "sha256": "e6869eda344a9ba28f7ec43450e5510b198dc647f00291d935eeafac622ebaca",
+      "bytes": 66043
+    },
+    "crates/obc-memory/src/liveness.rs": {
+      "sha256": "1c17afa67b73e5e2a56974b584e1534bffed270c5c20b7cc87b1f2fb93f99228",
+      "bytes": 33655
+    },
+    "crates/obc-memory/src/expiry.rs": {
+      "sha256": "c4573765f2f83b4368cc9f16ef224a3c2aa7f712e45774b77195b99968ac0930",
+      "bytes": 15977
+    },
+    "crates/obc-memory/src/trajectory.rs": {
+      "sha256": "f6355d2ab2d70c47a7d321cc92e324549a983712982304053edd3c9c9728518c",
+      "bytes": 28746
+    },
+    "crates/obc-memory/src/embed.rs": {
+      "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
+      "bytes": 1601
+    },
+    "crates/obc-memory/src/heartbeat.rs": {
+      "sha256": "1f4ac3869e144e918d91e513a81fdeb08d44f0e7a9f3b8db86bbf3c8696f7ac0",
+      "bytes": 9510
+    },
+    "crates/obc-memory/src/image.rs": {
+      "sha256": "ffbc8942cb0a69da6cc4c4ced8c2487f46575dbf9013f7edaec8429a70e4ef6f",
+      "bytes": 17998
+    },
+    "crates/obc-memory/src/journal.rs": {
+      "sha256": "de1837b22cfc3eba88951dd74bcdf474259bb2a2f205209b3a5950639aa817b6",
+      "bytes": 8902
+    },
+    "crates/obc-memory/src/vector.rs": {
+      "sha256": "73049de6540f08016e55c5745dc5d03ed392968245a72b319d22f926b29a21a6",
+      "bytes": 16680
     },
     "firmware/obc-esp32-s3/.cargo/config.toml": {
       "sha256": "636313d01cfe40b55fde7d2c4c6af9e98b8c35137bd3a54c29bcb4ba389dfe61",

@@ -103,6 +103,58 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
      "wasm/obc-planner/package.json",
      "wasm/obc-planner/package.json"),
 
+    # ── The memory substrate ─────────────────────────────────────────────────
+    # The first piece of the agent to move here (2026-07-30). Vendored rather
+    # than relocated, the same call DECISIONS.md made for firmware: the crates
+    # stay in the core repo where the rest of the agent compiles against them,
+    # and this repository carries a hash-checked copy it can build and test on
+    # its own. `cargo test -p obc-memory` runs here, in CI, against real agent
+    # code — which is more than a vendored copy usually earns, and the reason
+    # this is worth doing rather than just publishing the docs.
+    #
+    # No peer column: the generator is a TypeScript app and has no use for them.
+
+    ("crates/obc-paths/Cargo.toml",
+     "crates/obc-paths/Cargo.toml",
+     None),
+    ("crates/obc-paths/src/lib.rs",
+     "crates/obc-paths/src/lib.rs",
+     None),
+
+    ("crates/obc-memory/Cargo.toml",
+     "crates/obc-memory/Cargo.toml",
+     None),
+    ("crates/obc-memory/src/lib.rs",
+     "crates/obc-memory/src/lib.rs",
+     None),
+    ("crates/obc-memory/src/world.rs",
+     "crates/obc-memory/src/world.rs",
+     None),
+    ("crates/obc-memory/src/liveness.rs",
+     "crates/obc-memory/src/liveness.rs",
+     None),
+    ("crates/obc-memory/src/expiry.rs",
+     "crates/obc-memory/src/expiry.rs",
+     None),
+    ("crates/obc-memory/src/trajectory.rs",
+     "crates/obc-memory/src/trajectory.rs",
+     None),
+    ("crates/obc-memory/src/embed.rs",
+     "crates/obc-memory/src/embed.rs",
+     None),
+    ("crates/obc-memory/src/heartbeat.rs",
+     "crates/obc-memory/src/heartbeat.rs",
+     None),
+    ("crates/obc-memory/src/image.rs",
+     "crates/obc-memory/src/image.rs",
+     None),
+    ("crates/obc-memory/src/journal.rs",
+     "crates/obc-memory/src/journal.rs",
+     None),
+    ("crates/obc-memory/src/vector.rs",
+     "crates/obc-memory/src/vector.rs",
+     None),
+
     # ── Node firmware ────────────────────────────────────────────────────────
     # Authored upstream, vendored here so the flashing guide and the sources it
     # describes cannot drift apart. `spine.rs` in particular is compiled by a
