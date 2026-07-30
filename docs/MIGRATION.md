@@ -148,15 +148,32 @@ Both halves were wrong, and the ledger is what caught it:
 
 What the measurement does show, and what stands:
 
-| module | LOC | why it blocks |
-|---|---:|---|
-| `foresight` | 677 | The only SOTA-compared subsystem with no integration suite **and** no roadmap row. |
-| `learning` | 454 | Self-authored reflexes — mine → propose → approve → activate. The thinnest coverage in the tree (4 tests) on the one pipeline that ends by activating a rule which can actuate hardware. Its approval gate is the safety story and has no integration test. |
-| `runtime` | 417 | Unwired. Decision, not testing. |
+| module | LOC | why it blocks | status |
+|---|---:|---|---|
+| `foresight` | 677 | Only SOTA-compared subsystem with no integration suite. | **closed 2026-07-30** |
+| `learning` | 454 | Self-authored reflexes — mine → propose → approve → activate. Thinnest coverage in the tree, on the one pipeline that ends by activating a rule which can drive behaviour. | **closed 2026-07-30** |
+| `runtime` | 417 | Unwired. Decision, not testing. | open |
 
-1,548 LOC, three decisions. That is a materially smaller and more actionable
-problem than the one this section originally described, and the difference between
-the two is the difference between counting words and measuring.
+`tests/learning_approval_gate.rs` closed both testable rows at once — it drives
+the whole chain, so it covers the miner and the gate in `learning` *and* the live
+`ForesightEngine` an approved rule is pushed into. It asserts the safety claim the
+module docs make: mining activates nothing, a rejected proposal never reaches the
+engine and cannot be approved afterwards, approval and only approval makes a rule
+live, and everything the gate admits is escalate-only — a self-authored rule can
+wake the reasoner and cannot drive a pin or a motor.
+
+Worth recording how it nearly failed to mean anything. The first draft's fixture
+ended with pressure flat and low, so no forecast crossed the threshold and three
+of the four tests passed on `[] == []` — a gate narrower than its claim, in a test
+written to complain about gates narrower than their claims. Every negative
+assertion is now paired with a control that injects the same rule directly and
+requires it to fire, so "the engine fired nothing" is a statement about the gate
+rather than about a quiet world.
+
+**Claim outruns evidence: 1 module, 417 LOC.** `runtime` is a wire-it-or-cut-it
+decision, so nothing on this list is now blocked on writing tests. That is down
+from the nine modules and 8,900 LOC this document opened with, and every step of
+the reduction came from measuring rather than re-reading.
 
 ---
 
