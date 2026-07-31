@@ -59,15 +59,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "parity" / "MANIFEST.json"
 
-# (path in upstream core repo, path here, path in the generator app or None)
+# (path in upstream core repo, path here, {peer name: path in that peer} or None)
+#
+# The third column was a single generator path until 2026-07-30. Accelerapp
+# carries copies of registry.json and templates.json too, and had done since
+# Ecosystem Integration I1/I6, hashed by nobody -- they matched the canonical
+# files exactly, by luck rather than by a gate. A named map costs one level of
+# nesting and means the next consumer is a line rather than a refactor.
 #
 # Keep this list as the single declaration of what is vendored. Adding a
 # vendored file anywhere without adding it here is the exact failure mode this
 # script exists to prevent.
-ARTIFACTS: list[tuple[str, str, str | None]] = [
+ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("registry/registry.json",
      "registry/registry.json",
-     "lib/registry.json"),
+     {"generator": "lib/registry.json",
+      "accelerapp": "src/accelerapp/hardware/registry.json"}),
 
     # The shared firmware template set (Ecosystem Integration I6): one starter
     # sketch per flashable registry board, exported from the same tables as
@@ -81,41 +88,42 @@ ARTIFACTS: list[tuple[str, str, str | None]] = [
     # on the commit that vendored the crate.
     ("firmware-templates/templates.json",
      "firmware-templates/templates.json",
-     "lib/firmware-templates.json"),
+     {"generator": "lib/firmware-templates.json",
+      "accelerapp": "src/accelerapp/firmware/templates.json"}),
 
     ("tests/fixtures/deployment/nanopi/inventory.json",
      "parity/fixtures/deployment/nanopi/inventory.json",
-     "tests/fixtures/deployment/nanopi/inventory.json"),
+     {"generator": "tests/fixtures/deployment/nanopi/inventory.json"}),
     ("tests/fixtures/deployment/nanopi/expected-deployment.toml",
      "parity/fixtures/deployment/nanopi/expected-deployment.toml",
-     "tests/fixtures/deployment/nanopi/expected-deployment.toml"),
+     {"generator": "tests/fixtures/deployment/nanopi/expected-deployment.toml"}),
     # The whole generated config, not just its [deployment] block. Added after the
     # narrower golden was found to have hidden a real divergence for months.
     ("tests/fixtures/deployment/nanopi/expected-config.toml",
      "parity/fixtures/deployment/nanopi/expected-config.toml",
-     "tests/fixtures/deployment/nanopi/expected-config.toml"),
+     {"generator": "tests/fixtures/deployment/nanopi/expected-config.toml"}),
     ("tests/fixtures/siteplan/square/case.json",
      "parity/fixtures/siteplan/square/case.json",
-     "tests/fixtures/siteplan/square/case.json"),
+     {"generator": "tests/fixtures/siteplan/square/case.json"}),
     ("tests/fixtures/siteplan/square/expected-site.toml",
      "parity/fixtures/siteplan/square/expected-site.toml",
-     "tests/fixtures/siteplan/square/expected-site.toml"),
+     {"generator": "tests/fixtures/siteplan/square/expected-site.toml"}),
 
     ("planner-wasm/pkg/obc_planner_wasm_bg.wasm",
      "wasm/obc-planner/obc_planner_wasm_bg.wasm",
-     "wasm/obc-planner/obc_planner_wasm_bg.wasm"),
+     {"generator": "wasm/obc-planner/obc_planner_wasm_bg.wasm"}),
     ("planner-wasm/pkg/obc_planner_wasm.js",
      "wasm/obc-planner/obc_planner_wasm.js",
-     "wasm/obc-planner/obc_planner_wasm.js"),
+     {"generator": "wasm/obc-planner/obc_planner_wasm.js"}),
     ("planner-wasm/pkg/obc_planner_wasm.d.ts",
      "wasm/obc-planner/obc_planner_wasm.d.ts",
-     "wasm/obc-planner/obc_planner_wasm.d.ts"),
+     {"generator": "wasm/obc-planner/obc_planner_wasm.d.ts"}),
     ("planner-wasm/pkg/obc_planner_wasm_bg.wasm.d.ts",
      "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts",
-     "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts"),
+     {"generator": "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts"}),
     ("planner-wasm/pkg/package.json",
      "wasm/obc-planner/package.json",
-     "wasm/obc-planner/package.json"),
+     {"generator": "wasm/obc-planner/package.json"}),
 
     # ── The memory substrate ─────────────────────────────────────────────────
     # The first piece of the agent to move here (2026-07-30). Vendored rather
@@ -479,11 +487,15 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def resolve(flag: str | None, env: str, what: str, required: bool) -> Path | None:
-    raw = flag or os.environ.get(env)
+def resolve(flag: str | None, env: str | None, what: str, required: bool) -> Path | None:
+    # `env` is None for named peers, which have no environment fallback. Without
+    # the guard this is saved only by short-circuiting on a non-empty flag, which
+    # is luck rather than design.
+    raw = flag or (os.environ.get(env) if env else None)
     if not raw:
         if required:
-            sys.exit(f"{RED}error{RESET}: --{what} not given and {env} not set")
+            sys.exit(f"{RED}error{RESET}: --{what} not given"
+                     + (f" and {env} not set" if env else ""))
         return None
     p = Path(raw).expanduser().resolve()
     if not p.is_dir():
@@ -562,7 +574,7 @@ def toolchain_versions(upstream: Path) -> dict:
     return {k: v for k, v in versions.items() if v}
 
 
-def do_sync(upstream: Path, peer: Path | None = None, rebuild: bool = False) -> int:
+def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool = False) -> int:
     if rebuild and not rebuild_wasm(upstream):
         return 1
     copied, missing, mirrored = [], [], []
@@ -579,11 +591,14 @@ def do_sync(upstream: Path, peer: Path | None = None, rebuild: bool = False) -> 
         # only this repo, so a rebuilt WASM landed here and the generator kept the
         # old one — `check --peer` then reported drift that `sync` could not fix,
         # and the documented remedy ("fix with: sync") was wrong for that case.
-        if peer and peer_rel:
-            mirror = peer / peer_rel
+        for name, root in (peers or {}).items():
+            rel = (peer_rel or {}).get(name)
+            if not rel:
+                continue
+            mirror = root / rel
             mirror.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, mirror)
-            mirrored.append(peer_rel)
+            mirrored.append(f"{name}:{rel}")
 
     if missing:
         print(f"{RED}missing upstream artifacts:{RESET}")
@@ -650,8 +665,10 @@ def do_sync(upstream: Path, peer: Path | None = None, rebuild: bool = False) -> 
               f"`check --upstream` will fail until you run with --rebuild-wasm.")
     for local, digest, size in copied:
         print(f"  {DIM}{digest[:12]}{RESET}  {size:>7,}  {local}")
-    if peer:
-        print(f"{GREEN}mirrored{RESET} {len(mirrored)} artifacts into {peer}")
+    if peers:
+        for name, root in sorted(peers.items()):
+            n = len([m for m in mirrored if m.startswith(f"{name}:")])
+            print(f"{GREEN}mirrored{RESET} {n} artifacts into {name} ({root})")
     else:
         print(f"{YELLOW}note{RESET}: no --peer given — the generator's mirrors were "
               f"not updated. If a vendored file changed, `check --peer` will now "
@@ -661,7 +678,7 @@ def do_sync(upstream: Path, peer: Path | None = None, rebuild: bool = False) -> 
     return 0
 
 
-def do_check(upstream: Path | None, peer: Path | None) -> int:
+def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
     if not MANIFEST.exists():
         print(f"{RED}no manifest{RESET} at {MANIFEST} — run `sync` first")
         return 1
@@ -709,14 +726,17 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
                     f"      upstream {sha256(src)[:16]}  here {digest[:16]}\n"
                     f"      fix with: python scripts/sync_upstream.py sync")
 
-        if peer and peer_rel:
-            mirror = peer / peer_rel
+        for name, root in (peers or {}).items():
+            rel = (peer_rel or {}).get(name)
+            if not rel:
+                continue
+            mirror = root / rel
             if not mirror.exists():
-                problems.append(f"{local}: peer mirror missing ({peer_rel})")
+                problems.append(f"{local}: {name} mirror missing ({rel})")
             elif sha256(mirror) != digest:
                 problems.append(
-                    f"{local}: peer mirror DRIFTED ({peer_rel})\n"
-                    f"      peer {sha256(mirror)[:16]}  here {digest[:16]}")
+                    f"{local}: {name} mirror DRIFTED ({rel})\n"
+                    f"      {name} {sha256(mirror)[:16]}  here {digest[:16]}")
 
     # ── WASM build inputs ───────────────────────────────────────────────────
     # A built artifact cannot drift from itself, so the artifact hashes above
@@ -771,8 +791,8 @@ def do_check(upstream: Path | None, peer: Path | None) -> int:
     scope = ["manifest"]
     if upstream:
         scope += ["upstream", "wasm build inputs"]
-    if peer:
-        scope.append("peer")
+    for name in sorted(peers or {}):
+        scope.append(name)
 
     if problems:
         print(f"{RED}drift detected{RESET} ({checked} artifacts checked "
@@ -795,22 +815,44 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["sync", "check"])
     ap.add_argument("--upstream", help="path to the core agent repo")
-    ap.add_argument("--peer", help="path to the deployment generator repo")
+    # Repeatable and named: --peer generator=../OBC-deployment-generator
+    #                       --peer accelerapp=../Accelerapp
+    #
+    # A bare path still works and means the generator, so every existing
+    # invocation and the CI job keep running unchanged.
+    ap.add_argument("--peer", action="append", default=[], metavar="NAME=PATH",
+                    help="a mirror to check, as name=path (repeatable). A bare "
+                         "path is taken as generator=<path>.")
     ap.add_argument("--rebuild-wasm", action="store_true",
                     help="(sync) run wasm-pack in the upstream repo first, then "
                          "record the build-input hashes. The only way the manifest "
                          "gets a wasm_build block.")
     args = ap.parse_args()
 
+    raw = list(args.peer)
+    if not raw:
+        env = resolve(None, "OBC_PEER", "peer", required=False)
+        if env:
+            raw = [str(env)]
+    peers: dict[str, Path] = {}
+    for item in raw:
+        name, sep, path = item.partition("=")
+        if not sep:
+            name, path = "generator", item
+        resolved = resolve(path, None, name, required=True)
+        if resolved is None:
+            return 1
+        peers[name] = resolved
+
     if args.mode == "sync":
         return do_sync(
             resolve(args.upstream, "OBC_UPSTREAM", "upstream", required=True),
-            resolve(args.peer, "OBC_PEER", "peer", required=False),
+            peers or None,
             rebuild=args.rebuild_wasm,
         )
     return do_check(
         resolve(args.upstream, "OBC_UPSTREAM", "upstream", required=False),
-        resolve(args.peer, "OBC_PEER", "peer", required=False),
+        peers or None,
     )
 
 

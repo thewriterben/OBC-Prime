@@ -94,6 +94,28 @@ jobs:
           python-version: '3.12'
       - run: python scripts/sync_upstream.py check --peer peer
 
+  accelerapp:
+    name: accelerapp mirrors match
+    runs-on: ubuntu-latest
+    # Accelerapp carries copies of registry.json and templates.json, and has
+    # since Ecosystem Integration I1/I6. Nothing hashed them. They happened to
+    # match the canonical files exactly -- by luck, which is not a property you
+    # can rely on twice.
+    #
+    # No token: the repository is public. Established by running `ls-remote` with
+    # credentials disabled, which the deployment generator correctly fails, so
+    # the test distinguishes rather than merely succeeding.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Accelerapp
+          path: accelerapp
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/sync_upstream.py check --peer accelerapp=accelerapp
+
   upstream:
     name: vendored artifacts match the core agent
     runs-on: ubuntu-latest
