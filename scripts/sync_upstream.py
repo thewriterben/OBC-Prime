@@ -238,6 +238,66 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-planner/src/deployment/scheme.rs",
      None),
 
+    # ── Track 0 ──────────────────────────────────────────────────────────────
+    # The third piece to move here (2026-08-01), on the same terms as the two
+    # before it: vendored, hash-checked, compiled and tested by the `substrate`
+    # job rather than merely stored.
+    #
+    # This is the piece with the strongest claim to being in the public repo,
+    # because it is the one the README's safety claim rests on. `docs/SAFETY.md`
+    # describes a pin allowlist and value ranges enforced at the actuator, a
+    # hash-chained Ed25519-signed record of every physical decision, a risk
+    # classification that drives approval defaults, and a taint guard that
+    # refuses a privileged call whose arguments echo untrusted content. Until
+    # now a reader could check none of that: the document was here and the code
+    # was in another repository. Now `cargo test -p obc-safety` runs it here.
+    #
+    # `src/risk.rs` is the reason the extraction was possible at all. RiskClass,
+    # BlastRadius, OutputTrust and RolloutStage used to live in `tools::traits`,
+    # so three Track 0 files imported *upward* into the largest module in the
+    # tree. They are the contract rather than tool machinery; upstream moved
+    # them down here and `tools::traits` re-exports them, which is why this
+    # crate has no outward edges left to vendor.
+    #
+    # No peer column: the generator and Accelerapp have no use for these.
+
+    ("crates/obc-safety/Cargo.toml",
+     "crates/obc-safety/Cargo.toml",
+     None),
+    ("crates/obc-safety/src/lib.rs",
+     "crates/obc-safety/src/lib.rs",
+     None),
+    ("crates/obc-safety/src/risk.rs",
+     "crates/obc-safety/src/risk.rs",
+     None),
+    ("crates/obc-safety/src/limits.rs",
+     "crates/obc-safety/src/limits.rs",
+     None),
+    ("crates/obc-safety/src/audit.rs",
+     "crates/obc-safety/src/audit.rs",
+     None),
+    ("crates/obc-safety/src/audit_sign.rs",
+     "crates/obc-safety/src/audit_sign.rs",
+     None),
+    ("crates/obc-safety/src/taint.rs",
+     "crates/obc-safety/src/taint.rs",
+     None),
+    ("crates/obc-safety/src/trust.rs",
+     "crates/obc-safety/src/trust.rs",
+     None),
+    ("crates/obc-safety/src/pairing.rs",
+     "crates/obc-safety/src/pairing.rs",
+     None),
+    ("crates/obc-safety/src/policy.rs",
+     "crates/obc-safety/src/policy.rs",
+     None),
+    ("crates/obc-safety/src/redteam.rs",
+     "crates/obc-safety/src/redteam.rs",
+     None),
+    ("crates/obc-safety/src/vault.rs",
+     "crates/obc-safety/src/vault.rs",
+     None),
+
     # ── Node firmware ────────────────────────────────────────────────────────
     # Authored upstream, vendored here so the flashing guide and the sources it
     # describes cannot drift apart. `spine.rs` in particular is compiled by a
@@ -577,10 +637,45 @@ def toolchain_versions(upstream: Path) -> dict:
 def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool = False) -> int:
     if rebuild and not rebuild_wasm(upstream):
         return 1
-    copied, missing, mirrored = [], [], []
+
+    # The prior manifest, read before anything is copied. The manifest is rebuilt
+    # from what this run copied, so the artifacts a plain upstream checkout cannot
+    # supply need their entries carried forward — a dropped entry is an artifact
+    # nobody hashes any more, which is the silent-hole failure this script exists
+    # to prevent.
+    prior_manifest: dict = {}
+    if MANIFEST.exists():
+        try:
+            prior_manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            prior_manifest = {}
+    prior_artifacts: dict = prior_manifest.get("artifacts") or {}
+
+    copied, missing, mirrored, carried = [], [], [], []
     for up, local, peer_rel in ARTIFACTS:
         src, dst = upstream / up, ROOT / local
         if not src.exists():
+            # `sync` used to abort for anything missing, which meant it could not
+            # run at all against a clean upstream clone: the five wasm build
+            # outputs and two firmware Cargo.locks are gitignored upstream and
+            # simply are not there. `check --upstream` has skipped exactly these
+            # since 2026-07-30 — the same knowledge, applied in one command and
+            # not the other. Found on 2026-08-01 while vendoring obc-safety,
+            # where an unrelated missing bundle blocked a sync that had nothing
+            # to do with the bundle.
+            if local in UNCOMPARABLE_UPSTREAM:
+                entry = prior_artifacts.get(local)
+                if entry is None and dst.exists():
+                    entry = {"sha256": sha256(dst), "bytes": dst.stat().st_size}
+                if entry is None:
+                    missing.append(f"{up}  (uncomparable upstream, and no vendored copy here)")
+                    continue
+                # The recorded hash wins over re-hashing the file on disk: if the
+                # vendored copy was hand-edited, carrying the old hash forward is
+                # what lets `check` still say so.
+                carried.append((local, UNCOMPARABLE_UPSTREAM[local]))
+                copied.append((local, entry["sha256"], entry["bytes"]))
+                continue
             missing.append(up)
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -613,12 +708,7 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
     # previous block is carried forward untouched: a sync that merely copies a
     # bundle it did not build has no standing to say what that bundle was
     # compiled from, and guessing is how the gate would clear itself.
-    prior = {}
-    if MANIFEST.exists():
-        try:
-            prior = json.loads(MANIFEST.read_text(encoding="utf-8")).get("wasm_build") or {}
-        except (json.JSONDecodeError, OSError):
-            prior = {}
+    prior = prior_manifest.get("wasm_build") or {}
 
     if rebuild:
         wasm_build = {
@@ -644,10 +734,22 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
         "artifacts": {local: {"sha256": digest, "bytes": size}
                       for local, digest, size in copied},
         **({"wasm_build": wasm_build} if wasm_build else {}),
-    }, indent=2) + "\n", encoding="utf-8")
+    }, indent=2) + "\n", encoding="utf-8", newline="\n")
+    # newline="\n" because .gitattributes stores everything here as LF. Without
+    # it a sync run on Windows writes CRLF, and the working tree stops being
+    # byte-identical to the blob CI checks out — in the one file whose whole job
+    # is recording exact bytes.
 
     total = sum(size for _, _, size in copied)
     print(f"{GREEN}synced{RESET} {len(copied)} artifacts ({total:,} bytes) from {upstream}")
+    if carried:
+        # Printed every run, like the `check --upstream` skips. A sync that
+        # quietly declines to sync part of what it lists is worse than one that
+        # fails: the summary line would say 43 artifacts and mean 36.
+        print(f"{YELLOW}kept{RESET} {len(carried)} artifact(s) the upstream checkout "
+              f"does not carry — hashes unchanged, not re-copied:")
+        for local, why in carried:
+            print(f"  {local}  ({why})")
     if rebuild:
         print(f"{GREEN}recorded{RESET} {len(wasm_build['sources'])} WASM build-input "
               f"hashes for a bundle built by this run")

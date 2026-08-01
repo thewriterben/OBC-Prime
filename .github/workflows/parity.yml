@@ -49,10 +49,11 @@ jobs:
   substrate:
     name: the vendored agent crates build and pass their tests
     runs-on: ubuntu-latest
-    # The first vendored artifacts this repository can execute rather than only
-    # hash. registry/, parity/ and wasm/ are data and a build; crates/ is source,
-    # and source that is never compiled is a listing. 103 tests plus 3 doctests,
-    # verified against a standalone workspace before this job was written.
+    # The vendored artifacts this repository can execute rather than only hash.
+    # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
+    # source that is never compiled is a listing. 319 tests across four crates
+    # as of 2026-08-01, when obc-safety brought Track 0 here — the layer
+    # docs/SAFETY.md describes and this repository previously could not run.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

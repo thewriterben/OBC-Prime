@@ -1,6 +1,6 @@
 {
-  "generated": "2026-07-30T22:27:55+00:00",
-  "upstream": "/sessions/rcw-01m14aukcdwvs7114qppgewv/mnt/Oh-Ben-Claw",
+  "generated": "2026-08-01T01:33:40+00:00",
+  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
@@ -154,6 +154,54 @@
     "crates/obc-planner/src/deployment/scheme.rs": {
       "sha256": "92a5f9b1149bf69da37f3641dee518dc15c247e86b5aee7a11fee6494fa1a8a5",
       "bytes": 19751
+    },
+    "crates/obc-safety/Cargo.toml": {
+      "sha256": "f22c3c0283eab4afc94035ae03bc871e6aa380e83f7b8ab0eb4ade70f8ddb92f",
+      "bytes": 1838
+    },
+    "crates/obc-safety/src/lib.rs": {
+      "sha256": "ac1dc86fc6329ef180b194c960c4a5d4db7a994a71d97598372ded05d7271466",
+      "bytes": 3696
+    },
+    "crates/obc-safety/src/risk.rs": {
+      "sha256": "10051bc2d2eb9843953e3fc1f08f2a638396607638c6a29573691d37c356f606",
+      "bytes": 5915
+    },
+    "crates/obc-safety/src/limits.rs": {
+      "sha256": "bf9d91bfa4ea18fd026994bca6988cc61b3e688e6cdc0a9d3b28cc1e0d609225",
+      "bytes": 10856
+    },
+    "crates/obc-safety/src/audit.rs": {
+      "sha256": "6a3b071736d1f69bf18535fabfb534c933cac57eacadbbd0b5fc6003b6196247",
+      "bytes": 17626
+    },
+    "crates/obc-safety/src/audit_sign.rs": {
+      "sha256": "7d747d6ccdf3ba9adc98b2d536b18a9e0ed4d4c3ba3f27c2c8511492ea93f19e",
+      "bytes": 4916
+    },
+    "crates/obc-safety/src/taint.rs": {
+      "sha256": "3ccd7bbca75b64f4dccdf9ea7cd1c79e2ab2cb52283be0bb68380572bb55b509",
+      "bytes": 11076
+    },
+    "crates/obc-safety/src/trust.rs": {
+      "sha256": "c7751df437aeb174e94aedf49351173dc9902e3b31565eba8e9a67d7197d1fad",
+      "bytes": 10316
+    },
+    "crates/obc-safety/src/pairing.rs": {
+      "sha256": "632858cc298c2cec21b912a5b852cef76fd819480cf28e47d0ae6f1798cec1bc",
+      "bytes": 13720
+    },
+    "crates/obc-safety/src/policy.rs": {
+      "sha256": "49fb83f1da96cec44227a915320579a2e772df605d5412fa4f5e9de468b2964d",
+      "bytes": 12487
+    },
+    "crates/obc-safety/src/redteam.rs": {
+      "sha256": "34afc371ff3d0a38614d5c115def6356a79b9e82c5742d3ad046f79416e1f362",
+      "bytes": 7803
+    },
+    "crates/obc-safety/src/vault.rs": {
+      "sha256": "e8ba80c1e9a9bfe3707271c898374af125cf82faddd82a015fec157d8093e5bc",
+      "bytes": 12295
     },
     "firmware/obc-esp32-s3/.cargo/config.toml": {
       "sha256": "636313d01cfe40b55fde7d2c4c6af9e98b8c35137bd3a54c29bcb4ba389dfe61",
