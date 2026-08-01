@@ -50,6 +50,15 @@ Rust planner, the WASM build, and the TypeScript port. I hash-verified that its
 `registry.json`, all four golden fixtures and the planner WASM are identical to
 Oh-Ben-Claw's.
 
+> **Corrected 2026-08-01.** "Three independent implementations" is two
+> implementations in three executables: the WASM build is compiled from the Rust
+> planner's own sources. The claim is still the strong one — a hand-written
+> TypeScript port held byte-identical to the Rust that deploys is the hard part —
+> but the two legs fail differently and should be named separately. The port can
+> disagree on *logic*; the build can disagree on *age*, and did, for six weeks.
+> See `parity/README.md`, corrected 2026-07-29, and `docs/DECISIONS.md`,
+> *A hash gate cannot see a stale build*.
+
 That parity harness is the most valuable engineering artifact across all four
 repos, and it's currently an undocumented implementation detail of a private
 Expo app. In a public project it should be a headline claim: *the planner that
@@ -260,9 +269,14 @@ Also still open, in rough order of how much they'd embarrass a visitor:
   wired to a sandbox portal, `package.json` is named `"app-template"`, and there
   is no licence. It cannot be published as-is, which means the onboarding story
   the README leans on isn't reachable yet.
-- **CI only checks the manifest.** The `--upstream` job is written but commented
+- ~~**CI only checks the manifest.** The `--upstream` job is written but commented
   out, because the core repo isn't readable from CI. Drift against the core
-  agent is therefore *not* caught today — only hand-edits are.
+  agent is therefore *not* caught today — only hand-edits are.~~ **Closed
+  2026-07-30.** Six jobs run now: `manifest`, `behaviour` (executes the WASM
+  against the goldens), `substrate` (builds and tests the vendored crates),
+  `peer`, `accelerapp` and `upstream`. The premise was wrong on the part that
+  had kept the job commented out for weeks — the core repo is public, so
+  `github.token` reads it and no secret was ever needed. Nobody had asked.
 - **`bodies/benchtop` has no runtime half**, only a generator inventory.
 - **The operate token is stored in plaintext AsyncStorage** in the generator's
   fleet console, though `expo-secure-store` is already a dependency and is
