@@ -17,7 +17,7 @@ the reflex layer keeps working when the brain is unreachable.
 > **Status: early.** Most of the core agent runs and is **not yet in this
 > repository** — but five crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety` and `obc-telemetry` are here, vendored and
-> hash-checked, and CI builds and tests them: **337 tests** covering the
+> hash-checked, and CI builds and tests them: **344 tests** covering the
 > bitemporal world model, the deployment planner the parity claim below rests
 > on, the Track 0 safety layer `docs/SAFETY.md` describes, and the battery /
 > link / sensor suites that feed the reflexes.
@@ -146,7 +146,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 337 tests
+cargo test --workspace     # 344 tests
 ```
 
 Four pieces have moved, each chosen by measuring what was separable rather than
@@ -156,7 +156,7 @@ what sounded impressive, and each carrying the tests it had upstream:
 |---|---|---:|
 | `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
-| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking and node pairing — [docs/SAFETY.md](docs/SAFETY.md) | 65 |
+| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, and the spine frame tag [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — [docs/SAFETY.md](docs/SAFETY.md) | 72 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` | 18 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 

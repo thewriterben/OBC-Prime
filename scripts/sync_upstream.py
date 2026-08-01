@@ -270,6 +270,14 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-safety/src/risk.rs",
      "crates/obc-safety/src/risk.rs",
      None),
+    # The host half of spine authentication (2026-08-01). Canonical; the node's
+    # copy is firmware/heltec-lora-linktest/src/auth.rs, and upstream compiles
+    # both against RFC 4231 and RFC 5869 vectors. Landing it here means the
+    # document in docs/SPINE-AUTH.md and the arithmetic it specifies are in the
+    # same repository for the first time.
+    ("crates/obc-safety/src/spine_tag.rs",
+     "crates/obc-safety/src/spine_tag.rs",
+     None),
     ("crates/obc-safety/src/limits.rs",
      "crates/obc-safety/src/limits.rs",
      None),
@@ -417,6 +425,14 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("firmware/heltec-lora-linktest/sdkconfig.defaults",
      "firmware/heltec-lora-linktest/sdkconfig.defaults",
+     None),
+    # Spine frame authentication, node side (SPINE-AUTH.md step 2). Nothing
+    # calls it: no frame carries a tag and no receiver checks one. It is here so
+    # that the wire change in step 4 starts from two ends already proven to
+    # agree, and so this repository can run that proof — `cargo test
+    # -p obc-safety` plus the core repo's cross-implementation vectors.
+    ("firmware/heltec-lora-linktest/src/auth.rs",
+     "firmware/heltec-lora-linktest/src/auth.rs",
      None),
     ("firmware/heltec-lora-linktest/src/main.rs",
      "firmware/heltec-lora-linktest/src/main.rs",

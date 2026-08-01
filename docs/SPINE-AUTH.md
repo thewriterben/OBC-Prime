@@ -43,6 +43,17 @@ primitive and the persistent storage a replay counter needs are new work. The
 one piece of good news: ESP32-S3 has hardware SHA acceleration, so the cost is
 silicon rather than cycles.
 
+> **Half of that is fixed, 2026-08-01.** The bridge firmware
+> (`firmware/heltec-lora-linktest`) now carries `hmac`/`sha2`/`hkdf` and
+> `src/auth.rs`, so the primitive exists on the node side and is checked against
+> the host's. NVS is still untouched — the replay counter in step 3 remains
+> entirely new work, and it is the half that cannot be tested without a board,
+> since "a counter that survives reboot" is a claim about flash.
+>
+> `firmware/obc-esp32-s3` is also still untouched: the sentence above was written
+> about the compute node and the work so far has been on the bridge. Two
+> firmwares, and only one of them can currently compute a tag.
+
 **The host half already exists and is unwired.** `NodePairingManager` implements
 HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
 `pair_node` has no callers, `is_trusted` has none, and `require_pairing = true`
@@ -111,6 +122,9 @@ Append a truncated HMAC-SHA256 to every frame:
   survive reboot, so it lives in NVS, written every N (say 64) and advanced by N
   on boot to bound flash wear while never going backwards. The receiver rejects
   any counter at or below the highest seen for that source.
+  *(Superseded 2026-08-01 — that last sentence is wrong for a flood-relay mesh,
+  which delivers duplicates and re-orderings as normal traffic. It needs a
+  sliding window; see [`SPINE-REPLAY.md`](SPINE-REPLAY.md) §3.)*
 - The MAC covers `src ‖ ctr ‖ payload`, and deliberately **not** `ttl`, which
   relays decrement in flight.
 
@@ -244,10 +258,57 @@ one problem this design cannot solve on its own.
    plan and is better than the plan: the host builds every payload, so the
    census is a test that fails when a shape changes rather than a figure in a
    document that does not.
-2. **Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
-   vector in `firmware_spine_framing.rs`. No wire change yet.
+2. ~~**Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
+   vector in `firmware_spine_framing.rs`. No wire change yet.~~ **Done
+   2026-08-01.** `crates/obc-safety/src/spine_tag.rs` is canonical and vendored
+   here; `firmware/heltec-lora-linktest/src/auth.rs` is the node's mirror, also
+   vendored here; the core repo's `tests/spine_auth_vectors.rs` compiles both and
+   fails if they disagree. `cargo test -p obc-safety` runs the host half in this
+   repository, so the document above and the arithmetic it specifies are finally
+   in the same place.
+
+   Two deviations from the line as written, both deliberate:
+
+   - **Portable `sha2`, not the ESP32-S3's hardware SHA.** The silicon is the
+     right destination and an optimisation; a portable implementation compiles
+     on the machine writing it, so this could be tested immediately rather than
+     at the next bench session. Swapping in mbedtls later has a known answer to
+     check against, which is a better position than the reverse.
+   - **A separate `auth.rs`, not `spine.rs`.** Step 2 says *no wire change yet*
+     and `spine.rs` is the wire. Nothing calls `auth` — no frame carries a tag,
+     no receiver checks one.
+
+   The verification is three layers, and only the third is independent:
+   agreement between the two implementations (which two copies of one mistake
+   would also pass), frozen vectors (a regression pin generated from this
+   implementation, so an error would be frozen with it), and **RFC 4231 §4.2 +
+   RFC 5869 §A.1** — constants published years ago, which is what makes the
+   first two mean anything.
 3. **NVS counter**, with the wear-bounded advance-on-boot scheme, and a test that
-   a reboot never reissues a counter.
+   a reboot never reissues a counter. **Designed 2026-08-01, deliberately
+   unbuilt: [`SPINE-REPLAY.md`](SPINE-REPLAY.md).** It is the first step here
+   whose central claim — a counter that never goes backwards across a power cut
+   — is a statement about flash, so it cannot be checked without a board.
+   Writing it and marking it done on a compile is the kind of claim this project
+   keeps catching itself making.
+
+   Two things the design changed about the sketch in §3.2 above:
+
+   - **"Reject any counter at or below the highest seen" is wrong for this
+     mesh.** Flood relay delivers duplicates by design — `spine.rs` carries a
+     de-duplication ring because of it — and re-orders frames across paths.
+     Strict monotonicity drops all of that as an attack. It needs an IPsec-style
+     sliding window (RFC 4303 §3.4.3), which is pure logic and *is* testable on
+     the host today, unlike the rest of step 3.
+   - **The receiver's persistence rounds the opposite way from the sender's.**
+     The sender persists a ceiling above its position, so a crash skips
+     counters. A receiver that persists below its true high-water mark accepts
+     replays of everything in between, so it must persist a ceiling too and lose
+     a bounded number of legitimate frames after a restart instead. Getting that
+     direction backwards is the classic form of this bug.
+
+   `SPINE-REPLAY.md` §6 is a bench procedure, so the person with the boards does
+   not have to re-derive what "it works" means.
 4. **Wire format v2** behind a config key that defaults to strict, with the old
    format rejected rather than tolerated.
 5. **Wire the host half** — `NodePairingManager` gets its callers, and
