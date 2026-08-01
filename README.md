@@ -15,11 +15,12 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but four crates of it now are. `obc-paths`, `obc-memory`,
-> `obc-planner` and `obc-safety` are here, vendored and hash-checked, and CI
-> builds and tests them: **319 tests** covering the bitemporal world model, the
-> deployment planner the parity claim below rests on, and the Track 0 safety
-> layer `docs/SAFETY.md` describes.
+> repository** — but five crates of it now are. `obc-paths`, `obc-memory`,
+> `obc-planner`, `obc-safety` and `obc-telemetry` are here, vendored and
+> hash-checked, and CI builds and tests them: **337 tests** covering the
+> bitemporal world model, the deployment planner the parity claim below rests
+> on, the Track 0 safety layer `docs/SAFETY.md` describes, and the battery /
+> link / sensor suites that feed the reflexes.
 > The firmware is — see [firmware/](firmware/README.md) — so there is something to
 > flash and watch today, but nothing to talk to it with. See [PLAN.md](PLAN.md) for what is
 > landing and in what order. Self-hosted first; a hosted option is not
@@ -145,10 +146,10 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 319 tests
+cargo test --workspace     # 337 tests
 ```
 
-Three pieces have moved, each chosen by measuring what was separable rather than
+Four pieces have moved, each chosen by measuring what was separable rather than
 what sounded impressive, and each carrying the tests it had upstream:
 
 | crate | what it is | tests |
@@ -156,6 +157,7 @@ what sounded impressive, and each carrying the tests it had upstream:
 | `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking and node pairing — [docs/SAFETY.md](docs/SAFETY.md) | 65 |
+| `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` | 18 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 
 `obc-safety` is the one worth opening first if you are evaluating this. The
@@ -166,11 +168,22 @@ repository, so the claims could be read and not checked. `docs/SAFETY.md`,
 `docs/BELIEF-REVISION.md` and `docs/MEMORY-2026-07.md` all arrived before their
 code, which is the wrong order and is now corrected for all three.
 
-None of the three knows about tools, providers, the spine or the agent loop —
-that is what made them separable, and it is the same test the next piece has to
-pass. Like everything under `registry/`, `parity/` and `wasm/`, they are
-**copies**: authored in the core repo, verified by SHA-256, and not to be edited
-here.
+`obc-telemetry` is the newest, and it backs half of a claim this page makes
+repeatedly: that the reflex layer keeps working when the brain is unreachable.
+The node side of that has been checkable since the firmware was vendored; the
+host side is these three suites, which turn a battery reading, a link's health
+or a sensor sample into a world-memory fact plus a coarse mode — and it is the
+mode a reflex rule watches, because a rule cannot reason about millivolts and
+should not have to. The half still missing is the reflex *engine* itself, which
+is behind thirteen dependencies in the core crate and cannot move yet.
+
+None of them knows about tools, providers, the spine or the agent loop — that is
+what made them separable, and it is the same test the next piece has to pass. It
+is now a measured test rather than a judgement: the core repo's
+`scripts/extractability.py` counts each module's outward edges, and
+`obc-telemetry` was the first piece chosen by that count. Like everything under
+`registry/`, `parity/` and `wasm/`, these are **copies**: authored in the core
+repo, verified by SHA-256, and not to be edited here.
 
 ## Getting the agent
 

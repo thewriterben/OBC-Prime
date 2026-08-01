@@ -3,12 +3,18 @@
 # These are copies, verified by SHA-256 against the core repository — the same
 # arrangement as `registry/`, `parity/fixtures/`, `wasm/` and `firmware/`. What
 # makes them different is that this repository can *run* them: `cargo test
-# --workspace` here executes 319 tests of real agent code, so the public project
+# --workspace` here executes 337 tests of real agent code, so the public project
 # checks the substrate it documents instead of describing one it cannot build.
 #
 # Do not edit these by hand. Change them upstream, then
 # `python scripts/sync_upstream.py sync --upstream ../Oh-Ben-Claw`; the drift
 # gate exists to catch exactly that mistake.
 [workspace]
-members = ["crates/obc-paths", "crates/obc-memory", "crates/obc-planner", "crates/obc-safety"]
+members = [
+    "crates/obc-paths",
+    "crates/obc-memory",
+    "crates/obc-planner",
+    "crates/obc-safety",
+    "crates/obc-telemetry",
+]
 resolver = "2"
