@@ -5,6 +5,50 @@ New entries go at the top.
 
 ---
 
+## 2026-08-01 — The next piece is chosen by a script now, and this is the first one
+
+`obc-telemetry` — `power`, `comms`, `sensing`, 1,015 lines, 18 tests — is the
+fourth crate vendored here and the first that nobody picked by reading imports.
+
+The core repo now has `scripts/extractability.py`: per module, the outward
+edges, split into *blocking* (points at something still in that tree) and *free*
+(points at a crate that has already left, which a new crate can simply depend
+on). It is the mirror of the existing `curation_survey.py`, and the two ask
+opposite questions — who references this, versus what does this reference. Only
+the second one predicts whether a piece can move. The three suites were among
+six modules with zero blocking edges.
+
+Two things about that script are worth carrying over here, because this
+repository is downstream of its judgement:
+
+- **Its first version was wrong, in the direction that would have cost a week.**
+  Counting only `use crate::…` declarations, it reported `config` — 3,430 lines,
+  58 dependents — as having no outward edges. It has six; its struct fields are
+  typed with inline paths like `pub server: crate::mcp::McpServerConfig` that no
+  `use` line records. That is the same failure the sibling script was corrected
+  for in July, which is why the two now share one parser.
+- **The verdict was then confirmed by a compiler**, before anything moved:
+  `src/comms/mod.rs` compiled in a scratch crate whose entire universe was
+  `obc-memory`, serde and anyhow. A survey saying "no blocking edges" and a
+  compiler agreeing are different claims, and only the second is load-bearing.
+  The extraction that followed needed no call-site changes at all.
+
+Why these three and not `scheduler`, `a2a` or `observability`, which were
+equally movable: the queue says what *can* move, not what *should*. The README
+says the reflex layer keeps working when the brain is unreachable, on ten
+separate lines, and backed it only with vendored firmware. The three suites are
+the host side of that — each turns a raw reading into a world-memory fact plus a
+coarse mode (`power.mode`, `net.mode`, `sensor.{quantity}` and a quality flag),
+and the mode is what a reflex rule watches, since a rule cannot reason about
+millivolts.
+
+Stated plainly rather than left to be found: this backs half the sentence. The
+reflex *engine* is in the core crate's `agent/` behind thirteen blocking edges
+and cannot move yet. A claim half-backed and labelled as such is worth more than
+one wholly unbacked and unlabelled, but it is not the same as done.
+
+---
+
 ## 2026-08-01 — Track 0 comes here third, because the safety claim was the one a reader could not check
 
 `obc-safety` is the third crate vendored from the core agent, after `obc-memory`

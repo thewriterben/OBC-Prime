@@ -26,6 +26,11 @@ Thumbs.db
 *.log
 .env
 
+# Commit messages written to a file and passed with `git commit -F`. Untracked
+# and unignored is how scratch files get swept into a commit here — which
+# happened upstream on 2026-08-01 with a `git add -A`.
+_commitmsg.txt
+
 # Scratch landing area. The Cowork device bridge cannot unlink files, so an
 # agent working in this repo moves things here instead of deleting them. Twice
 # now that has ended with scratch files committed by accident, because they show

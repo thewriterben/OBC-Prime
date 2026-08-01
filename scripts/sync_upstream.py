@@ -298,6 +298,45 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-safety/src/vault.rs",
      None),
 
+    # ── Body telemetry ───────────────────────────────────────────────────────
+    # The fourth crate (2026-08-01), and the first upstream picked with an
+    # instrument rather than by reading imports: `scripts/extractability.py`
+    # counts each module's outward edges, and power, comms and sensing were
+    # three of the six with none pointing anywhere still in the core tree.
+    #
+    # One crate because they are one pattern. Each classifies a raw reading
+    # against configured expectations, records it in world memory under a stable
+    # entity name, and derives a coarse mode a reflex rule can watch without
+    # understanding the domain: `power.mode`, `net.mode`, `sensor.{quantity}`
+    # plus a quality flag.
+    #
+    # This is the half of the README's reflex claim that had no code here. The
+    # firmware has been vendored since the beginning, so "the reflex layer keeps
+    # working when the brain is unreachable" was checkable on the node side and
+    # nowhere else. The host side is these three. The honest limit, stated here
+    # rather than left to be discovered: the reflex *engine* is in the core
+    # crate's `agent/` behind thirteen blocking edges and cannot follow yet, so
+    # this backs perceive-and-classify, not the whole sentence.
+    #
+    # Not `observability`, which is the agent watching itself and is still
+    # upstream. This is the agent watching its body.
+
+    ("crates/obc-telemetry/Cargo.toml",
+     "crates/obc-telemetry/Cargo.toml",
+     None),
+    ("crates/obc-telemetry/src/lib.rs",
+     "crates/obc-telemetry/src/lib.rs",
+     None),
+    ("crates/obc-telemetry/src/power.rs",
+     "crates/obc-telemetry/src/power.rs",
+     None),
+    ("crates/obc-telemetry/src/comms.rs",
+     "crates/obc-telemetry/src/comms.rs",
+     None),
+    ("crates/obc-telemetry/src/sensing.rs",
+     "crates/obc-telemetry/src/sensing.rs",
+     None),
+
     # ── Node firmware ────────────────────────────────────────────────────────
     # Authored upstream, vendored here so the flashing guide and the sources it
     # describes cannot drift apart. `spine.rs` in particular is compiled by a
