@@ -118,6 +118,42 @@ Cost: 12 bytes of the 240-byte budget, payload down to 224. Worth measuring
 against real traffic before committing — if the common tool call is near the
 limit today, this design forces fragmentation, and that is a different project.
 
+> **Measured 2026-08-01** — `tests/spine_payload_budget.rs` in the core repo. Not
+> a radio capture: the host builds every one of these payloads, so the
+> distribution is a property of the code, and the census runs as a standing test
+> rather than sitting here as a number that quietly stops being true.
+>
+> | | bytes | spare of 240 | spare of 228 |
+> |---|---:|---:|---:|
+> | `gpio_write` / `sensor_read` / `capabilities` | 100–121 | 119–140 | 107–128 |
+> | `reflex_tick`, four quantities | 183 | 57 | 45 |
+> | fleet heartbeat / assignment | 59–82 | 158–181 | 146–169 |
+> | `set_limits`, one allowed pin | 228 | 12 | **0** |
+> | `set_limits`, two allowed pins | 230 | 10 | **−2** |
+> | `set_reflex_rules`, one rule | 344 | **−104** | −116 |
+>
+> **The tag fits.** Everything that carries actuation, telemetry or coordination
+> keeps 45–169 bytes of headroom, so §3.2 stands as written and steps 2–4 are
+> not invalidated.
+>
+> **The tag is not free**, and the thing it costs is not a tool call. Pushing a
+> deterministic limit table — `set_limits`, the Track 0 configuration — lands on
+> exactly 228 bytes with one allowed pin and 230 with two. The command that
+> configures the safety gate is the command the safety tag would break.
+>
+> **The margin already exists in the frame.** `mesh_command` spends **36 bytes on
+> a UUIDv4 correlation id**, three times the whole tag, on a link where the id
+> need only be unique among a handful of in-flight requests. Shortening it frees
+> 34; the tag needs 12. So step 4 should carry the correlation-id change with it,
+> and then authentication costs less than nothing.
+>
+> **`set_reflex_rules` was already broken**, at 344 bytes — 104 over the frame we
+> have, before any authentication. The node's line framer discards an over-length
+> line whole, so it never arrived, and the host reported `sent: true`. Now
+> refused host-side (`NodeCommand::fits_one_frame`). That one is not an auth
+> question: pushing a rule set over LoRa needs fragmentation or a different
+> transport either way.
+
 ### 3.3 MQTT and P2P
 
 The same tag, carried as a field rather than a prefix, since neither transport
@@ -195,8 +231,19 @@ one problem this design cannot solve on its own.
 
 ## 6. Suggested order
 
-1. **Measure the payload distribution** on the bench mesh. If typical frames sit
-   near 240 bytes, everything above needs rethinking before it is built.
+1. ~~**Measure the payload distribution** on the bench mesh. If typical frames sit
+   near 240 bytes, everything above needs rethinking before it is built.~~
+   **Done 2026-08-01** — see the box in §3.2. Steps 2–4 stand; the tag fits
+   everything that carries actuation, telemetry or coordination. Two additions
+   to the plan came out of it: **step 4 must also shorten the correlation id**
+   (36 bytes of UUID, against a 12-byte tag — otherwise `set_limits` becomes
+   collateral), and `set_reflex_rules` needs fragmentation or another transport
+   regardless of authentication, since it never fitted.
+
+   It was measured from the code rather than from the air, which was not the
+   plan and is better than the plan: the host builds every payload, so the
+   census is a test that fails when a shape changes rather than a figure in a
+   document that does not.
 2. **Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
    vector in `firmware_spine_framing.rs`. No wire change yet.
 3. **NVS counter**, with the wear-bounded advance-on-boot scheme, and a test that
@@ -208,4 +255,6 @@ one problem this design cannot solve on its own.
 6. **Re-sync firmware into OBC-Prime** and update `SAFETY.md` §4.3 from "no
    authentication story" to what it then is, including what it still is not.
 
-Step 1 is a morning and could invalidate steps 2–4. Do it first.
+Step 1 was a morning and did not invalidate steps 2–4. It was still the right
+thing to do first: it changed step 4, and it found a command that had never
+worked.
