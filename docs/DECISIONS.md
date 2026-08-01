@@ -5,6 +5,65 @@ New entries go at the top.
 
 ---
 
+## 2026-08-01 — Track 0 comes here third, because the safety claim was the one a reader could not check
+
+`obc-safety` is the third crate vendored from the core agent, after `obc-memory`
+and `obc-planner`. The order was not chosen by importance — on importance this
+one goes first. It was chosen by separability, which is the only thing that makes
+a piece movable, and Track 0 did not become separable until upstream fixed a
+dependency that pointed the wrong way.
+
+Three of its files — `audit.rs`, `taint.rs`, `trust.rs` — imported `RiskClass`
+and `BlastRadius` from `crate::tools`, so the safety layer depended on the
+largest and least self-contained module in the tree. Those four types are the
+*contract* the tool layer is checked against, not tool machinery. Upstream moved
+them down into `obc-safety::risk` and had `tools::traits` re-export them, which
+left the crate with no outward edges and made this vendoring a copy rather than a
+negotiation. Extraction is usually blocked by exactly one edge pointing the wrong
+way, and the fix is usually to move the contract down rather than the consumer up.
+
+What this changes for a reader: `README.md` and `docs/SAFETY.md` claim that
+actuator bounds are enforced below the host, that every physical action and every
+refusal lands in a hash-chained Ed25519-signed record, and that a privileged call
+whose arguments echo untrusted content is refused. Until today all three claims
+were documented here and implemented somewhere else. `cargo test -p obc-safety`
+now runs 65 tests of that code in this repository, in CI, on every push. The
+document arriving before its code is the wrong order, and this is the third and
+last of the three where that had happened.
+
+Not fixed by this, and worth stating in the same breath: node **pairing** is
+vendored here as `pairing.rs` and is inert upstream — `pair_node` and `is_trusted`
+have no callers, so the spine is still unauthenticated (see `docs/SPINE-AUTH.md`
+and `docs/MIGRATION.md` §2.4). Vendoring the code does not wire it. What it does
+is put the primitive and its 386 tested lines where the design document that
+depends on them already lives.
+
+---
+
+## 2026-08-01 — `sync` skips what `check` already skips
+
+`sync` refused to run at all against a clean upstream checkout. Seven artifacts —
+five wasm build outputs and two firmware `Cargo.lock`s — are gitignored upstream,
+so they are simply absent from a fresh clone, and `do_sync` aborted on the first
+missing source. `check --upstream` had known about exactly these seven since
+2026-07-30, by name and with a reason each; `sync` did not. The same knowledge,
+encoded in one command and not its sibling.
+
+It surfaced the way these things do: vendoring `obc-safety` — twelve files with
+nothing to do with WASM — was blocked by a WASM bundle that was never going to be
+there.
+
+`sync` now skips them and **carries their manifest entries forward**, which is
+the part that had to be right. The manifest is rebuilt from what a run copied, so
+skipping without carrying would have silently dropped seven artifacts from the
+gate — turning "cannot sync" into "no longer checked", which is strictly worse
+than the abort it replaces. The recorded hash wins over re-hashing the file on
+disk, so a hand-edited vendored copy still fails `check` instead of being
+laundered into the manifest by the next sync. Skips print on every run, like
+`check`'s do.
+
+---
+
 ## 2026-07-30 — The peer check keeps a credential, because the alternative is trusting a mirror
 
 The `peer` job checks the 11 artifacts the deployment generator mirrors. It went

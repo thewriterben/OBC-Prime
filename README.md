@@ -15,10 +15,11 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but the first piece of it now is. `crates/obc-memory` and
-> `crates/obc-paths` are here, vendored and hash-checked, and CI builds and tests
-> them: 103 tests plus doctests of the bitemporal world model, belief revision,
-> liveness and expiry this repository's docs already described.
+> repository** — but four crates of it now are. `obc-paths`, `obc-memory`,
+> `obc-planner` and `obc-safety` are here, vendored and hash-checked, and CI
+> builds and tests them: **319 tests** covering the bitemporal world model, the
+> deployment planner the parity claim below rests on, and the Track 0 safety
+> layer `docs/SAFETY.md` describes.
 > The firmware is — see [firmware/](firmware/README.md) — so there is something to
 > flash and watch today, but nothing to talk to it with. See [PLAN.md](PLAN.md) for what is
 > landing and in what order. Self-hosted first; a hosted option is not
@@ -28,9 +29,16 @@ the reflex layer keeps working when the brain is unreachable.
 
 ## The claim worth checking first
 
-The deployment planner exists in **three independent implementations** — the
-Rust planner inside the agent, a WASM build of it, and a TypeScript port that
-runs in the browser-based deployment generator.
+The deployment planner runs as **three executables from two implementations** —
+the Rust planner inside the agent, a WASM build of that same source, and a
+hand-written TypeScript port in the deployment generator.
+
+> Corrected 2026-08-01. This paragraph said "three independent implementations".
+> `parity/README.md` was fixed on 2026-07-29 and this one was not — the same
+> one-leg-of-two miss that the parity gate itself was found guilty of. The
+> hand-written port is the leg that can disagree on *logic*; the WASM build is
+> the leg that can disagree on *age*. Naming them separately is what makes the
+> gate legible, and the honest claim is still the strong one.
 
 All three produce **byte-identical output**, enforced by golden fixtures and a
 drift gate in CI:
@@ -121,37 +129,48 @@ which parts have been run and which have not.
 ## Repository layout
 
 ```
-crates/      the agent's memory substrate — vendored source this repo builds and tests
+crates/      memory, planner and Track 0 — vendored agent source this repo builds and tests
 registry/    board + accessory registry (69 boards, 34 accessories) — SSOT, emitted by the core
-parity/      golden fixtures + manifest that hold the three planners to identical output
-wasm/        the planner compiled to WASM, so a browser plans exactly as the device does
+parity/      golden fixtures + manifest that hold the three planner executables to identical output
+wasm/        the planner compiled to WASM, so a planning service needs no Rust
 bodies/      ready-to-run reference deployments
 scripts/     sync + drift tooling
 docs/        design decisions and their reasoning
 ```
 
-### The memory substrate
+### The vendored substrate
 
-`crates/obc-memory` is the first piece of the agent to move here, and the first
-vendored artifact this repository can *run* rather than only hash:
+`crates/` is the part of the agent this repository can *run* rather than only
+hash. Everything else vendored here is data or a build; this is source, and
+source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 103 tests + 3 doctests
+cargo test --workspace     # 319 tests
 ```
 
-It is the bitemporal world model with provenance and a support graph, the four
-withdrawal mechanisms — supersession, source liveness, dependency withdrawal,
-retention — and the liveness and expiry machinery described in
-[docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) and
-[docs/MEMORY-2026-07.md](docs/MEMORY-2026-07.md). Those documents were here for
-two days before the code was, which is the wrong order and is now corrected.
+Three pieces have moved, each chosen by measuring what was separable rather than
+what sounded impressive, and each carrying the tests it had upstream:
 
-It knows nothing about tools, providers, the spine or the agent loop. That is
-what made it the first thing separable enough to move: 5,878 lines with two
-references to the rest of the tree, against twenty-three modules depending on it.
+| crate | what it is | tests |
+|---|---|---:|
+| `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 |
+| `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
+| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking and node pairing — [docs/SAFETY.md](docs/SAFETY.md) | 65 |
+| `obc-paths` | where data lives, resolved in one place | 6 |
 
-Like everything under `registry/`, `parity/` and `wasm/`, these are **copies** —
-authored in the core repo, verified by SHA-256, and not to be edited here.
+`obc-safety` is the one worth opening first if you are evaluating this. The
+safety section above makes claims about bounds enforced below the host and about
+an audit record that cannot be quietly rewritten. Until 2026-08-01 the document
+making those claims was here and the code backing them was in another
+repository, so the claims could be read and not checked. `docs/SAFETY.md`,
+`docs/BELIEF-REVISION.md` and `docs/MEMORY-2026-07.md` all arrived before their
+code, which is the wrong order and is now corrected for all three.
+
+None of the three knows about tools, providers, the spine or the agent loop —
+that is what made them separable, and it is the same test the next piece has to
+pass. Like everything under `registry/`, `parity/` and `wasm/`, they are
+**copies**: authored in the core repo, verified by SHA-256, and not to be edited
+here.
 
 ## Getting the agent
 
