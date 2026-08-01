@@ -43,6 +43,17 @@ primitive and the persistent storage a replay counter needs are new work. The
 one piece of good news: ESP32-S3 has hardware SHA acceleration, so the cost is
 silicon rather than cycles.
 
+> **Half of that is fixed, 2026-08-01.** The bridge firmware
+> (`firmware/heltec-lora-linktest`) now carries `hmac`/`sha2`/`hkdf` and
+> `src/auth.rs`, so the primitive exists on the node side and is checked against
+> the host's. NVS is still untouched — the replay counter in step 3 remains
+> entirely new work, and it is the half that cannot be tested without a board,
+> since "a counter that survives reboot" is a claim about flash.
+>
+> `firmware/obc-esp32-s3` is also still untouched: the sentence above was written
+> about the compute node and the work so far has been on the bridge. Two
+> firmwares, and only one of them can currently compute a tag.
+
 **The host half already exists and is unwired.** `NodePairingManager` implements
 HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
 `pair_node` has no callers, `is_trusted` has none, and `require_pairing = true`
@@ -244,8 +255,32 @@ one problem this design cannot solve on its own.
    plan and is better than the plan: the host builds every payload, so the
    census is a test that fails when a shape changes rather than a figure in a
    document that does not.
-2. **Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
-   vector in `firmware_spine_framing.rs`. No wire change yet.
+2. ~~**Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
+   vector in `firmware_spine_framing.rs`. No wire change yet.~~ **Done
+   2026-08-01.** `crates/obc-safety/src/spine_tag.rs` is canonical and vendored
+   here; `firmware/heltec-lora-linktest/src/auth.rs` is the node's mirror, also
+   vendored here; the core repo's `tests/spine_auth_vectors.rs` compiles both and
+   fails if they disagree. `cargo test -p obc-safety` runs the host half in this
+   repository, so the document above and the arithmetic it specifies are finally
+   in the same place.
+
+   Two deviations from the line as written, both deliberate:
+
+   - **Portable `sha2`, not the ESP32-S3's hardware SHA.** The silicon is the
+     right destination and an optimisation; a portable implementation compiles
+     on the machine writing it, so this could be tested immediately rather than
+     at the next bench session. Swapping in mbedtls later has a known answer to
+     check against, which is a better position than the reverse.
+   - **A separate `auth.rs`, not `spine.rs`.** Step 2 says *no wire change yet*
+     and `spine.rs` is the wire. Nothing calls `auth` — no frame carries a tag,
+     no receiver checks one.
+
+   The verification is three layers, and only the third is independent:
+   agreement between the two implementations (which two copies of one mistake
+   would also pass), frozen vectors (a regression pin generated from this
+   implementation, so an error would be frozen with it), and **RFC 4231 §4.2 +
+   RFC 5869 §A.1** — constants published years ago, which is what makes the
+   first two mean anything.
 3. **NVS counter**, with the wear-bounded advance-on-boot scheme, and a test that
    a reboot never reissues a counter.
 4. **Wire format v2** behind a config key that defaults to strict, with the old
