@@ -21,10 +21,10 @@ the reflex layer keeps working when the brain is unreachable.
 > bitemporal world model, the deployment planner the parity claim below rests
 > on, the Track 0 safety layer `docs/SAFETY.md` describes, and the battery /
 > link / sensor suites that feed the reflexes.
-> The firmware is — see [firmware/](firmware/README.md) — so there is something to
-> flash and watch today, but nothing to talk to it with. See [PLAN.md](PLAN.md) for what is
-> landing and in what order. Self-hosted first; a hosted option is not
-> foreclosed but is not being built. Expect things to move.
+> The firmware is here in full — see [firmware/](firmware/README.md) — so there
+> is something to flash and watch today, but nothing to talk to it with. See
+> [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
+> a hosted option is not foreclosed but is not being built. Expect things to move.
 
 ---
 

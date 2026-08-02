@@ -21,6 +21,17 @@ bodies/*/config.local.toml
 bodies/*/*.db-wal
 bodies/*/*.db-shm
 
+# The two rules above never matched the files they were written for. The agent
+# names its own SQLite databases after `[agent] name` with no extension, so a
+# body called "trailwatch" produces `trailwatch`, `trailwatch-wal` and
+# `trailwatch-shm` — not `*.db-wal`. bodies/trailwatch/ shipped all three (an
+# empty scheduler database, 57 KB) from cce8731 on 2026-07-27 until 2026-08-02,
+# ignored by a pattern that looked like it covered them. A current build writes
+# to the OS data directory instead, so the bare database file cannot come back
+# from a normal run; the sidecars are matched here anyway.
+bodies/*/*-wal
+bodies/*/*-shm
+
 .DS_Store
 Thumbs.db
 *.log
