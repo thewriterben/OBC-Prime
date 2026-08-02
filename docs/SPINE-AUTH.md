@@ -60,6 +60,16 @@ HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
 is validated and enforces nothing (see `ROADMAP.md`, Phase 3). Roughly half the
 host-side work is written; none of it runs, and it has no counterpart on a node.
 
+> **Wired 2026-08-01** (§6 step 5). `pair_node` has callers on both transports,
+> `require_pairing` refuses, and per-message tags cover inbound results and
+> outbound calls. The counterpart on a node now exists too, for the bridge
+> firmware — `auth.rs`, cross-verified against the host's copy.
+>
+> What is still true in this section: the **LoRa frame itself carries no tag**,
+> and the compute-node firmware cannot compute one. This paragraph described a
+> host-side gap that is closed; the transport-side gap in the table above is
+> not.
+
 ---
 
 ## 2. What authentication is for here
@@ -311,8 +321,36 @@ one problem this design cannot solve on its own.
    not have to re-derive what "it works" means.
 4. **Wire format v2** behind a config key that defaults to strict, with the old
    format rejected rather than tolerated.
-5. **Wire the host half** — `NodePairingManager` gets its callers, and
-   `require_pairing` starts meaning something.
+5. ~~**Wire the host half** — `NodePairingManager` gets its callers, and
+   `require_pairing` starts meaning something.~~ **Done 2026-08-01, for MQTT and
+   P2P.** All three bullets of §3.4 except the LoRa frame, which is step 4:
+
+   - **`require_pairing` refuses unpaired announcements.** It had been validated
+     at boot and gated nothing — any node that could publish on the topic got
+     its tools registered. Gated now on both transports, and on P2P especially,
+     where discovery is a UDP broadcast with no broker and no handshake.
+   - **Inbound tool results are verified.** The non-obvious direction: a result
+     does not actuate, it lands in world memory, and reflexes act on world
+     memory without waking the model.
+   - **Outbound tool calls are signed**, and on P2P *verified*, because both
+     ends of a P2P call are the agent rather than firmware. That half is a round
+     trip today rather than a promise about step 4.
+
+   Two things the work established that this document did not say:
+
+   - **The sender's counter has a host-side answer that is not NVS: the clock.**
+     Seeding each counter at the current Unix second means a restart cannot go
+     backwards unless the clock does, which is exactly the guarantee flash is
+     needed for on a node that has no clock at boot. See
+     [`SPINE-REPLAY.md`](SPINE-REPLAY.md) §2 for what the node still needs.
+   - **`ToolCallRequest` carried no sender identity at all.** The frame said
+     what to do and never said who was asking, so a P2P receiver could not have
+     verified anything even in principle. `from` now selects the key; the tag is
+     what makes the claim mean something.
+
+   `[security] require_frame_auth`, default off, deriving per-node keys from the
+   existing `pairing_secret`. Off by default because the moment it is on, a node
+   that has not been upgraded goes silent — the migration window §4 asks for.
 6. **Re-sync firmware into OBC-Prime** and update `SAFETY.md` §4.3 from "no
    authentication story" to what it then is, including what it still is not.
 

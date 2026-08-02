@@ -305,17 +305,34 @@ Stated because a safety document that only lists strengths is marketing.
   this: the published state of the art either checks physics with hard maths or
   checks meaning with another language model, and the second is not a verifier.
 - **Uncovered tools.** See §2.1. No rule means no gate.
-- **The spine.** The `p2p` and MQTT transports have no authentication story. The
-  realistic robot compromise in 2026 is not an adversarial patch, it is
-  CVE-2026-27509/27510 — unauthenticated DDS publish on Unitree Go2 giving root
-  RCE with physical actuation, persistent across reboot, patched 24 Feb 2026.
-  **Treat the spine network as trusted, and make sure that is actually true.**
-  A design for closing this is in [SPINE-AUTH.md](SPINE-AUTH.md) — per-message
-  HMAC with a replay counter, sized against the 240-byte LoRa frame budget. It is
-  a design and not an implementation, and this section changes when that changes.
-  Note also that MQTT is cleartext by construction: `spine.tls = true` is a hard
-  error because MQTT-over-TLS is not implemented, which is deliberate and is not
-  the same as being encrypted.
+- **The spine.** The realistic robot compromise in 2026 is not an adversarial
+  patch, it is CVE-2026-27509/27510 — unauthenticated DDS publish on Unitree Go2
+  giving root RCE with physical actuation, persistent across reboot, patched
+  24 Feb 2026. The design for closing this is
+  [SPINE-AUTH.md](SPINE-AUTH.md) — per-message HMAC with a replay counter, sized
+  against the 240-byte LoRa frame budget.
+
+  **Updated 2026-08-01**, because "no authentication story" is no longer
+  accurate and neither is "solved". Precisely:
+
+  | | authenticated? |
+  |---|---|
+  | MQTT | **opt-in.** `[security] require_frame_auth` verifies inbound tool results and signs outbound calls with a per-node key. Off by default. |
+  | P2P | **opt-in, both directions verified** — both ends are the agent, so a call signed here is checked there. Peer discovery is gated by `require_pairing`. |
+  | LoRa | **no.** The frame format carries no tag. This is step 4 and needs a bench. |
+  | Serial | physical possession, unchanged. |
+
+  So: a deployment that sets `pairing_secret` and both keys gets authenticated
+  IP-transport traffic today. A deployment that does not — the default — is
+  exactly where it was. **Treat the spine network as trusted unless you have
+  turned those keys on, and make sure that is actually true.**
+
+  Two limits worth stating rather than discovering. The replay window is held in
+  memory, so a host restart collapses it — that fails closed, and
+  [SPINE-REPLAY.md](SPINE-REPLAY.md) §3 works out the persistence this still
+  needs. And MQTT remains cleartext by construction: `spine.tls = true` is a
+  hard error because MQTT-over-TLS is not implemented. A MAC stops forgery, not
+  reading; authenticated is not encrypted.
 - **Perception content in the planning path.** Taint tracking guards tool
   *arguments*. Text recovered from an image by `vision_analyze` still reaches the
   reasoner as prose. Nothing currently strips or sandboxes OCR'd instructions.

@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 344 tests across five crates
+    # source that is never compiled is a listing. 370 tests across five crates
     # as of 2026-08-01, when obc-safety brought Track 0 here and obc-telemetry
     # brought the battery/link/sensor suites — between them the safety layer
     # docs/SAFETY.md describes and the host half of the reflex claim the README
