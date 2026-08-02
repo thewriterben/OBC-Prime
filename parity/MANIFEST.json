@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-02T05:16:42+00:00",
+  "generated": "2026-08-02T16:39:15+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -366,6 +366,18 @@
     "firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino": {
       "sha256": "25a7d8751522493e83c8c3150c5be22227d8d2badc7dab9001dd64add3a1ce26",
       "bytes": 25867
+    },
+    "docs/playbooks/vision-analytics.md": {
+      "sha256": "4b734cb56cab93b183bcf10d63cc784d0c10ee2d2a804f4c83bb44c214222163",
+      "bytes": 5136
+    },
+    "docs/playbooks/mesh-node-lost.md": {
+      "sha256": "2566ce3617290d5ff64e21f6c6ea5e5e4cf7776d17c1da0702a25fce9fd5f9fd",
+      "bytes": 6288
+    },
+    "docs/playbooks/safing-escalations.md": {
+      "sha256": "6a3e3ea3d1fdf0a83492e651439a14d7306eb473386bfa760705ea7b02e799d3",
+      "bytes": 5862
     }
   },
   "wasm_build": {

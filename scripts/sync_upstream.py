@@ -470,6 +470,33 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino",
      "firmware/t-deck-terminal/t_deck_terminal/t_deck_terminal.ino",
      None),
+
+    # ── The triage playbooks ─────────────────────────────────────────────────
+    # Vendored 2026-08-02, because the reference bodies already cite them. The
+    # escalation text a reflex attaches when it wakes System 2 ends with
+    # "Full playbook: docs/playbooks/vision-analytics.md" — and that string is
+    # printed on screen by `bodies/trailwatch`, the quickstart on the front
+    # page of this repository, within two seconds of a first-ever run. Until
+    # now the file it named was not here. The public repo told a new reader to
+    # go read a document it did not have.
+    #
+    # The reason strings live in the agent's reflex rules, which are not in
+    # this repository, so this side is the side that can be fixed.
+    #
+    # Vendored verbatim, like the firmware: they are upstream's prose about
+    # upstream's rules, and editing them here would put this copy in the same
+    # position `crates/obc-memory/src/image.rs` was in. Where they point into
+    # `src/`, they mean the core repo. `docs/playbooks/README.md` says so, and
+    # is this repository's own file — see VENDORED_TREES below.
+    ("docs/playbooks/vision-analytics.md",
+     "docs/playbooks/vision-analytics.md",
+     None),
+    ("docs/playbooks/mesh-node-lost.md",
+     "docs/playbooks/mesh-node-lost.md",
+     None),
+    ("docs/playbooks/safing-escalations.md",
+     "docs/playbooks/safing-escalations.md",
+     None),
 ]
 
 # The upstream sources the WASM bundle is *compiled from*, via the `#[path]`
@@ -575,6 +602,9 @@ VENDORED_TREES: dict[str, set[str]] = {
     "registry": set(),
     # This repo's own prose about the vendored firmware, not a vendored file.
     "firmware": {"firmware/README.md"},
+    # Only the playbooks subtree, not docs/ — everything else under docs/ is
+    # written here. Same shape as firmware: one local README, the rest vendored.
+    "docs/playbooks": {"docs/playbooks/README.md"},
 }
 
 
