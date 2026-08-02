@@ -278,6 +278,21 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-safety/src/spine_tag.rs",
      "crates/obc-safety/src/spine_tag.rs",
      None),
+    # The receiver's half of the same scheme (2026-08-01). `replay` is the
+    # anti-replay window — RFC 4303 §3.4.3 rather than a high-water mark,
+    # because this mesh's flood relay delivers duplicates by design and
+    # re-orders across paths, so strict monotonicity would drop its own traffic
+    # as an attack. `frame_auth` is key, tag and window as one decision, plus
+    # the outbound counter that makes signing safe across a restart.
+    #
+    # Both are pure logic and run here: `cargo test -p obc-safety` is where the
+    # public repo checks the authentication its own SPINE-AUTH.md specifies.
+    ("crates/obc-safety/src/replay.rs",
+     "crates/obc-safety/src/replay.rs",
+     None),
+    ("crates/obc-safety/src/frame_auth.rs",
+     "crates/obc-safety/src/frame_auth.rs",
+     None),
     ("crates/obc-safety/src/limits.rs",
      "crates/obc-safety/src/limits.rs",
      None),
