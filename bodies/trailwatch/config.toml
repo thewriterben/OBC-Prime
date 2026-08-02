@@ -5,7 +5,7 @@
 # Run this body from its own directory:
 #
 #     cd bodies/trailwatch
-#     OBC_CONFIG=config.toml obc start        # PowerShell: $env:OBC_CONFIG="config.toml"
+#     OBC_CONFIG=config.toml oh-ben-claw start   # PowerShell: $env:OBC_CONFIG="config.toml"
 #
 # The paths below are relative to the working directory, so there is nothing to
 # edit before first run. Running from here also gives the agent a writable
