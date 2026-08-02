@@ -213,6 +213,11 @@ the model is down, wedged, or wrong, safing rules still fire.
 Escalation to the slow reasoner is rate-capped and novelty-gated, so a noisy
 sensor cannot drive unbounded model invocations.
 
+Each escalation carries a triage directive naming the playbook that expands it.
+Those three playbooks are in [`playbooks/`](playbooks/README.md) — vendored from
+the core repo from 2026-08-02, because the reference bodies were already citing
+them by path and the path resolved to nothing here.
+
 ---
 
 ## 3. How to turn it on
