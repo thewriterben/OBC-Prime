@@ -20,7 +20,7 @@ edit, nothing to install.
 ```bash
 cd bodies/trailwatch
 export OBC_CONFIG=config.toml      # PowerShell: $env:OBC_CONFIG="config.toml"
-obc start
+oh-ben-claw start
 ```
 
 Run it **from this directory** — the paths in `config.toml` are relative to the
