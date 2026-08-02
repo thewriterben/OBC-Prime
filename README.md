@@ -15,12 +15,13 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but five crates of it now are. `obc-paths`, `obc-memory`,
-> `obc-planner`, `obc-safety` and `obc-telemetry` are here, vendored and
-> hash-checked, and CI builds and tests them: **370 tests** covering the
-> bitemporal world model, the deployment planner the parity claim below rests
-> on, the Track 0 safety layer `docs/SAFETY.md` describes, and the battery /
-> link / sensor suites that feed the reflexes.
+> repository** — but six crates of it now are. `obc-paths`, `obc-memory`,
+> `obc-planner`, `obc-safety`, `obc-telemetry` and `obc-observability` are here,
+> vendored and hash-checked, and CI builds and tests them: **391 tests** covering
+> the bitemporal world model, the deployment planner the parity claim below rests
+> on, the Track 0 safety layer `docs/SAFETY.md` describes, the battery / link /
+> sensor suites that feed the reflexes, and the spans and counters the agent
+> records about itself.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
 > is something to flash and watch today, but nothing to talk to it with. See
 > [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
@@ -146,18 +147,22 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 370 tests
+cargo test --workspace     # 391 tests
 ```
 
-Four pieces have moved, each chosen by measuring what was separable rather than
-what sounded impressive, and each carrying the tests it had upstream:
+Six pieces have moved, each chosen by measuring what was separable rather than
+what sounded impressive, and each carrying the tests it had upstream. The counts
+below are the 388 unit tests plus the 3 doctests; this line said "370 tests" and
+counted only the unit tests, which was the sort of quiet exclusion this page
+otherwise objects to.
 
 | crate | what it is | tests |
 |---|---|---:|
-| `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 |
+| `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 + 2 doc |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 98 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` | 18 |
+| `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 
 `obc-safety` is the one worth opening first if you are evaluating this. The
@@ -168,22 +173,32 @@ repository, so the claims could be read and not checked. `docs/SAFETY.md`,
 `docs/BELIEF-REVISION.md` and `docs/MEMORY-2026-07.md` all arrived before their
 code, which is the wrong order and is now corrected for all three.
 
-`obc-telemetry` is the newest, and it backs half of a claim this page makes
-repeatedly: that the reflex layer keeps working when the brain is unreachable.
-The node side of that has been checkable since the firmware was vendored; the
-host side is these three suites, which turn a battery reading, a link's health
-or a sensor sample into a world-memory fact plus a coarse mode — and it is the
-mode a reflex rule watches, because a rule cannot reason about millivolts and
-should not have to. The half still missing is the reflex *engine* itself, which
-is behind thirteen dependencies in the core crate and cannot move yet.
+`obc-telemetry` backs half of a claim this page makes repeatedly: that the
+reflex layer keeps working when the brain is unreachable. The node side of that
+has been checkable since the firmware was vendored; the host side is these three
+suites, which turn a battery reading, a link's health or a sensor sample into a
+world-memory fact plus a coarse mode — and it is the mode a reflex rule watches,
+because a rule cannot reason about millivolts and should not have to. The half
+still missing is the reflex *engine* itself, which is behind thirteen
+dependencies in the core crate and cannot move yet.
+
+`obc-observability` is the newest, and it is the smallest honest thing in the
+list: no claim on this page rests on it. It is here because it was next by the
+measure below, it costs one dependency and no hardware to run, and it is what a
+running body's spans and counters come from — the part you read when a reflex
+fired and you want to know how long it took. Its Cargo.toml is worth a look for
+one detail: upstream compiled the module in a scratch crate against nothing but
+its six external dependencies *before* extracting it, so "self-contained" was a
+compiler's verdict and not a survey's — and that build corrected the survey,
+which had missed three attribute-macro dependencies it structurally cannot see.
 
 None of them knows about tools, providers, the spine or the agent loop — that is
 what made them separable, and it is the same test the next piece has to pass. It
 is now a measured test rather than a judgement: the core repo's
-`scripts/extractability.py` counts each module's outward edges, and
-`obc-telemetry` was the first piece chosen by that count. Like everything under
-`registry/`, `parity/` and `wasm/`, these are **copies**: authored in the core
-repo, verified by SHA-256, and not to be edited here.
+`scripts/extractability.py` counts each module's outward edges. `obc-telemetry`
+was the first piece chosen by that count and `obc-observability` the second.
+Like everything under `registry/`, `parity/` and `wasm/`, these are **copies**:
+authored in the core repo, verified by SHA-256, and not to be edited here.
 
 ## Getting the agent
 
