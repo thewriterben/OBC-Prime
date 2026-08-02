@@ -360,6 +360,24 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-telemetry/src/sensing.rs",
      None),
 
+    # ── The agent watching itself ────────────────────────────────────────────
+    # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
+    # watching its *body*; this is the instrumentation of the software — spans,
+    # the bounded span ring buffer, and the counters the gateway's
+    # `/api/v1/metrics` serves. The two are one word apart and easy to confuse,
+    # which is why both Cargo.toml files say so.
+    #
+    # Upstream compiled it in a scratch crate against nothing but its six
+    # external dependencies before extracting it, so "self-contained" was a
+    # compiler's verdict rather than a survey's. That is also why it is only two
+    # files: one module, no submodules.
+    ("crates/obc-observability/Cargo.toml",
+     "crates/obc-observability/Cargo.toml",
+     None),
+    ("crates/obc-observability/src/lib.rs",
+     "crates/obc-observability/src/lib.rs",
+     None),
+
     # ── Node firmware ────────────────────────────────────────────────────────
     # Authored upstream, vendored here so the flashing guide and the sources it
     # describes cannot drift apart. `spine.rs` in particular is compiled by a

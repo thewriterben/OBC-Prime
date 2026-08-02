@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-02T16:39:15+00:00",
+  "generated": "2026-08-02T17:40:17+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -234,6 +234,14 @@
     "crates/obc-telemetry/src/sensing.rs": {
       "sha256": "164de6f2ba8d6476f01620bcd0d5f134b80046223bab8a61f6126680fac50821",
       "bytes": 12500
+    },
+    "crates/obc-observability/Cargo.toml": {
+      "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",
+      "bytes": 1900
+    },
+    "crates/obc-observability/src/lib.rs": {
+      "sha256": "3e9605acbe5bc800584279b944bc80e7f9af5ac32d9ff9b045c14e95e3c5eb4e",
+      "bytes": 29550
     },
     "firmware/obc-esp32-s3/.cargo/config.toml": {
       "sha256": "636313d01cfe40b55fde7d2c4c6af9e98b8c35137bd3a54c29bcb4ba389dfe61",
