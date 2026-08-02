@@ -385,8 +385,17 @@ gap is unfilled by any published standard.
 
 ## 6. Reporting a vulnerability
 
-See [SECURITY.md](../SECURITY.md). Please do not open a public issue for anything
-that would let someone actuate hardware they do not own.
+See the security policy in the upstream repo,
+[Oh-Ben-Claw/SECURITY.md](https://github.com/thewriterben/Oh-Ben-Claw/blob/main/SECURITY.md)
+— the agent it covers is the one that actuates hardware, and it is developed
+there. Please do not open a public issue for anything that would let someone
+actuate hardware they do not own.
+
+> This said `[SECURITY.md](../SECURITY.md)` until 2026-08-02. There is no
+> `SECURITY.md` in this repository; the link was written against the upstream
+> tree and pointed at nothing here from the day the file arrived. Found by
+> resolving every relative link in a `git archive` export rather than reading
+> them.
 
 ---
 
