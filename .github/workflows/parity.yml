@@ -31,6 +31,30 @@ jobs:
       - name: check
         run: python scripts/sync_upstream.py check
 
+  doclinks:
+    name: relative links in our own prose resolve
+    runs-on: ubuntu-latest
+    # Added 2026-08-02 after `docs/SAFETY.md` §6 was found pointing at
+    # `../SECURITY.md`, a file this repository does not have and never had. A
+    # dead relative link renders exactly like a live one, so nothing short of
+    # resolving them finds this — and the front page of a public repo is the
+    # part where a broken link costs the most.
+    #
+    # Checks the commit, via `git archive`, not the checkout: an untracked local
+    # file must not be able to satisfy a link a fresh clone cannot follow.
+    # Vendored prose is skipped from `sync_upstream.ARTIFACTS` — its paths mean
+    # the upstream tree, and editing it here is what the manifest gate exists to
+    # prevent. No network: absolute URLs are not fetched.
+    #
+    # `fetch-depth: 0` is not needed; `git archive HEAD` works on a shallow
+    # checkout because it only needs the one commit.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_doc_links.py
+
   behaviour:
     name: vendored wasm behaves as the goldens say
     runs-on: ubuntu-latest
