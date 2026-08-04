@@ -241,7 +241,13 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   wires it when `conscience.enabled`. Whole crate builds; reach gate live at
   runtime for the agent's outbound calls (2026-08-03). Still to do: (a) apply
   the reach gate to the other egress tools (browser, comms, MCP client) and to
-  the other tool registries (orchestrator, pool, MCP server); (b) inject the
+  the other tool registries (orchestrator, pool, MCP server) — **partly done
+  (2026-08-04):** the **browser navigate** tool is now reach-gated + audited
+  (`all_browser_tools_with_reach`), and the **orchestrator inner agent and its
+  sub-agent pool** are gated (`InnerAgentDeps.reach` → `AgentPool::with_reach_gate`
+  → `default_tools_with_reach` per spawn), so delegation is no longer an egress
+  bypass; remaining under (a): comms / MCP-client egress tools and the
+  MCP-server + `mcp serve` registries; (b) inject the
   gate's named credential via the vault on allow; (c) record reach-gate
   refusals to the audit log too — ✅ **done (2026-08-04)**: the auditor is built before the tool registry and threaded into the HTTP tool, so reach refusals are audited live, exactly as perception refusals are.
 
