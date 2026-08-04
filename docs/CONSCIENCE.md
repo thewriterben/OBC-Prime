@@ -211,7 +211,7 @@ Honesty section, in the manner of SAFETY.md §4 and §6:
 
 **Built (2026-08-03):** the gate logic is now real code — the `obc-conscience`
 crate (authored upstream in Oh-Ben-Claw, `cargo test -p obc-conscience`:
-13/13). It implements the consent registry / `PerceptionGate` (default-deny
+18/18, incl. the label→class classifier). It implements the consent registry / `PerceptionGate` (default-deny
 humans, fail-closed on uncertainty), the egress `ReachGate` (default-deny,
 credentials-by-name, perception-tools-have-no-egress), and the
 `deny_unknown_fields` `ConscienceConfig`. It mirrors `obc-safety`'s
@@ -220,10 +220,18 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
 
 **Still open:**
 
-- The perception **classifier** is unbuilt; the crate gates on its *output*,
-  it does not classify. Until a classifier exists, the honest posture for any
-  camera body is `human.capture = false` enforced by *not pointing the camera
-  at people* — an operational control, labeled as such.
+- The perception **label→class classifier** is now built (2026-08-04):
+  `obc_conscience::classifier::SubjectClassifier` maps a detector's raw label
+  (`person`, `deer`, `mountain lion`) onto a broad consent class
+  (`human` / `wildlife`), **fails closed** on any label it doesn't recognize
+  (refused outright, never mapped onto a permitted class even on a permissive
+  body), and is wired at the ingest boundary via `Conscience::may_perceive_label`
+  (5 classifier tests; obc-conscience 18/18, oh-ben-claw lib 905/905). A species
+  taxonomy is added via `[conscience.classifier]` config; everything unmapped
+  fails closed. **Honest scope:** this maps the *labels the detector already
+  emits* onto consent classes — it is NOT the computer-vision detector. Whether a
+  person is labeled at all remains the upstream model's job, so the
+  false-negative caveat below applies to that detector, not to this map.
 - Fail-closed-on-uncertainty needs a measured false-negative rate on a real
   subject set before any human-permitting deployment is defensible.
 - The perception gate is now **called at the perception ingest boundary**
