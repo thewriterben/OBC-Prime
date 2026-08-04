@@ -254,8 +254,10 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   (`all_browser_tools_with_reach`), and the **orchestrator inner agent and its
   sub-agent pool** are gated (`InnerAgentDeps.reach` → `AgentPool::with_reach_gate`
   → `default_tools_with_reach` per spawn), so delegation is no longer an egress
-  bypass; remaining under (a): comms / MCP-client egress tools and the
-  MCP-server + `mcp serve` registries; (b) inject the
+  bypass; the standalone `mcp serve` tool registry is now gated too (2026-08-04) —
+  tools exposed over MCP are an egress surface an external client could drive, so
+  they hit the same allowlist. Remaining under (a): comms / MCP-client egress
+  tools and the embedded MCP-server registry; (b) inject the
   gate's named credential via the vault on allow; (c) record reach-gate
   refusals to the audit log too — ✅ **done (2026-08-04)**: the auditor is built before the tool registry and threaded into the HTTP tool, so reach refusals are audited live, exactly as perception refusals are.
 
