@@ -267,6 +267,24 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   wire the runtime to persist a decision log (the audit chain currently records
   refusals only, without the perception confidence); the replay engine is ready
   for it.
+- **Multi-party consent — done (2026-08-04):** the class gate can't express
+  "Alice opted in, Bob didn't" — a per-*person* property, not a per-class one. The
+  trap is that checking consent by *recognizing* people means face-recognizing
+  everyone in frame, a worse surveillance capability than the one being
+  constrained. Resolution (`obc_conscience::multiparty`): consent is **affirmative,
+  opt-in, and keyed to a token the subject presents** (beacon/badge/code), never a
+  derived identity — no token ⇒ not consented. Grants are purpose-scoped, expiring
+  (`0` = already-expired, no eternal consent), and revocable, failing closed on
+  every axis. `decide_frame` checks only the restricted class (wildlife needs no
+  token) under `RequireAll` (any un-consented person refuses the whole frame, and
+  a *count* is reported, not a "who didn't consent" list — that list would itself
+  be surveillance) or `Redact` (list subjects to blank; a body that can't localize
+  must treat Redact as refuse). Honest limits labeled: redaction needs
+  localization; a token proves a signal is present, not that consent was freely
+  given. Runnable: `oh-ben-claw consent-check --frame f.json --ledger l.json`;
+  design + rationale in `docs/MULTIPARTY-CONSENT.md`; 9 tests, obc-conscience
+  43/43. **Remaining:** wire it into the live perception ingest path (alongside
+  `conscience_filter`); the decision function is ready.
 - The perception gate is now **called at the perception ingest boundary**
   (`vision/clawcam_ingest.rs`: `conscience_filter` /
   `ingest_clawcam_detections_gated`, 2026-08-03) — non-consented subjects are
