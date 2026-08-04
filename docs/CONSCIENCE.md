@@ -248,6 +248,25 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   harness proves the method on synthetic frames, but a real rate needs the
   annotated deployment eval set (≥100 person-present frames spanning night / rain /
   occlusion / long range). Until then the human miss rate is *unmeasured*, not low.
+- **Deterministic replay of decisions — done (2026-08-04):** both gates are pure
+  functions of `(input, config)`, so a decision is replayable if the log captures
+  its full input. `obc_conscience::replay` provides `DecisionRecord` (input +
+  verdict + a stable FNV-1a fingerprint of the config's canonical JSON) and
+  `replay()`, which re-runs each record's input through the *same* gate call the
+  runtime makes and diffs the verdict. A mismatch is attributed to **config
+  drift** (the record's fingerprint differs from the one replayed against —
+  "refused in June, allowed today") or flagged as an **unexplained determinism
+  bug** (same fingerprint, different verdict — a pure function disagreeing with
+  itself). The record carries the perception confidence the refusal-only audit
+  entry omits, so a decision log written from these is sufficient to replay.
+  `evaluate` uses `may_reach`/`may_perceive_label`, so a disabled conscience
+  replays as Allow on both gates — matching the runtime. Runnable:
+  `oh-ben-claw replay-decisions --log log.json` (exits non-zero only on an
+  unexplained mismatch, so it is CI-safe); sample log in
+  `crates/obc-conscience/examples/`; 7 tests, obc-conscience 34/34. **Remaining:**
+  wire the runtime to persist a decision log (the audit chain currently records
+  refusals only, without the perception confidence); the replay engine is ready
+  for it.
 - The perception gate is now **called at the perception ingest boundary**
   (`vision/clawcam_ingest.rs`: `conscience_filter` /
   `ingest_clawcam_detections_gated`, 2026-08-03) — non-consented subjects are
