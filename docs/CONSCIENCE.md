@@ -263,10 +263,12 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   replays as Allow on both gates — matching the runtime. Runnable:
   `oh-ben-claw replay-decisions --log log.json` (exits non-zero only on an
   unexplained mismatch, so it is CI-safe); sample log in
-  `crates/obc-conscience/examples/`; 7 tests, obc-conscience 34/34. **Remaining:**
-  wire the runtime to persist a decision log (the audit chain currently records
-  refusals only, without the perception confidence); the replay engine is ready
-  for it.
+  `crates/obc-conscience/examples/`; 7 tests, obc-conscience 34/34. **Now wired
+  (2026-08-04):** `crate::decision_log::DecisionLog` persists every perception
+  decision (allow + refuse, with confidence — the input the audit chain omits) as
+  fingerprint-stamped JSONL, opt-in via `OBC_DECISION_LOG`; the perception poll
+  (`poll_clawcam_guarded`) writes to it, and `replay-decisions` reads both a JSON
+  array and JSONL, so it now runs on real runtime history.
 - **Multi-party consent — done (2026-08-04):** the class gate can't express
   "Alice opted in, Bob didn't" — a per-*person* property, not a per-class one. The
   trap is that checking consent by *recognizing* people means face-recognizing
@@ -283,8 +285,13 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   localization; a token proves a signal is present, not that consent was freely
   given. Runnable: `oh-ben-claw consent-check --frame f.json --ledger l.json`;
   design + rationale in `docs/MULTIPARTY-CONSENT.md`; 9 tests, obc-conscience
-  43/43. **Remaining:** wire it into the live perception ingest path (alongside
-  `conscience_filter`); the decision function is ready.
+  43/43. **Now wired into the live ingest path (2026-08-04):** `ClawCamDetection`
+  gained an optional `consent_token`; `multiparty_filter` groups detections into
+  frames by `event_id` and runs `decide_frame` per frame before the class gate
+  (RequireAll drops the frame, Redact drops the un-consented subjects), auditing
+  each as `conscience.consent`. Opt-in via `OBC_CONSENT_LEDGER`
+  (+ `OBC_CONSENT_POLICY`, `OBC_CONSENT_PURPOSE`) — off with no ledger, so existing
+  deployments are unchanged.
 - The perception gate is now **called at the perception ingest boundary**
   (`vision/clawcam_ingest.rs`: `conscience_filter` /
   `ingest_clawcam_detections_gated`, 2026-08-03) — non-consented subjects are
