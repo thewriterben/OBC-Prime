@@ -256,8 +256,16 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   → `default_tools_with_reach` per spawn), so delegation is no longer an egress
   bypass; the standalone `mcp serve` tool registry is now gated too (2026-08-04) —
   tools exposed over MCP are an egress surface an external client could drive, so
-  they hit the same allowlist. Remaining under (a): comms / MCP-client egress
-  tools and the embedded MCP-server registry; (b) inject the
+  they hit the same allowlist; and the **MCP-client egress surface**
+  (`McpRemoteTool`) is now reach-gated + audited too (2026-08-04) — each remote
+  tool forwards its arguments to a server outside the trust boundary, so it is
+  keyed on the server name (transport-agnostic: stdio subprocess and HTTP
+  endpoint gated the same) and built already carrying the gate via
+  `McpRegistry::build_tools_with_reach`, refusal pre-forward + on the audit
+  chain. That **closes (a) (2026-08-04)**: the `comms` tool turned out to be
+  link telemetry (reads + reversible world-memory appends), not an egress path,
+  so it was never in scope; and the "embedded MCP-server registry" is the same
+  surface as `mcp serve`, already gated. (b) inject the
   gate's named credential via the vault on allow; (c) record reach-gate
   refusals to the audit log too — ✅ **done (2026-08-04)**: the auditor is built before the tool registry and threaded into the HTTP tool, so reach refusals are audited live, exactly as perception refusals are.
 
