@@ -275,11 +275,20 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   the existing encrypted `SecretsVault` via `get_or_env` (vault value first, env
   fallback), reused rather than rebuilt; `main` wires it (unlocked vault when
   `OBC_VAULT_PASSWORD` is set, else environment-only) into the primary tool
-  registry when conscience is enabled. Remaining under (b): thread the resolver
-  to the sub-agent surfaces (orchestrator inner agent, spawned pool agents) and
-  the MCP-client surface — all four stay reach-gated + fail-closed on a named
-  credential until then, so containment holds; only injection convenience is
-  absent. `HttpTool` +7 tests; lib 915/915. (c) record reach-gate
+  registry when conscience is enabled. **(b) now covers every egress surface
+  (2026-08-04):** the resolver is threaded to the **sub-agent surfaces** —
+  orchestrator inner agent and spawned pool agents (`InnerAgentDeps.resolver` →
+  `AgentPool::with_reach_gate` → `default_tools_with_reach` per spawn) — so
+  delegation is not an injection bypass either; and the **MCP-client surface**
+  injects at the connection boundary (MCP auth is connection-level, not
+  per-call): `McpRegistry::connect_with_conscience` binds a reach-named
+  credential as the HTTP bearer token (http) or an env var of that name (stdio),
+  refuses an unlisted server, and fails closed on an unresolvable credential —
+  a pure, unit-tested decision (`apply_conscience_to_config`). Browser needs no
+  credential. `McpRegistry` is still latent (no live agent wires it), so that
+  path closes the mechanism at the correct layer ahead of wiring; the per-call
+  `McpRemoteTool` reach gate remains the runtime chokepoint. **(b) done.**
+  `HttpTool` +7, `McpRegistry` +4 tests; lib 919/919. (c) record reach-gate
   refusals to the audit log too — ✅ **done (2026-08-04)**: the auditor is built before the tool registry and threaded into the HTTP tool, so reach refusals are audited live, exactly as perception refusals are.
 
 **Both gates now on by default at runtime (2026-08-03):** the perception gate
