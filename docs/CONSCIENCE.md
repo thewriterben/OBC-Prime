@@ -233,7 +233,21 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   person is labeled at all remains the upstream model's job, so the
   false-negative caveat below applies to that detector, not to this map.
 - Fail-closed-on-uncertainty needs a measured false-negative rate on a real
-  subject set before any human-permitting deployment is defensible.
+  subject set before any human-permitting deployment is defensible. **Measurement
+  harness done (2026-08-04):** `obc_conscience::detector_eval` scores a labeled
+  eval set (human-annotated ground truth vs detector output, classified onto
+  consent classes via the same `SubjectClassifier` the gate uses) into a per-class
+  miss rate with a **Wilson 95% upper bound** — because "0 misses in 20 frames"
+  is a 0% point estimate but a ~16% upper bound, and safety plans against the
+  bound. The restricted class (`human`) is foregrounded; an unrecognized *detected*
+  label counts as covering it (mirrors the gate's fail-closed behavior), an
+  unrecognized *truth* label is excluded and reported (never fabricated into a
+  present class). Runnable on real data: `oh-ben-claw eval-detector --frames
+  frames.json` (sample + full collection protocol in `docs/DETECTOR-FN-EVAL.md`;
+  9 tests, obc-conscience 27/27). **Still open:** the field number itself — the
+  harness proves the method on synthetic frames, but a real rate needs the
+  annotated deployment eval set (≥100 person-present frames spanning night / rain /
+  occlusion / long range). Until then the human miss rate is *unmeasured*, not low.
 - The perception gate is now **called at the perception ingest boundary**
   (`vision/clawcam_ingest.rs`: `conscience_filter` /
   `ingest_clawcam_detections_gated`, 2026-08-03) — non-consented subjects are
