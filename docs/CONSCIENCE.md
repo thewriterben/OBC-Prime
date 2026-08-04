@@ -266,7 +266,20 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
   link telemetry (reads + reversible world-memory appends), not an egress path,
   so it was never in scope; and the "embedded MCP-server registry" is the same
   surface as `mcp serve`, already gated. (b) inject the
-  gate's named credential via the vault on allow; (c) record reach-gate
+  gate's named credential via the vault on allow — **implemented + live for the
+  primary agent (2026-08-04):** a `CredentialResolver` seam resolves a name to
+  its secret at the egress boundary and the HTTP tool injects it as a bearer
+  token (the model sees the name, never the value); named-but-unresolvable
+  credentials **fail closed** (refused, audited, no connection), and an
+  `Authorization` header the caller set is respected. The production resolver is
+  the existing encrypted `SecretsVault` via `get_or_env` (vault value first, env
+  fallback), reused rather than rebuilt; `main` wires it (unlocked vault when
+  `OBC_VAULT_PASSWORD` is set, else environment-only) into the primary tool
+  registry when conscience is enabled. Remaining under (b): thread the resolver
+  to the sub-agent surfaces (orchestrator inner agent, spawned pool agents) and
+  the MCP-client surface — all four stay reach-gated + fail-closed on a named
+  credential until then, so containment holds; only injection convenience is
+  absent. `HttpTool` +7 tests; lib 915/915. (c) record reach-gate
   refusals to the audit log too — ✅ **done (2026-08-04)**: the auditor is built before the tool registry and threaded into the HTTP tool, so reach refusals are audited live, exactly as perception refusals are.
 
 **Both gates now on by default at runtime (2026-08-03):** the perception gate
