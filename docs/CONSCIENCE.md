@@ -4,11 +4,20 @@
 *touching* a system it shouldn't — enforced by deterministic code the model
 cannot override.**
 
-*Status: design, not a decision. Sibling to [SAFETY.md](SAFETY.md). Where
-SAFETY.md governs what the agent may **do** to the physical world (Track 0,
-actuation), this governs what the agent may **see** and what it may **reach**.
-Nothing here is aspirational; the gaps in §6 are as load-bearing as the
-guarantees in §2. Written 2026-08.*
+*Status: built and vendored, with one gap that code cannot close. Sibling to
+[SAFETY.md](SAFETY.md). Where SAFETY.md governs what the agent may **do** to the
+physical world (Track 0, actuation), this governs what the agent may **see** and
+what it may **reach**. Nothing here is aspirational; the gaps in §6 are as
+load-bearing as the guarantees in §2. Written 2026-08.*
+
+> This line said *"design, not a decision"* until 2026-08-06. That was true when
+> written and stopped being true two days later, when the `obc-conscience` crate
+> landed upstream and was vendored here — `cargo test --workspace` in this
+> repository now runs its 43 tests. Understating a shipped safety control is a
+> smaller sin than overstating one, and it is still the same defect: a status
+> line nobody re-read. The one thing §6 still calls unmeasured — the detector's
+> human false-negative rate in the field — is unmeasured because it needs an
+> annotated eval set, not more code.
 
 ---
 
@@ -209,14 +218,50 @@ Honesty section, in the manner of SAFETY.md §4 and §6:
 
 ## 6. Status & open items (load-bearing)
 
+> **Re-measured 2026-08-06.** This section was written by appending, over two
+> days, and it ends by listing as open the two things it declares **done**
+> a hundred lines earlier. That is not a small inconsistency in a section whose
+> heading says *load-bearing*: a reader who scrolls to the bottom for "what is
+> still missing" gets the opposite of the answer.
+>
+> Every symbol, subcommand, environment variable and test count below was
+> re-derived from a `git archive HEAD` of the core repo on 2026-08-06. What held
+> up: all sixteen named symbols exist, all five `OBC_*` opt-ins are read in
+> `main.rs`, and the three subcommands this section calls *Runnable* are real
+> (`EvalDetector`, `ReplayDecisions`, `ConsentCheck` in the clap enum — the
+> kebab-case forms the text uses are what clap derives). Two of those looked
+> absent on a first pass and were not; a search for `McpRegistry::build_tools_with_reach`
+> finds nothing when the code says `fn build_tools_with_reach`.
+>
+> What did not hold up is recorded inline: the two contradicted bullets, the
+> vendoring note, the running test numbers, and one function name that points at
+> the wrong side of the live path.
+
 **Built (2026-08-03):** the gate logic is now real code — the `obc-conscience`
 crate (authored upstream in Oh-Ben-Claw, `cargo test -p obc-conscience`:
-18/18, incl. the label→class classifier). It implements the consent registry / `PerceptionGate` (default-deny
+**43/43** as of 2026-08-06, incl. the label→class classifier). It implements the consent registry / `PerceptionGate` (default-deny
 humans, fail-closed on uncertainty), the egress `ReachGate` (default-deny,
 credentials-by-name, perception-tools-have-no-egress), and the
 `deny_unknown_fields` `ConscienceConfig`. It mirrors `obc-safety`'s
-deterministic-gate pattern exactly. Vendoring into OBC-Prime is a follow-up
-via `scripts/sync_upstream.py` (the drift-gated copy path).
+deterministic-gate pattern exactly.
+
+> ~~Vendoring into OBC-Prime is a follow-up via `scripts/sync_upstream.py` (the
+> drift-gated copy path).~~ **Done 2026-08-06.** The crate is in `crates/` here,
+> under the same SHA-256 gate as the rest, and `cargo test --workspace` in this
+> repository runs its 43 tests. Until that landed, this document described a gate
+> the repository carrying it could not execute — which is the failure mode the
+> README's note about SAFETY.md, BELIEF-REVISION.md and MEMORY-2026-07.md
+> already names.
+
+**A note on the numbers below.** The counts quoted through this section
+(`18/18`, `27/27`, `34/34`, `13/13`, `lib 904/904`, `905/905`, `919/919`,
+`clawcam 23/23`, `http 6/6`, `http 7/7`) are a running log written as each piece
+landed, and several are same-day contradictions of each other. Measured
+2026-08-06, the current figures are: **obc-conscience 43**, obc-safety audit
+module **7**, `clawcam_ingest` **25**, `tools/builtin/http` **12**, oh-ben-claw
+lib **922**. The historical numbers are left in place because each one was true
+when written and shows the order things arrived in; treat any of them as a
+timestamp, not a status.
 
 **Still open:**
 
@@ -351,10 +396,18 @@ via `scripts/sync_upstream.py` (the drift-gated copy path).
 
 **Both gates now on by default at runtime (2026-08-03):** the perception gate
 is threaded into the runtime ClawCam poll (`main.rs` builds a `Conscience` per
-poll; `poll_clawcam_into_world_gated` drops non-consented detections before
-world memory) and the reach gate into the agent tool registry. A deployment
-that sets `[conscience] enabled = true` gets both; disabled admits everything.
+poll; `poll_clawcam_guarded` drops non-consented detections before world memory)
+and the reach gate into the agent tool registry. A deployment that sets
+`[conscience] enabled = true` gets both; disabled admits everything.
 Whole crate builds; clawcam module 23/23, http gate 6/6.
+
+> Corrected 2026-08-06: this said `poll_clawcam_into_world_gated`. That function
+> exists and has **no callers** — `main.rs:2230` calls `poll_clawcam_guarded`
+> directly, building the `PerceptionGuard` itself, which is the whole of what
+> the wrapper does. The gate is live on the runtime path either way; the
+> document named the sibling nothing uses. Worth the correction rather than a
+> silent edit, because "the runtime calls X" is exactly the kind of sentence a
+> reader checks a safety claim against.
 
 **Refusals are audited (2026-08-03):** `ActionAuditor::record_conscience_refusal`
 writes each refusal into the same hash-chained, HMAC'd (optionally Ed25519)
@@ -372,11 +425,38 @@ as a perception refusal. The init-order refactor is done — both gates' refusal
 are audited live. (Whole-workspace `cargo check` clean; obc-conscience 13/13,
 obc-safety 99/99, oh-ben-claw lib 904/904.)
 
-- No deterministic replay of perception decisions yet (mirrors SAFETY.md's
-  replay gap).
-- Operator-overreach (adversary 5) is only partially addressed; a
+- ~~No deterministic replay of perception decisions yet (mirrors SAFETY.md's
+  replay gap).~~ **Contradicted by this same section and removed 2026-08-06.**
+  Replay landed 2026-08-04 — `obc_conscience::replay`, 7 tests, and
+  `replay-decisions` reads the JSONL the runtime poll writes. This bullet
+  survived the commit that made it false because the update was appended above
+  it instead of replacing it.
+- ~~Operator-overreach (adversary 5) is only partially addressed; a
   multi-party consent scheme (the subject, not just the operator, attests) is
-  research, not design.
+  research, not design.~~ **Also contradicted and removed 2026-08-06.**
+  Multi-party consent landed 2026-08-04 — `obc_conscience::multiparty`, 9 tests,
+  token-presented rather than identity-derived, wired into the ingest path
+  behind `OBC_CONSENT_LEDGER`.
+
+  What is *still* true about adversary 5, and worth keeping rather than
+  deleting: consent tokens make invasive configuration loud, logged and
+  effortful; they do not stop an operator with physical control, and a token
+  proves a signal is present, not that consent was freely given. §4 says this
+  and remains accurate.
+
+**Genuinely open, as of 2026-08-06:**
+
+- **The measured false-negative rate.** The harness is done; the field number is
+  not. Until an annotated deployment eval set exists (≥100 person-present frames
+  across night / rain / occlusion / long range), the human miss rate is
+  *unmeasured*, not low. This is the one item on the page that no amount of
+  code closes.
+- **`poll_clawcam_into_world_gated` has no callers.** The "Both gates now on by
+  default" paragraph above said the runtime perception path is that function. It
+  is not — `main.rs:2230` calls `poll_clawcam_guarded` directly and builds the
+  `PerceptionGuard` itself, which is all the wrapper does. The gate *is* live on
+  the runtime path; the document named the unused sibling. Corrected above, and
+  the function itself is flagged upstream for a keep-or-cut decision.
 
 ---
 
