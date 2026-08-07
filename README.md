@@ -15,14 +15,15 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but eight crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but nine crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
-> `obc-scheduler` and `obc-conscience` are here, vendored and hash-checked, and
-> CI builds and tests them: **452 tests** covering the bitemporal world model,
-> the deployment planner the parity claim below rests on, the Track 0 safety
-> layer `docs/SAFETY.md` describes, the perception and reach gates
-> `docs/CONSCIENCE.md` describes, the battery / link / sensor suites that feed
-> the reflexes, and the spans and counters the agent records about itself.
+> `obc-scheduler`, `obc-conscience` and `obc-position` are here, vendored and
+> hash-checked, and CI builds and tests them: **473 tests** covering the
+> bitemporal world model, the deployment planner the parity claim below rests
+> on, the Track 0 safety layer `docs/SAFETY.md` describes, the perception and
+> reach gates `docs/CONSCIENCE.md` describes, the battery / link / sensor suites
+> that feed the reflexes, the spans and counters the agent records about itself,
+> and the position sources that put a node on a map.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
 > is something to flash and watch today, but nothing to talk to it with. See
 > [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
@@ -148,12 +149,12 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 452 tests
+cargo test --workspace     # 473 tests
 ```
 
-Eight pieces have moved, each chosen by measuring what was separable rather than
+Nine pieces have moved, each chosen by measuring what was separable rather than
 what sounded impressive, and each carrying the tests it had upstream. The counts
-below are the 448 unit tests plus the 4 doctests; this line said "370 tests" and
+below are the 469 unit tests plus the 4 doctests; this line said "370 tests" and
 counted only the unit tests, which was the sort of quiet exclusion this page
 otherwise objects to.
 
@@ -163,8 +164,9 @@ otherwise objects to.
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 99 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay and multi-party consent — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 43 |
-| `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` | 18 |
+| `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
+| `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |
 | `obc-scheduler` | cron, interval and one-shot tasks in SQLite, surviving restarts — what turns "check the perimeter every hour" into something the agent does unasked | 16 + 1 doc |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 
@@ -210,6 +212,16 @@ what made them separable, and it is the same test the next piece has to pass. It
 is now a measured test rather than a judgement: the core repo's
 `scripts/extractability.py` counts each module's outward edges. `obc-telemetry`
 was the first piece chosen by that count and `obc-observability` the second.
+
+`obc-position` is the first pair chosen by *changing* that count rather than
+waiting for it. `aerial` and `gnss` each named exactly one thing from the fleet
+coordinator — `NodeState`, a 25-line heartbeat struct — and that single import
+pinned a 177-line and a 336-line module to an 823-line module neither otherwise
+touches. Moving the struct to `obc-telemetry`, where it belonged, took both to
+zero blocking edges in one commit. Turning an edge around is cheaper than
+waiting for one to come loose, and it is the same manoeuvre that freed
+`obc-safety`; the difference is that this one was done on purpose.
+
 Like everything under `registry/`, `parity/` and `wasm/`, these are **copies**:
 authored in the core repo, verified by SHA-256, and not to be edited here.
 
