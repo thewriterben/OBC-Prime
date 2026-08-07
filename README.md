@@ -15,13 +15,14 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but six crates of it now are. `obc-paths`, `obc-memory`,
-> `obc-planner`, `obc-safety`, `obc-telemetry` and `obc-observability` are here,
-> vendored and hash-checked, and CI builds and tests them: **391 tests** covering
-> the bitemporal world model, the deployment planner the parity claim below rests
-> on, the Track 0 safety layer `docs/SAFETY.md` describes, the battery / link /
-> sensor suites that feed the reflexes, and the spans and counters the agent
-> records about itself.
+> repository** — but eight crates of it now are. `obc-paths`, `obc-memory`,
+> `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
+> `obc-scheduler` and `obc-conscience` are here, vendored and hash-checked, and
+> CI builds and tests them: **452 tests** covering the bitemporal world model,
+> the deployment planner the parity claim below rests on, the Track 0 safety
+> layer `docs/SAFETY.md` describes, the perception and reach gates
+> `docs/CONSCIENCE.md` describes, the battery / link / sensor suites that feed
+> the reflexes, and the spans and counters the agent records about itself.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
 > is something to flash and watch today, but nothing to talk to it with. See
 > [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
@@ -147,12 +148,12 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 391 tests
+cargo test --workspace     # 452 tests
 ```
 
-Six pieces have moved, each chosen by measuring what was separable rather than
+Eight pieces have moved, each chosen by measuring what was separable rather than
 what sounded impressive, and each carrying the tests it had upstream. The counts
-below are the 388 unit tests plus the 3 doctests; this line said "370 tests" and
+below are the 448 unit tests plus the 4 doctests; this line said "370 tests" and
 counted only the unit tests, which was the sort of quiet exclusion this page
 otherwise objects to.
 
@@ -160,9 +161,11 @@ otherwise objects to.
 |---|---|---:|
 | `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 + 2 doc |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
-| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 98 |
+| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 99 |
+| `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay and multi-party consent — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 43 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` | 18 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
+| `obc-scheduler` | cron, interval and one-shot tasks in SQLite, surviving restarts — what turns "check the perimeter every hour" into something the agent does unasked | 16 + 1 doc |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 
 `obc-safety` is the one worth opening first if you are evaluating this. The
@@ -172,6 +175,16 @@ making those claims was here and the code backing them was in another
 repository, so the claims could be read and not checked. `docs/SAFETY.md`,
 `docs/BELIEF-REVISION.md` and `docs/MEMORY-2026-07.md` all arrived before their
 code, which is the wrong order and is now corrected for all three.
+
+`docs/CONSCIENCE.md` was the fourth, and the worst instance of it. It went up on
+2026-08-04 describing a consent registry, an egress allowlist and audited
+refusals as wired and live, and cited `crates/obc-conscience/examples/` — a path
+that existed in neither repository. The code was real and was not fabricated;
+it sat on an upstream branch whose pull request had already merged, twenty-one
+commits ahead of every main, where nothing was going to look at it again. It is
+here now, so the document and the code arrived in the right order in the end,
+two days apart. Recording the two days because the alternative is a repository
+that only ever looks like it got things right the first time.
 
 `obc-telemetry` backs half of a claim this page makes repeatedly: that the
 reflex layer keeps working when the brain is unreachable. The node side of that
