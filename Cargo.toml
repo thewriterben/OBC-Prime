@@ -3,7 +3,7 @@
 # These are copies, verified by SHA-256 against the core repository — the same
 # arrangement as `registry/`, `parity/fixtures/`, `wasm/` and `firmware/`. What
 # makes them different is that this repository can *run* them: `cargo test
-# --workspace` here executes 452 tests of real agent code, so the public project
+# --workspace` here executes 473 tests of real agent code, so the public project
 # checks the substrate it documents instead of describing one it cannot build.
 #
 # Do not edit these by hand. Change them upstream, then
@@ -19,5 +19,6 @@ members = [
     "crates/obc-observability",
     "crates/obc-scheduler",
     "crates/obc-conscience",
+    "crates/obc-position",
 ]
 resolver = "2"

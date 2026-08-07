@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-07T01:47:02+00:00",
+  "generated": "2026-08-07T17:37:52+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -220,8 +220,8 @@
       "bytes": 1653
     },
     "crates/obc-telemetry/src/lib.rs": {
-      "sha256": "393e2b405c6f1e9b7233d1bb63f971e564e8e4febc2c3f4211bc9478e96485bd",
-      "bytes": 1526
+      "sha256": "9d97458ca2d66cfc02bc2bbf709df04a84b7b4cf2a4154613bbf212f12881693",
+      "bytes": 1917
     },
     "crates/obc-telemetry/src/power.rs": {
       "sha256": "ee5fdd1bc269536b5023a2ec262bad3fd75ec4535021e5ae96716641aba1e3b8",
@@ -234,6 +234,26 @@
     "crates/obc-telemetry/src/sensing.rs": {
       "sha256": "164de6f2ba8d6476f01620bcd0d5f134b80046223bab8a61f6126680fac50821",
       "bytes": 12500
+    },
+    "crates/obc-telemetry/src/node.rs": {
+      "sha256": "07439e606a624a217a94140b489f98590728ba074316c9283d20600bd9ae571c",
+      "bytes": 3660
+    },
+    "crates/obc-position/Cargo.toml": {
+      "sha256": "fddb72cdf6d667a4ab3c22d88472e5c159ff428c2f292d892f4f270967eed5c3",
+      "bytes": 1274
+    },
+    "crates/obc-position/src/lib.rs": {
+      "sha256": "f02b1b0aac8658a8908797cfe498c25ed8bb008490ed0ed342e350cf50a39d0a",
+      "bytes": 1967
+    },
+    "crates/obc-position/src/aerial.rs": {
+      "sha256": "2da5fa8d971869574c297158c92dcd7155e50c6216e9ae2a5f1779e642d52812",
+      "bytes": 6065
+    },
+    "crates/obc-position/src/gnss.rs": {
+      "sha256": "f6baed90430e20ced975a52045e0da7839f2e55491a655309233b5fcc0075ea3",
+      "bytes": 11700
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",

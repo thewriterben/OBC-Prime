@@ -2010,6 +2010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-position"
+version = "0.1.0"
+dependencies = [
+ "obc-planner",
+ "obc-telemetry",
+ "serde",
+]
+
+[[package]]
 name = "obc-safety"
 version = "0.1.0"
 dependencies = [

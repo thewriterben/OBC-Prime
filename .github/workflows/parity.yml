@@ -75,8 +75,11 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 452 tests across eight crates
-    # as of 2026-08-06, when obc-scheduler and obc-conscience arrived — the
+    # source that is never compiled is a listing. 473 tests across nine crates as
+    # of 2026-08-06, when obc-position arrived — the first pair extracted by
+    # *changing* the dependency graph rather than waiting for it: one 25-line
+    # struct moved out of the fleet coordinator and two modules came free. 452
+    # across eight before it, when obc-scheduler and obc-conscience landed — the
     # second of those being the code behind docs/CONSCIENCE.md, which had been
     # on public main for two days describing a gate this repository could not
     # run. 391 across six before that, and 370 across five from 2026-08-01, when

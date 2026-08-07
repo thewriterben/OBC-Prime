@@ -359,6 +359,37 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-telemetry/src/sensing.rs",
      "crates/obc-telemetry/src/sensing.rs",
      None),
+    # `NodeState` — the heartbeat every other layer reads — moved here from the
+    # core repo's `fleet` module on 2026-08-06. It is telemetry a coordinator
+    # consumes, not coordination, and being defined inside the coordinator was
+    # the single edge that kept `aerial` and `gnss` from extracting at all.
+    ("crates/obc-telemetry/src/node.rs",
+     "crates/obc-telemetry/src/node.rs",
+     None),
+
+    # ── Where a node actually is ─────────────────────────────────────────────
+    # Vendored 2026-08-06, pieces eight and nine, and the first pair unlocked by
+    # a change made on purpose rather than found already loose: the `NodeState`
+    # move above took both from one blocking edge to zero, and upstream's
+    # `scripts/extractability.py` said so before the crate existed.
+    #
+    # One crate rather than two because they are one pattern — a real-world
+    # position report (MAVLink-style geodetic telemetry, or a raw NMEA 0183 GGA
+    # sentence) projected through a site frame into the node state the fleet
+    # coordinates on. Neither knows the coordinator exists, which is what lets a
+    # drone and a bare u-blox module join the same auction as a ground robot.
+    ("crates/obc-position/Cargo.toml",
+     "crates/obc-position/Cargo.toml",
+     None),
+    ("crates/obc-position/src/lib.rs",
+     "crates/obc-position/src/lib.rs",
+     None),
+    ("crates/obc-position/src/aerial.rs",
+     "crates/obc-position/src/aerial.rs",
+     None),
+    ("crates/obc-position/src/gnss.rs",
+     "crates/obc-position/src/gnss.rs",
+     None),
 
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
