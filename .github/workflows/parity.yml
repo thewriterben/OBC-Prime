@@ -75,10 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 391 tests across six crates as
-    # of 2026-08-02, when obc-observability arrived; 370 across five before that,
-    # from 2026-08-01, when obc-safety brought Track 0 here and obc-telemetry
-    # brought the battery/link/sensor suites — between them the safety layer
+    # source that is never compiled is a listing. 452 tests across eight crates
+    # as of 2026-08-06, when obc-scheduler and obc-conscience arrived — the
+    # second of those being the code behind docs/CONSCIENCE.md, which had been
+    # on public main for two days describing a gate this repository could not
+    # run. 391 across six before that, and 370 across five from 2026-08-01, when
+    # obc-safety brought Track 0 here and obc-telemetry brought the
+    # battery/link/sensor suites — between them the safety layer
     # docs/SAFETY.md describes and the host half of the reflex claim the README
     # makes, neither of which this repository could run before.
     steps:

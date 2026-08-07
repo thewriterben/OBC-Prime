@@ -378,6 +378,85 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-observability/src/lib.rs",
      None),
 
+    # ── The scheduler ────────────────────────────────────────────────────────
+    # Vendored 2026-08-06. The last module upstream's extractability survey
+    # listed with zero blocking edges; everything after it needs an edge turned
+    # around first. Cron, interval and one-shot tasks in SQLite.
+    #
+    # It is also the crate that writes `<agent name>` and its `-wal`/`-shm`
+    # sidecars — three of which were committed into `bodies/trailwatch/` here
+    # and shipped for six days. Its own manifest upstream records that.
+    ("crates/obc-scheduler/Cargo.toml",
+     "crates/obc-scheduler/Cargo.toml",
+     None),
+    ("crates/obc-scheduler/src/lib.rs",
+     "crates/obc-scheduler/src/lib.rs",
+     None),
+
+    # ── The perception & reach gate ──────────────────────────────────────────
+    # Vendored 2026-08-06, and the reason this sync is not routine.
+    #
+    # `docs/CONSCIENCE.md` has been on this repository's public main since
+    # 2026-08-04, describing a consent registry, an egress allowlist and audited
+    # refusals as wired and live — and citing `crates/obc-conscience/examples/`,
+    # a path that did not exist here or upstream. The code was real; it sat on a
+    # branch whose PR had already merged, 21 commits ahead of every main, where
+    # nothing was going to notice it.
+    #
+    # This repository's README already names the pattern: SAFETY.md,
+    # BELIEF-REVISION.md and MEMORY-2026-07.md "all arrived before their code,
+    # which is the wrong order and is now corrected for all three." CONSCIENCE.md
+    # was the fourth, and this entry is that correction.
+    #
+    # The crate depends on serde, serde_json and tracing and nothing else, so
+    # `cargo test --workspace` here runs the gate itself — not a description of
+    # it. That is the whole reason crates/ exists in a repository that cannot
+    # run the agent.
+    ("crates/obc-conscience/Cargo.toml",
+     "crates/obc-conscience/Cargo.toml",
+     None),
+    ("crates/obc-conscience/src/lib.rs",
+     "crates/obc-conscience/src/lib.rs",
+     None),
+    ("crates/obc-conscience/src/classifier.rs",
+     "crates/obc-conscience/src/classifier.rs",
+     None),
+    ("crates/obc-conscience/src/consent.rs",
+     "crates/obc-conscience/src/consent.rs",
+     None),
+    ("crates/obc-conscience/src/multiparty.rs",
+     "crates/obc-conscience/src/multiparty.rs",
+     None),
+    ("crates/obc-conscience/src/reach.rs",
+     "crates/obc-conscience/src/reach.rs",
+     None),
+    ("crates/obc-conscience/src/replay.rs",
+     "crates/obc-conscience/src/replay.rs",
+     None),
+    ("crates/obc-conscience/src/detector_eval.rs",
+     "crates/obc-conscience/src/detector_eval.rs",
+     None),
+
+    # The sample frames, ledgers and decision logs the crate's own docs point at
+    # as runnable. Declared individually because VENDORED_TREES fails on any
+    # undeclared file under crates/ — which is the rule working: a fixture that
+    # drifts from upstream is a fixture that stops demonstrating what it claims.
+    ("crates/obc-conscience/examples/sample-consent-frame.json",
+     "crates/obc-conscience/examples/sample-consent-frame.json",
+     None),
+    ("crates/obc-conscience/examples/sample-consent-ledger.json",
+     "crates/obc-conscience/examples/sample-consent-ledger.json",
+     None),
+    ("crates/obc-conscience/examples/sample-decision-log.json",
+     "crates/obc-conscience/examples/sample-decision-log.json",
+     None),
+    ("crates/obc-conscience/examples/sample-decision-log.jsonl",
+     "crates/obc-conscience/examples/sample-decision-log.jsonl",
+     None),
+    ("crates/obc-conscience/examples/sample-eval-frames.json",
+     "crates/obc-conscience/examples/sample-eval-frames.json",
+     None),
+
     # ── Node firmware ────────────────────────────────────────────────────────
     # Authored upstream, vendored here so the flashing guide and the sources it
     # describes cannot drift apart. `spine.rs` in particular is compiled by a
