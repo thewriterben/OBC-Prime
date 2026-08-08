@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-07T20:21:52+00:00",
+  "generated": "2026-08-08T01:10:35+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -276,8 +276,8 @@
       "bytes": 11074
     },
     "crates/obc-tunnel/Cargo.toml": {
-      "sha256": "daeee0137e7d8180a5c86e21b05613324e607569d82fb0cf803ce44460d866a0",
-      "bytes": 1661
+      "sha256": "fb60d15e27ce81f56238acdd9df3d8c59a0952cf68f04c6fbe3083f968305fe7",
+      "bytes": 3227
     },
     "crates/obc-tunnel/src/lib.rs": {
       "sha256": "888db17b86c9c8251c1e2e79a08b63aac8a8cc7ca64f4a6920e5b7c4b4bb6552",

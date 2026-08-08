@@ -75,8 +75,11 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 473 tests across nine crates as
-    # of 2026-08-06, when obc-position arrived — the first pair extracted by
+    # source that is never compiled is a listing. 495 tests across eleven crates
+    # as of 2026-08-08, when obc-cost and obc-tunnel arrived — the pair that
+    # showed a workspace build cannot tell you what one crate needs, and put the
+    # per-crate step below next to this one. 473 across nine from 2026-08-06,
+    # when obc-position arrived — the first pair extracted by
     # *changing* the dependency graph rather than waiting for it: one 25-line
     # struct moved out of the fleet coordinator and two modules came free. 452
     # across eight before it, when obc-scheduler and obc-conscience landed — the
