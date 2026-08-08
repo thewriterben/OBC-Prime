@@ -20,5 +20,7 @@ members = [
     "crates/obc-scheduler",
     "crates/obc-conscience",
     "crates/obc-position",
+    "crates/obc-cost",
+    "crates/obc-tunnel",
 ]
 resolver = "2"

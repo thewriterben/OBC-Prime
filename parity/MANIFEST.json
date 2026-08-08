@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-07T17:37:52+00:00",
+  "generated": "2026-08-08T01:10:35+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -254,6 +254,46 @@
     "crates/obc-position/src/gnss.rs": {
       "sha256": "f6baed90430e20ced975a52045e0da7839f2e55491a655309233b5fcc0075ea3",
       "bytes": 11700
+    },
+    "crates/obc-cost/Cargo.toml": {
+      "sha256": "445f272a87b18a332dda01cd5c19635c1abbf6e7399221c79b4759de160007a1",
+      "bytes": 1279
+    },
+    "crates/obc-cost/src/lib.rs": {
+      "sha256": "5c8664aa058f7946c1e84bcc20a0554f8a5da0f99079999a26cff695f18d6beb",
+      "bytes": 293
+    },
+    "crates/obc-cost/src/config.rs": {
+      "sha256": "853bca27ce4d4093c126e592d3065bd4ed6612f827fdfa1513888d47099f542a",
+      "bytes": 2087
+    },
+    "crates/obc-cost/src/types.rs": {
+      "sha256": "470dd2c84a4de1e7b021d5641e06e52de99dc81b750ada7835f8d1b5f3df5cc2",
+      "bytes": 4395
+    },
+    "crates/obc-cost/src/tracker.rs": {
+      "sha256": "39e0efec90ec323e7539ed2e1bd8559a81a3c4dee8e71923354e80fb5f125939",
+      "bytes": 11074
+    },
+    "crates/obc-tunnel/Cargo.toml": {
+      "sha256": "fb60d15e27ce81f56238acdd9df3d8c59a0952cf68f04c6fbe3083f968305fe7",
+      "bytes": 3227
+    },
+    "crates/obc-tunnel/src/lib.rs": {
+      "sha256": "888db17b86c9c8251c1e2e79a08b63aac8a8cc7ca64f4a6920e5b7c4b4bb6552",
+      "bytes": 8701
+    },
+    "crates/obc-tunnel/src/config.rs": {
+      "sha256": "bf713186df157173f6493f935a77285b64c1029a34837f3442f78085399e8a5e",
+      "bytes": 1609
+    },
+    "crates/obc-tunnel/src/cloudflare.rs": {
+      "sha256": "2f68f4a01b26918f5eeb29930947aa7d94d7634d6fd4a271503c2b9788db7f84",
+      "bytes": 6449
+    },
+    "crates/obc-tunnel/src/tailscale.rs": {
+      "sha256": "abeab0fb5e93774db35891708210c242f4580a201d151247cf9d41228e1700e8",
+      "bytes": 6569
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",

@@ -391,6 +391,53 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-position/src/gnss.rs",
      None),
 
+    # ── Token accounting, and the tunnel ─────────────────────────────────────
+    # Pieces ten and eleven, both vendored 2026-08-06 and both the same shape:
+    # each named exactly one thing outside itself — its own config block, in the
+    # core repo's root config module — so the config struct travelled with the
+    # code that reads it. That is the arrangement obc-planner
+    # (`DeploymentConfig`) and obc-conscience (`ConscienceConfig`) already use.
+    #
+    # A note on how these arrived. When they merged upstream, `check --upstream`
+    # here stayed green — because the gate compares *declared* artifacts, and a
+    # crate nobody has declared has nothing to compare. It catches a vendored
+    # file edited here, a vendored file that drifted upstream, and an undeclared
+    # file sitting in a vendored tree. It does not catch a new crate upstream
+    # that should be vendored and is not. That gap is closed by a person
+    # noticing, which is exactly the kind of dependency this repository keeps
+    # finding and writing down.
+    ("crates/obc-cost/Cargo.toml",
+     "crates/obc-cost/Cargo.toml",
+     None),
+    ("crates/obc-cost/src/lib.rs",
+     "crates/obc-cost/src/lib.rs",
+     None),
+    ("crates/obc-cost/src/config.rs",
+     "crates/obc-cost/src/config.rs",
+     None),
+    ("crates/obc-cost/src/types.rs",
+     "crates/obc-cost/src/types.rs",
+     None),
+    ("crates/obc-cost/src/tracker.rs",
+     "crates/obc-cost/src/tracker.rs",
+     None),
+
+    ("crates/obc-tunnel/Cargo.toml",
+     "crates/obc-tunnel/Cargo.toml",
+     None),
+    ("crates/obc-tunnel/src/lib.rs",
+     "crates/obc-tunnel/src/lib.rs",
+     None),
+    ("crates/obc-tunnel/src/config.rs",
+     "crates/obc-tunnel/src/config.rs",
+     None),
+    ("crates/obc-tunnel/src/cloudflare.rs",
+     "crates/obc-tunnel/src/cloudflare.rs",
+     None),
+    ("crates/obc-tunnel/src/tailscale.rs",
+     "crates/obc-tunnel/src/tailscale.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,
@@ -753,6 +800,56 @@ def undeclared_vendored_files() -> list[str]:
     return found
 
 
+# Upstream trees that are vendored whole, mapped to upstream paths inside them
+# that are deliberately not vendored. Empty set means "every tracked file here
+# must be declared".
+#
+# This is undeclared_vendored_files() pointed the other way, and it exists
+# because the first direction was not enough. On 2026-08-06 obc-cost and
+# obc-tunnel were extracted upstream. `check --upstream` printed ok, because
+# every artifact it knew about was still correct -- and it knew about no file in
+# either crate. Two entire crates had appeared in the thing this repository
+# claims to mirror, and the mirror-checker said the mirror was fine.
+#
+# ARTIFACTS answers "is everything we declared still correct".
+# undeclared_vendored_files answers "is everything present still declared".
+# Neither can answer "is everything upstream present at all". This can.
+UPSTREAM_TREES: dict[str, set[str]] = {
+    "crates": set(),
+}
+
+
+def undeclared_upstream_files(upstream: Path) -> list[str]:
+    """Tracked upstream files inside a vendored-whole tree that ARTIFACTS omits.
+
+    Uses `git ls-files` rather than a filesystem walk so that build output and
+    anything else upstream ignores does not read as a missing artifact. If git
+    is unavailable the check reports that fact instead of silently passing --
+    a check that cannot run must not look like a check that ran.
+    """
+    declared = {up for up, _local, _peer in ARTIFACTS}
+    found: list[str] = []
+    for tree, skip in UPSTREAM_TREES.items():
+        if not (upstream / tree).is_dir():
+            continue
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(upstream), "ls-files", "--", tree],
+                capture_output=True, text=True, timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            found.append(f"{tree}/: cannot list upstream files ({exc})")
+            continue
+        if out.returncode != 0:
+            found.append(f"{tree}/: `git ls-files` failed upstream "
+                         f"({out.stderr.strip() or out.returncode})")
+            continue
+        for rel in sorted(line.strip() for line in out.stdout.splitlines()):
+            if rel and rel not in declared and rel not in skip:
+                found.append(rel)
+    return found
+
+
 # How each artifact is produced upstream. Printed on drift so the fix is
 # obvious instead of requiring archaeology.
 REGENERATE = {
@@ -1104,6 +1201,15 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
                         f"      artifact check, and it is still wrong.\n"
                         f"      fix with: python scripts/sync_upstream.py sync \\\n"
                         f"                    --upstream <core> --peer <generator> --rebuild-wasm")
+
+    if upstream:
+        for rel in undeclared_upstream_files(upstream):
+            problems.append(
+                f"{rel}: exists upstream in a tree this repository vendors whole,\n"
+                f"      but no ARTIFACTS entry names it. Nothing here is a copy of it\n"
+                f"      and nothing here is checking it. Add it to ARTIFACTS and sync,\n"
+                f"      or record in UPSTREAM_TREES that it is deliberately not\n"
+                f"      vendored. Silence is the one option that is not available.")
 
     for rel in undeclared_vendored_files():
         problems.append(
