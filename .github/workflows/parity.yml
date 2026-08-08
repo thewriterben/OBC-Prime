@@ -93,6 +93,48 @@ jobs:
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
+      # And once more with each crate alone, which is not the same test.
+      #
+      # `--workspace` unifies Cargo features across every member, so a crate can
+      # use a feature of a shared dependency that it never declared as long as
+      # anything else in the graph declares it. obc-tunnel arrived here doing
+      # exactly that, twice. The workspace build above caught one of the two:
+      # `rt-multi-thread`, missing where tailscale.rs calls `Runtime::new()`.
+      #
+      # It did not catch the other. `tokio::sync::Mutex` needs the `sync`
+      # feature, no crate in this workspace declares it, and it arrives anyway
+      # through hyper-util several levels down another dependency's tree. A
+      # build with eleven crates in it cannot tell you what one crate needs.
+      #
+      # That is worth being precise about, because this repository's argument
+      # for itself is that it *runs* the vendored crates instead of only hashing
+      # them. True, and not sufficient: running them together is a weaker claim
+      # than running each one. This step makes the stronger claim.
+      - name: each vendored crate builds and tests with no siblings
+        run: |
+          set -euo pipefail
+          crates=$(cargo metadata --no-deps --format-version 1 | python3 -c \
+            'import json,sys; [print(p["name"]) for p in json.load(sys.stdin)["packages"]]' \
+            | tr -d '\r' | sort)
+          if [ -z "$crates" ]; then
+            echo "no crates found -- the discovery query is wrong, not the workspace"
+            exit 1
+          fi
+          echo "$crates" | tr '\n' ' '; echo
+          failed=""
+          for c in $crates; do
+            echo "::group::$c"
+            if cargo test -p "$c" --all-targets; then
+              echo "$c ok"
+            else
+              failed="$failed $c"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "crates that do not stand alone:$failed"
+            exit 1
+          fi
 
   peer:
     name: generator mirrors match
