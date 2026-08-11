@@ -438,6 +438,36 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-tunnel/src/tailscale.rs",
      None),
 
+    # ── Being reachable by other agents ──────────────────────────────────────
+    # Vendored 2026-08-08, the twelfth crate: Google's Agent-to-Agent v1.0 —
+    # the wire types, the JSON-RPC task lifecycle, and the HTTP transport that
+    # makes an agent discoverable and callable.
+    #
+    # It is here later than it could have been, on purpose. It was upstream's
+    # cleanest extraction candidate for months — zero edges to anything else in
+    # the agent — and that was the same fact from the other side: nothing named
+    # it either. `src/main.rs` referenced it zero times, `src/gateway/` zero
+    # times, and flipping its `pub` off so `dead_code` could see it produced 34
+    # items never constructed. 791 conformant, tested lines implementing a
+    # server nobody could start.
+    #
+    # Vendoring that would have been worse here than upstream: in a public
+    # repository an unreachable protocol implementation reads as a feature.
+    # It was given an entry point first (`oh-ben-claw a2a-serve`, dispatch to
+    # the real agent, and a read of the `[a2a]` config block that had never
+    # been read by anything), and arrives now that it does something.
+    #
+    # Two files, and the crate is genuinely two files: the executor that calls
+    # the agent lives upstream in `src/a2a_agent.rs`, implementing a trait this
+    # crate declares. That is what keeps the crate free of agent dependencies,
+    # and it is why the extraction moved 0 lines.
+    ("crates/obc-a2a/Cargo.toml",
+     "crates/obc-a2a/Cargo.toml",
+     None),
+    ("crates/obc-a2a/src/lib.rs",
+     "crates/obc-a2a/src/lib.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,

@@ -75,9 +75,12 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 497 tests across eleven crates
-    # as of 2026-08-08, when obc-conscience gained the decision log it had been
-    # documenting and could not write — a move into a crate, not a twelfth one.
+    # source that is never compiled is a listing. 520 tests across twelve crates
+    # as of 2026-08-08, when obc-a2a arrived — held back until it had an entry
+    # point, because an unreachable protocol server reads as a feature in a
+    # public repository. 497 across eleven earlier the same day, when
+    # obc-conscience gained the decision log it had been documenting and could
+    # not write — a move into a crate, not a new one.
     # 495 the same day, when obc-cost and obc-tunnel arrived — the pair that
     # showed a workspace build cannot tell you what one crate needs, and put the
     # per-crate step below next to this one. 473 across nine from 2026-08-06,
@@ -115,6 +118,20 @@ jobs:
       # for itself is that it *runs* the vendored crates instead of only hashing
       # them. True, and not sufficient: running them together is a weaker claim
       # than running each one. This step makes the stronger claim.
+      #
+      # `check` and `test`, and they are not redundant. Building a lib as a test
+      # target links its [dev-dependencies] into it, so a dependency the library
+      # genuinely needs can be declared dev-only and pass its own tests. obc-a2a
+      # arrived upstream that way on 2026-08-08 — `A2AClient` uses reqwest,
+      # reqwest was declared dev-only:
+      #
+      #     cargo test  -p obc-a2a --all-targets  -> 0
+      #     cargo check -p obc-a2a                -> 101   E0433 reqwest
+      #
+      # Upstream's equivalent job ran only the first command and passed it. This
+      # one had the same hole, from the same author, on the same day. Two
+      # separate repositories are not two separate checks when one was copied
+      # from the other.
       - name: each vendored crate builds and tests with no siblings
         run: |
           set -euo pipefail
@@ -129,7 +146,7 @@ jobs:
           failed=""
           for c in $crates; do
             echo "::group::$c"
-            if cargo test -p "$c" --all-targets; then
+            if cargo check -p "$c" && cargo test -p "$c" --all-targets; then
               echo "$c ok"
             else
               failed="$failed $c"

@@ -15,22 +15,25 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but eleven crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but twelve crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
-> `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost` and `obc-tunnel`
-> are here, vendored and hash-checked, and CI builds and tests them: **497
+> `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`
+> and `obc-a2a`
+> are here, vendored and hash-checked, and CI builds and tests them: **520
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
 > / sensor suites that feed the reflexes, the spans and counters the agent
 > records about itself, the position sources that put a node on a map, the spend
-> tracker, and the tunnel providers that let a gateway on a home network be
-> reached without opening a port.
+> tracker, the tunnel providers that let a gateway on a home network be
+> reached without opening a port, and the A2A endpoint that lets another agent
+> discover this one and send it work.
 >
-> CI runs them twice: once as a workspace, and once per crate with no siblings.
-> The second pass is not redundant — it is the only thing that can tell whether
-> a crate declares the dependency features it actually uses, and on 2026-08-08
-> it caught one that did not.
+> CI runs them twice: once as a workspace, and once per crate with no siblings —
+> and that second pass runs both `cargo check` and `cargo test`, because a lib
+> built as a test target links its dev-dependencies and can hide a dependency it
+> genuinely needs. Both distinctions were found by a crate walking through the
+> weaker check: obc-tunnel on the features, obc-a2a on the dev-dependency.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
 > is something to flash and watch today, but nothing to talk to it with. See
 > [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
@@ -156,20 +159,23 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 497 tests
-cargo test -p obc-tunnel   # and once more per crate, with no siblings
+cargo test --workspace     # 520 tests
+cargo test -p obc-a2a      # and once more per crate, with no siblings
 ```
 
-Eleven pieces have moved, each chosen by measuring what was separable rather
+Twelve pieces have moved, each chosen by measuring what was separable rather
 than what sounded impressive, and each carrying the tests it had upstream. The
-counts below are the 493 unit tests plus the 4 doctests; this line said "370
+counts below are the 516 unit tests plus the 4 doctests; this line said "370
 tests" and counted only the unit tests, which was the sort of quiet exclusion
 this page otherwise objects to.
 
-Still eleven, not twelve: the most recent arrival was 163 lines that belonged
-inside `obc-conscience` rather than beside it — the decision log the crate's own
-documentation had been describing since it landed and could not write. Migration
-is not only counted in crates.
+Not every arrival is a crate: `obc-conscience` gained its decision log, 163
+lines that belonged inside it rather than beside it. And `obc-a2a` is here
+later than it could have been on purpose — it was upstream's cleanest
+extraction candidate for months precisely because nothing referenced it, which
+is the same sentence read two ways. It was given an entry point first. A
+protocol implementation nobody can start is worse in a public repository than
+in a private one, because here it reads as a feature.
 
 The second command is not a nicety. `--workspace` unifies Cargo features across
 every member, so a crate can use a feature of a shared dependency it never
@@ -189,6 +195,7 @@ CI now does both.
 | `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |
 | `obc-scheduler` | cron, interval and one-shot tasks in SQLite, surviving restarts — what turns "check the perimeter every hour" into something the agent does unasked | 16 + 1 doc |
 | `obc-tunnel` | Cloudflare, ngrok and Tailscale behind one interface, so a gateway on a home network can be reached without opening a port — the crate whose under-declared tokio features are why CI now compiles each crate alone | 14 |
+| `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 

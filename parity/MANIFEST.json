@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-11T19:15:28+00:00",
+  "generated": "2026-08-11T20:30:47+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -294,6 +294,14 @@
     "crates/obc-tunnel/src/tailscale.rs": {
       "sha256": "abeab0fb5e93774db35891708210c242f4580a201d151247cf9d41228e1700e8",
       "bytes": 6569
+    },
+    "crates/obc-a2a/Cargo.toml": {
+      "sha256": "d7fb91a7a3bf5225e91c8fc55b2b3939966d83f376e17e4f0bf1ff9e1b2c12a2",
+      "bytes": 3247
+    },
+    "crates/obc-a2a/src/lib.rs": {
+      "sha256": "35699745da5819afbcc0e3ddff493b0930c75206c9bdf96a8c28774b3332deb8",
+      "bytes": 43625
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",
