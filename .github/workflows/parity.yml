@@ -165,6 +165,37 @@ jobs:
             exit 1
           fi
 
+  # ── The demos still run ───────────────────────────────────────────────────
+  # demo/ is the only Rust here written rather than vendored, and its whole
+  # purpose is that a stranger can watch a claim hold instead of reading that it
+  # does. A demo that stopped running would be worse than no demo: it is cited
+  # in the README as evidence.
+  #
+  # Running them, rather than only compiling them, is the point. Every one of
+  # these exercises a vendored crate through its real API — the gate is
+  # obc_safety::SafetyGate, the planner is obc_navigation::planning::plan — so a
+  # vendored crate whose behaviour changed under this repository's feet fails
+  # here even when it still type-checks.
+  demos:
+    name: the demos still run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p obc-demo -- gate
+      - run: cargo run -p obc-demo -- plan
+      - run: cargo run -p obc-demo -- conscience
+      # No subcommand prints usage and exits 0; an unknown one exits 2. Checked
+      # because "the binary runs" and "the binary does the right thing when
+      # misused" are different claims.
+      - run: cargo run -p obc-demo
+      - name: an unknown demo exits non-zero
+        run: |
+          if cargo run -p obc-demo -- nonsense; then
+            echo "expected a non-zero exit for an unknown demo"
+            exit 1
+          fi
+
   peer:
     name: generator mirrors match
     runs-on: ubuntu-latest
