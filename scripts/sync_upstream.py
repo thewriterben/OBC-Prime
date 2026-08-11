@@ -514,6 +514,21 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-conscience/src/detector_eval.rs",
      "crates/obc-conscience/src/detector_eval.rs",
      None),
+    # Moved into the crate upstream on 2026-08-08 from the private runtime's
+    # src/decision_log.rs. It is the sink the crate's own header has always
+    # demanded ("a conscience that isn't audited is just a promise") and never
+    # shipped: the crate defined DecisionRecord, replayed it and computed the
+    # config fingerprint, but could neither write a log nor read one back.
+    # docs/CONSCIENCE.md documented the JSONL format here with no code here to
+    # check it against.
+    #
+    # Worth recording how this entry came to be added: `check --upstream` found
+    # the file. It was the first live use of undeclared_upstream_files(), added
+    # two days earlier after `check --upstream` printed ok while obc-cost and
+    # obc-tunnel were missing entirely. The old gate would have said ok again.
+    ("crates/obc-conscience/src/decision_log.rs",
+     "crates/obc-conscience/src/decision_log.rs",
+     None),
 
     # The sample frames, ledgers and decision logs the crate's own docs point at
     # as runnable. Declared individually because VENDORED_TREES fails on any

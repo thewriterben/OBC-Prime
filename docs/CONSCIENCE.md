@@ -308,12 +308,23 @@ timestamp, not a status.
   replays as Allow on both gates — matching the runtime. Runnable:
   `oh-ben-claw replay-decisions --log log.json` (exits non-zero only on an
   unexplained mismatch, so it is CI-safe); sample log in
-  `crates/obc-conscience/examples/`; 7 tests, obc-conscience 34/34. **Now wired
-  (2026-08-04):** `crate::decision_log::DecisionLog` persists every perception
+  `crates/obc-conscience/examples/`; 7 tests, obc-conscience 45/45. **Now wired
+  (2026-08-04), and here (2026-08-08):** `obc_conscience::decision_log::DecisionLog`
+  persists every perception
   decision (allow + refuse, with confidence — the input the audit chain omits) as
   fingerprint-stamped JSONL, opt-in via `OBC_DECISION_LOG`; the perception poll
   (`poll_clawcam_guarded`) writes to it, and `replay-decisions` reads both a JSON
   array and JSONL, so it now runs on real runtime history.
+
+  The date pair matters. For four days this bullet said "now wired" while the
+  writer lived in the private runtime as `crate::decision_log` — a path that
+  resolved nowhere in this repository. The crate here defined `DecisionRecord`,
+  replayed it, and computed the fingerprint, and could neither produce a log nor
+  read one back; the format was specified above with nothing here to check the
+  specification against. It moved into the crate on 2026-08-08 and arrived here
+  the same day, with its 2 tests. `cargo test -p obc-conscience` now exercises
+  the round trip — open a log, record an allow and a refusal, read it back,
+  replay it — in this repository, on this page's claim.
 - **Multi-party consent — done (2026-08-04):** the class gate can't express
   "Alice opted in, Bob didn't" — a per-*person* property, not a per-class one. The
   trap is that checking consent by *recognizing* people means face-recognizing

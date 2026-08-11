@@ -75,8 +75,10 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 495 tests across eleven crates
-    # as of 2026-08-08, when obc-cost and obc-tunnel arrived — the pair that
+    # source that is never compiled is a listing. 497 tests across eleven crates
+    # as of 2026-08-08, when obc-conscience gained the decision log it had been
+    # documenting and could not write — a move into a crate, not a twelfth one.
+    # 495 the same day, when obc-cost and obc-tunnel arrived — the pair that
     # showed a workspace build cannot tell you what one crate needs, and put the
     # per-crate step below next to this one. 473 across nine from 2026-08-06,
     # when obc-position arrived — the first pair extracted by
