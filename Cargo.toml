@@ -19,6 +19,7 @@ members = [
     "crates/obc-observability",
     "crates/obc-scheduler",
     "crates/obc-conscience",
+    "crates/obc-a2a",
     "crates/obc-position",
     "crates/obc-cost",
     "crates/obc-tunnel",
