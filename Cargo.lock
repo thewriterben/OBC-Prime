@@ -2061,6 +2061,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "obc-conscience",
+ "obc-memory",
+ "obc-movement",
+ "obc-navigation",
+ "obc-safety",
+ "tokio",
+]
+
+[[package]]
 name = "obc-memory"
 version = "0.1.0"
 dependencies = [

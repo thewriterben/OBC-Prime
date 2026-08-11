@@ -25,5 +25,8 @@ members = [
     "crates/obc-position",
     "crates/obc-cost",
     "crates/obc-tunnel",
+    # Written here, not vendored — see demo/Cargo.toml for why it is not
+    # under crates/.
+    "demo",
 ]
 resolver = "2"

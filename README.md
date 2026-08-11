@@ -37,7 +37,9 @@ the reflex layer keeps working when the brain is unreachable.
 > genuinely needs. Both distinctions were found by a crate walking through the
 > weaker check: obc-tunnel on the features, obc-a2a on the dev-dependency.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
-> is something to flash and watch today, but nothing to talk to it with. See
+> is something to flash and watch today, and `cargo run -p obc-demo` runs the
+> safety gate, the planner and the perception gate on the host. What is still
+> missing is the agent that drives them: no brain talks to a board yet. See
 > [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
 > a hosted option is not foreclosed but is not being built. Expect things to move.
 
@@ -150,6 +152,7 @@ registry/    board + accessory registry (69 boards, 34 accessories) — SSOT, em
 parity/      golden fixtures + manifest that hold the three planner executables to identical output
 wasm/        the planner compiled to WASM, so a planning service needs no Rust
 bodies/      ready-to-run reference deployments
+demo/        runnable demonstrations of the vendored crates (written here, not vendored)
 scripts/     sync + drift tooling
 docs/        design decisions and their reasoning
 ```
@@ -164,6 +167,25 @@ source that is never compiled is a listing:
 cargo test --workspace     # 589 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
+
+And three things you can watch instead of read:
+
+```bash
+cargo run -p obc-demo -- gate        # Track 0 refusing an out-of-range command
+cargo run -p obc-demo -- plan        # A* with and without a robot radius
+cargo run -p obc-demo -- conscience  # the perception gate failing closed
+```
+
+`demo/` is the first host binary in this repository and the only Rust here that
+is **not** vendored — it is written here, like `scripts/` and
+`parity/verify_wasm.cjs`, which is why it sits outside `crates/`. It mocks
+nothing: the gate is `obc_safety::SafetyGate`, the planner is
+`obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
+When `gate` prints REFUSED, a deterministic limit table refused it.
+
+That matters because "589 tests pass" and "you can see it refuse" are different
+kinds of evidence, and only the second one survives someone who does not trust
+the person showing it to them.
 
 Fourteen pieces have moved, each chosen by measuring what was separable rather
 than what sounded impressive, and each carrying the tests it had upstream. The
