@@ -75,8 +75,12 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 520 tests across twelve crates
-    # as of 2026-08-08, when obc-a2a arrived — held back until it had an entry
+    # source that is never compiled is a listing. 534 tests across thirteen
+    # crates as of 2026-08-08, when obc-movement arrived — the caller the Track
+    # 0 limit table exists to bound, so "every command is checked before it
+    # actuates" is now two vendored crates that can be run against each other
+    # rather than one crate and a sentence. 520 earlier the same day, when
+    # obc-a2a arrived — held back until it had an entry
     # point, because an unreachable protocol server reads as a feature in a
     # public repository. 497 across eleven earlier the same day, when
     # obc-conscience gained the decision log it had been documenting and could

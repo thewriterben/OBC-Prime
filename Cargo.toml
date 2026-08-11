@@ -20,6 +20,7 @@ members = [
     "crates/obc-scheduler",
     "crates/obc-conscience",
     "crates/obc-a2a",
+    "crates/obc-movement",
     "crates/obc-position",
     "crates/obc-cost",
     "crates/obc-tunnel",

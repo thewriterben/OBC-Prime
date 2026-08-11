@@ -468,6 +468,33 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-a2a/src/lib.rs",
      None),
 
+    # ── The act side of the loop ─────────────────────────────────────────────
+    # Vendored 2026-08-08, the thirteenth crate: typed movement commands
+    # bounded by the deterministic Track 0 gate *before* they reach hardware,
+    # recorded into bitemporal world memory as `actuator.{name}` facts, and
+    # dispatched through a pluggable sink.
+    #
+    # docs/SAFETY.md has described this bound since it was written. obc-safety
+    # brought the gate here on 2026-08-01; this brings the caller that is
+    # supposed to be using it, so the sentence "every command is bounded before
+    # it actuates" is now two vendored crates that can be run against each
+    # other rather than one crate and a claim.
+    #
+    # It was blocked for months by one edge — `Arc<SpineClient>` in a single
+    # `ActuatorSink` implementation, one field and one constructor parameter.
+    # Upstream turned it on 2026-08-08 by moving that sink to the spine, where
+    # it implements this crate's trait from the other side. 39 lines. Behind it
+    # `navigation` (3714 lines) went to zero blocking edges and is next.
+    ("crates/obc-movement/Cargo.toml",
+     "crates/obc-movement/Cargo.toml",
+     None),
+    ("crates/obc-movement/src/lib.rs",
+     "crates/obc-movement/src/lib.rs",
+     None),
+    ("crates/obc-movement/src/feedback.rs",
+     "crates/obc-movement/src/feedback.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,
