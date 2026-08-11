@@ -15,11 +15,11 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but thirteen crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but fourteen crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
 > `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
-> `obc-a2a` and `obc-movement`
-> are here, vendored and hash-checked, and CI builds and tests them: **534
+> `obc-a2a`, `obc-movement` and `obc-navigation`
+> are here, vendored and hash-checked, and CI builds and tests them: **589
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
@@ -27,8 +27,9 @@ the reflex layer keeps working when the brain is unreachable.
 > records about itself, the position sources that put a node on a map, the spend
 > tracker, the tunnel providers that let a gateway on a home network be
 > reached without opening a port, the A2A endpoint that lets another agent
-> discover this one and send it work, and the actuation path that every one of
-> those safety bounds exists to constrain.
+> discover this one and send it work, the actuation path that every one of
+> those safety bounds exists to constrain, and the localization, SLAM and
+> planning stack that decides where to go.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -160,13 +161,13 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 534 tests
-cargo test -p obc-movement # and once more per crate, with no siblings
+cargo test --workspace     # 589 tests
+cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
-Thirteen pieces have moved, each chosen by measuring what was separable rather
+Fourteen pieces have moved, each chosen by measuring what was separable rather
 than what sounded impressive, and each carrying the tests it had upstream. The
-counts below are the 530 unit tests plus the 4 doctests; this line said "370
+counts below are the 585 unit tests plus the 4 doctests; this line said "370
 tests" and counted only the unit tests, which was the sort of quiet exclusion
 this page otherwise objects to.
 
@@ -182,9 +183,12 @@ in a private one, because here it reads as a feature.
 months by **one** edge — a single `Arc<SpineClient>` field in the one actuator
 sink that talked to the spine. Upstream moved that sink to the spine, where it
 implements this crate's trait from the other side: 39 lines, one commit. Behind
-it `navigation` — 3714 lines of particle filter, pose-graph SLAM and A* costmap
-— dropped to zero blocking edges and is next. An extraction queue is mostly not
-a queue of large jobs; it is a queue of small edges pointing the wrong way.
+it `obc-navigation` — 3714 lines of particle filter, pose-graph SLAM and A*
+costmap, six times the size of the crate it was waiting on — followed the same
+day, with nothing refactored and four of its nine files byte-identical. An
+extraction queue is mostly not a queue of large jobs; it is a queue of small
+edges pointing the wrong way, and this repository now has the two commits to
+show for it.
 
 The second command is not a nicety. `--workspace` unifies Cargo features across
 every member, so a crate can use a feature of a shared dependency it never
@@ -206,6 +210,7 @@ CI now does both.
 | `obc-tunnel` | Cloudflare, ngrok and Tailscale behind one interface, so a gateway on a home network can be reached without opening a port — the crate whose under-declared tokio features are why CI now compiles each crate alone | 14 |
 | `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
+| `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 

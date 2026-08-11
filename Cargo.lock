@@ -2093,6 +2093,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-navigation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "obc-memory",
+ "obc-movement",
+ "obc-safety",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "obc-observability"
 version = "0.1.0"
 dependencies = [
