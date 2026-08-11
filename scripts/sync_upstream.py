@@ -495,6 +495,54 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-movement/src/feedback.rs",
      None),
 
+    # ── Knowing where you are and how to get somewhere ───────────────────────
+    # Vendored 2026-08-08, the fourteenth crate and the largest: Monte Carlo
+    # localization against a beam model and likelihood field, pose-graph SLAM
+    # with loop closure and graph relaxation, occupancy grids, inflation cost
+    # maps, A* with an admissible heuristic, frontier exploration, and pose
+    # fusion across odometry, scan matching and an external fix.
+    #
+    # The README's "Navigation / SLAM" row has claimed all of that for months
+    # against code this repository could not compile. It can now, which is the
+    # same correction obc-movement made to docs/SAFETY.md the same day.
+    #
+    # Worth recording how it got here, because the size is misleading. It was
+    # blocked by one edge (`movement`), which was blocked by one edge (`spine`),
+    # which was one `Arc<SpineClient>` field in a single actuator sink. 39 lines
+    # turned that edge upstream; obc-movement followed; this crate — six times
+    # the size — followed with no design work and four of its nine files
+    # byte-identical. An extraction queue is a queue of edges, not of jobs.
+    ("crates/obc-navigation/Cargo.toml",
+     "crates/obc-navigation/Cargo.toml",
+     None),
+    ("crates/obc-navigation/src/lib.rs",
+     "crates/obc-navigation/src/lib.rs",
+     None),
+    ("crates/obc-navigation/src/particle.rs",
+     "crates/obc-navigation/src/particle.rs",
+     None),
+    ("crates/obc-navigation/src/sensor_model.rs",
+     "crates/obc-navigation/src/sensor_model.rs",
+     None),
+    ("crates/obc-navigation/src/slam.rs",
+     "crates/obc-navigation/src/slam.rs",
+     None),
+    ("crates/obc-navigation/src/planning.rs",
+     "crates/obc-navigation/src/planning.rs",
+     None),
+    ("crates/obc-navigation/src/costmap.rs",
+     "crates/obc-navigation/src/costmap.rs",
+     None),
+    ("crates/obc-navigation/src/exploration.rs",
+     "crates/obc-navigation/src/exploration.rs",
+     None),
+    ("crates/obc-navigation/src/mapping.rs",
+     "crates/obc-navigation/src/mapping.rs",
+     None),
+    ("crates/obc-navigation/src/pose_fusion.rs",
+     "crates/obc-navigation/src/pose_fusion.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-11T22:49:24+00:00",
+  "generated": "2026-08-11T23:22:07+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -314,6 +314,46 @@
     "crates/obc-movement/src/feedback.rs": {
       "sha256": "9d49b27722a1d457b80ab811e88b0f1c8c19b9ede213c5aea8b78fc056c1611d",
       "bytes": 9396
+    },
+    "crates/obc-navigation/Cargo.toml": {
+      "sha256": "05c5faadd6fac6da3bd4a629614590509d0299aafe3bb94ec3e2fb7df24d6517",
+      "bytes": 2341
+    },
+    "crates/obc-navigation/src/lib.rs": {
+      "sha256": "beb31a9957c1cecce6ecbe55cbfbeb113dbb05f0662d037f7991cf9b45913925",
+      "bytes": 30586
+    },
+    "crates/obc-navigation/src/particle.rs": {
+      "sha256": "bbee1da550ca4db34835e5431ba7c5eb0e789e3843df1b8cbad214d43a6425e6",
+      "bytes": 20928
+    },
+    "crates/obc-navigation/src/sensor_model.rs": {
+      "sha256": "ef008c0c6306e68626bde15b21977af6f09ec6c8586ecf746ea9b03c308f4463",
+      "bytes": 10049
+    },
+    "crates/obc-navigation/src/slam.rs": {
+      "sha256": "633100503763611da93febdbbad305cd9605a4e05d58b9e04ab8c1500be79d7d",
+      "bytes": 24019
+    },
+    "crates/obc-navigation/src/planning.rs": {
+      "sha256": "ff37c5763de5629d1c283b357a2130f9810278a1e6ca40833bd601af53dcae71",
+      "bytes": 12113
+    },
+    "crates/obc-navigation/src/costmap.rs": {
+      "sha256": "219569923002ca0bb4f1888a0aef43a2a9e56a004582081cd926fb3f5ed789d7",
+      "bytes": 10866
+    },
+    "crates/obc-navigation/src/exploration.rs": {
+      "sha256": "50df495f665ec66838294879f87ec0556a93b16b839b3fbdf2bb6d054711a031",
+      "bytes": 5022
+    },
+    "crates/obc-navigation/src/mapping.rs": {
+      "sha256": "badf2083c74fbddbee84d6c9840629321b4e6e51d9f42fa80ff9c18d11274aa8",
+      "bytes": 5351
+    },
+    "crates/obc-navigation/src/pose_fusion.rs": {
+      "sha256": "9cc37a109ebba3870b338e4afae61cd7e80eaf6ea7dc2daf12af9ee38dd93106",
+      "bytes": 9488
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",

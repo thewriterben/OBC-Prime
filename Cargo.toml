@@ -21,6 +21,7 @@ members = [
     "crates/obc-conscience",
     "crates/obc-a2a",
     "crates/obc-movement",
+    "crates/obc-navigation",
     "crates/obc-position",
     "crates/obc-cost",
     "crates/obc-tunnel",
