@@ -93,6 +93,20 @@ drive an actuator outside the limits the node itself holds.** The host is not in
 the trusted computing base for bounds enforcement. Compromising the agent gets
 you the agent; it does not get you the actuator.
 
+Both halves of that sentence are now in this repository and can be run against
+each other. `obc-safety` brought the gate on 2026-08-01; `obc-movement` brought
+the caller on 2026-08-08. The order inside `MovementController` is gate →
+remember → dispatch: the limit check runs first and returns early, so a refused
+command never reaches a sink *and* is never written to world memory as a
+commanded state. Until then this page described a check whose only caller lived
+in a repository you could not read. It was true; you had to take it on faith.
+`cargo test -p obc-movement` is the version you do not.
+
+Worth naming the gap that remains: a refusal leaves no trace here. The
+`MovementError::Safety` goes back to the caller, and whether it reaches the
+tamper-evident audit chain depends on that caller, which is still upstream. The
+gate refuses; this crate does not record that it refused.
+
 The published safety literature for LLM-driven robots converges on a two-tier
 architecture — an untrusted planner plus a trusted non-LLM enforcer. RoboGuard
 ([arXiv:2503.07885](https://arxiv.org/abs/2503.07885), RA-L Feb 2026) compiles
