@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-08T01:10:35+00:00",
+  "generated": "2026-08-11T19:15:28+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -312,12 +312,12 @@
       "bytes": 23025
     },
     "crates/obc-conscience/Cargo.toml": {
-      "sha256": "1075ec66b26e5af58a4f2d4120fb618b4c72439ff8d55045904922cd49a6e239",
-      "bytes": 502
+      "sha256": "1d32e7a6952275270c0fb823d32b38fa5b64b05d0f4daf3862f04c677ae25590",
+      "bytes": 517
     },
     "crates/obc-conscience/src/lib.rs": {
-      "sha256": "82f0ab2e2f2b9c80a5ae86c647acdbfb973612b2fe4e7d416ff2126e048dbb8c",
-      "bytes": 9225
+      "sha256": "e1a21dd6c3a164436816ba9c6c494cf677b1803cec14a5ce8215c46444791fb8",
+      "bytes": 9822
     },
     "crates/obc-conscience/src/classifier.rs": {
       "sha256": "51175efa217cb6e01cf3c11514a8985dcfa646c2e11efb8111f5abdbe0c9158b",
@@ -342,6 +342,10 @@
     "crates/obc-conscience/src/detector_eval.rs": {
       "sha256": "d5882bf86eef68d0844af165f47d34ab0969d2ffe05bdba2584714662f84ad1f",
       "bytes": 18134
+    },
+    "crates/obc-conscience/src/decision_log.rs": {
+      "sha256": "38d79efe1fb34e207263b8e1f343238742300a3d9f6bfeca955a95eb07c8fa85",
+      "bytes": 6399
     },
     "crates/obc-conscience/examples/sample-consent-frame.json": {
       "sha256": "030984835883550f941cd543a7b07983f4b4ef5eb8fafb0c10554a715bbb0dd6",
