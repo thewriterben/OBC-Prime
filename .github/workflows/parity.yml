@@ -75,8 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 589 tests across fourteen
-    # crates as of 2026-08-08, when obc-navigation arrived — 3714 lines that
+    # source that is never compiled is a listing. 589 tests across fifteen
+    # crates as of 2026-08-12, when obc-tool-api arrived — 175 lines, no tests
+    # of its own and none needed: it is the `Tool` contract with no
+    # implementation, and everything that implements it is tested elsewhere.
+    # The count is unchanged because a trait definition does not add assertions;
+    # what it adds is somewhere to write against. 589 across fourteen from
+    # 2026-08-08, when obc-navigation arrived — 3714 lines that
     # needed no refactoring at all, because the one edge holding it had been
     # turned two commits earlier. 534 across thirteen the same day, when
     # obc-movement arrived — the caller the Track

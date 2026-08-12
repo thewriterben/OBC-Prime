@@ -15,10 +15,10 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but fourteen crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but fifteen crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
 > `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
-> `obc-a2a`, `obc-movement` and `obc-navigation`
+> `obc-a2a`, `obc-movement`, `obc-navigation` and `obc-tool-api`
 > are here, vendored and hash-checked, and CI builds and tests them: **589
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -187,11 +187,24 @@ That matters because "589 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Fourteen pieces have moved, each chosen by measuring what was separable rather
+Fifteen pieces have moved, each chosen by measuring what was separable rather
 than what sounded impressive, and each carrying the tests it had upstream. The
 counts below are the 585 unit tests plus the 4 doctests; this line said "370
 tests" and counted only the unit tests, which was the sort of quiet exclusion
 this page otherwise objects to.
+
+**If you want to write something rather than read something, start with
+`obc-tool-api`.** It is 175 lines and no implementation: the `Tool` trait, the
+result type, and the Track 0 vocabulary — risk class, blast radius, rollout
+stage, output trust — that a tool declares about itself. `obc-safety` is the
+other half, the gate that reads `risk_class()` and decides. Between them you can
+write a tool and watch it be refused without any of the agent being present.
+
+It is also the first crate here extracted for a reason other than being
+separable. Upstream's tool module is 9052 lines and sits in several of the
+cycles that make the agent core unextractable; thirty of that core's measured
+crossings were this one file, because three other modules needed the contract
+and had to name the whole module to get it.
 
 Not every arrival is a crate: `obc-conscience` gained its decision log, 163
 lines that belonged inside it rather than beside it. And `obc-a2a` is here
@@ -233,6 +246,7 @@ CI now does both.
 | `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
 | `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
+| `obc-tool-api` | the contract, with no implementation: the `Tool` trait, `ToolResult`, and the Track 0 vocabulary a tool declares about itself. The smallest crate here and the one to read first if you intend to write a tool | 0 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
 
