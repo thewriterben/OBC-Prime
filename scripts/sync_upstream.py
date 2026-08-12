@@ -543,6 +543,30 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-navigation/src/pose_fusion.rs",
      None),
 
+    # ── The contract every tool is checked against ───────────────────────────
+    # Vendored 2026-08-12, the fifteenth crate and the smallest at 175 lines:
+    # the `Tool` trait, `ToolResult`, the `Arc<dyn Tool>` blanket impl, and the
+    # Track 0 vocabulary (risk class, blast radius, rollout stage, output trust)
+    # that the approval layer and safety gate evaluate a tool against.
+    #
+    # This is the most useful thing here for someone who wants to *write*
+    # something rather than read about it: it is the contract, with no
+    # implementation attached. `obc-safety` is the other half — the gate that
+    # reads `risk_class()` and decides.
+    #
+    # It is also the first crate extracted for a reason other than "it was
+    # separable". Upstream's `tools` module is 9052 lines and sits in several of
+    # the cycles that make the agent core unextractable; 30 of the core's 117
+    # measured crossings were this one file, because `agent`, `gateway` and
+    # `spine` all needed the contract and had to name the whole module to get
+    # it. See docs/ENDGAME.md upstream.
+    ("crates/obc-tool-api/Cargo.toml",
+     "crates/obc-tool-api/Cargo.toml",
+     None),
+    ("crates/obc-tool-api/src/lib.rs",
+     "crates/obc-tool-api/src/lib.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,

@@ -2206,6 +2206,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-tool-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "obc-safety",
+ "serde_json",
+]
+
+[[package]]
 name = "obc-tunnel"
 version = "0.1.0"
 dependencies = [

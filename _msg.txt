@@ -1,0 +1,37 @@
+sync: obc-tool-api -- the contract, with nothing implementing it
+
+The fifteenth crate and the smallest at 175 lines: the `Tool` trait,
+`ToolResult`, the `Arc<dyn Tool>` blanket impl, and the Track 0 vocabulary --
+risk class, blast radius, rollout stage, output trust -- that a tool declares
+about itself. 144 artifacts, 589 tests, unchanged, because a trait definition
+adds no assertions. What it adds is somewhere to write against.
+
+That is the argument for vendoring it at all, and the README now makes it where
+someone deciding whether to bother will read it: obc-tool-api is the contract,
+obc-safety is the gate that reads `risk_class()` and decides, and between them
+you can write a tool and watch it be refused with none of the agent present.
+Every other crate here is something to run. This is the first one that is
+something to build on.
+
+It is also the first crate extracted upstream for a reason other than being
+separable. The tool module there is 9052 lines and sits in several of the cycles
+that make the agent core unextractable; thirty of that core's measured crossings
+were this one file, because agent, gateway and spine all needed the contract and
+had to name the whole module to get it.
+
+── The gate caught the branch I was comparing against ───────────────────────
+
+`check --upstream` failed after the sync, naming crates/obc-reflex -- a crate
+that exists upstream on an unmerged branch and nowhere on upstream main. My
+local upstream checkout was still sitting on `extract/obc-reflex` from the
+previous step, so the comparison was against code that has not been released.
+
+Checked upstream back to main, re-ran, 144 artifacts identical. This is the same
+wrong-branch-base error that produced a bad measurement on 2026-08-06, caught
+the same way and in less time, because the gate reports what it compared against
+rather than just a verdict.
+
+Gates: check --upstream 144, workspace 589 tests, each crate alone 15/15
+(check + test), clippy -D warnings, fmt --check, doc-links.
+
+Still outstanding: obc-reflex, once its PR merges upstream.
