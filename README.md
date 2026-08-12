@@ -15,11 +15,11 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but fifteen crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but sixteen crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
 > `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
-> `obc-a2a`, `obc-movement`, `obc-navigation` and `obc-tool-api`
-> are here, vendored and hash-checked, and CI builds and tests them: **589
+> `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api` and `obc-reflex`
+> are here, vendored and hash-checked, and CI builds and tests them: **617
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
@@ -28,8 +28,10 @@ the reflex layer keeps working when the brain is unreachable.
 > tracker, the tunnel providers that let a gateway on a home network be
 > reached without opening a port, the A2A endpoint that lets another agent
 > discover this one and send it work, the actuation path that every one of
-> those safety bounds exists to constrain, and the localization, SLAM and
-> planning stack that decides where to go.
+> those safety bounds exists to constrain, the localization, SLAM and
+> planning stack that decides where to go, and the reflex engine itself — the
+> rules that fire on sensed state without waking the model, which this page has
+> claimed since its first paragraph and could not show until now.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -164,7 +166,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 589 tests
+cargo test --workspace     # 617 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -183,13 +185,13 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "589 tests pass" and "you can see it refuse" are different
+That matters because "617 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Fifteen pieces have moved, each chosen by measuring what was separable rather
+Sixteen pieces have moved, each chosen by measuring what was separable rather
 than what sounded impressive, and each carrying the tests it had upstream. The
-counts below are the 585 unit tests plus the 4 doctests; this line said "370
+counts below are the 613 unit tests plus the 4 doctests; this line said "370
 tests" and counted only the unit tests, which was the sort of quiet exclusion
 this page otherwise objects to.
 
@@ -246,6 +248,7 @@ CI now does both.
 | `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
 | `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
+| `obc-reflex` | System 1: a rule language of conditions and actions evaluated against world memory without waking the model, with debounce, rate limits, an escalation budget and a pluggable action sink — the same evaluator that runs mirrored on the node, and the half of this page's reflex claim that had no host-side code here until now | 28 |
 | `obc-tool-api` | the contract, with no implementation: the `Tool` trait, `ToolResult`, and the Track 0 vocabulary a tool declares about itself. The smallest crate here and the one to read first if you intend to write a tool | 0 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
@@ -273,11 +276,28 @@ reflex layer keeps working when the brain is unreachable. The node side of that
 has been checkable since the firmware was vendored; the host side is these three
 suites, which turn a battery reading, a link's health or a sensor sample into a
 world-memory fact plus a coarse mode — and it is the mode a reflex rule watches,
-because a rule cannot reason about millivolts and should not have to. The half
-still missing is the reflex *engine* itself, which is behind thirteen
-dependencies in the core crate and cannot move yet.
+because a rule cannot reason about millivolts and should not have to.
 
-`obc-observability` is the newest, and it is the smallest honest thing in the
+The other half — the reflex *engine* — is `obc-reflex`, and it arrived on
+2026-08-12. That entry said it was "behind thirteen dependencies in the core
+crate and cannot move yet", which was true when written and stopped being true
+one edge at a time. The last of the thirteen was a single action sink holding an
+`Arc<SpineClient>`: one field, one constructor parameter, two topic constants.
+Upstream moved the sink to the spine, where it implements this crate's
+`ActionSink` from the other side, and the crate followed. That is the third time
+the same manoeuvre has been the answer — `obc-movement` and `obc-a2a` were the
+other two — and it is worth stating plainly, because the counting instrument
+upstream ranks candidates by how many edges block them and is therefore silent
+about which edges are *cheap to turn around*. Thirteen and one looked like very
+different numbers and were not.
+
+One test did not come with it. A case asserting that an agent-*reported*
+temperature must not actuate while a driver-*measured* one must needs the tool
+layer to say what it means, so it is an integration test upstream now rather
+than a unit test here. It is the one place the vendored copy is knowingly
+thinner than the original, and this sentence is why the count says 28.
+
+`obc-observability` is the smallest honest thing in the
 list: no claim on this page rests on it. It is here because it was next by the
 measure below, it costs one dependency and no hardware to run, and it is what a
 running body's spans and counters come from — the part you read when a reflex

@@ -75,8 +75,14 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 589 tests across fifteen
-    # crates as of 2026-08-12, when obc-tool-api arrived — 175 lines, no tests
+    # source that is never compiled is a listing. 617 tests across sixteen
+    # crates as of 2026-08-12, when obc-reflex arrived — System 1 itself, the
+    # rule engine the README has claimed since its first paragraph and could
+    # not show. It was listed at thirteen blocking edges on 2026-08-01 and left
+    # with one: an action sink holding an `Arc<SpineClient>`, moved upstream to
+    # the spine to implement the crate's own trait from the other side. Third
+    # time that manoeuvre has been the answer; see docs/DECISIONS.md.
+    # 589 across fifteen earlier the same day, when obc-tool-api arrived — 175 lines, no tests
     # of its own and none needed: it is the `Tool` contract with no
     # implementation, and everything that implements it is tested elsewhere.
     # The count is unchanged because a trait definition does not add assertions;

@@ -2159,6 +2159,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-reflex"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "obc-memory",
+ "obc-movement",
+ "obc-observability",
+ "obc-safety",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "obc-safety"
 version = "0.1.0"
 dependencies = [

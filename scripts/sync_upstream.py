@@ -567,6 +567,39 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-tool-api/src/lib.rs",
      None),
 
+    # ── System 1 ─────────────────────────────────────────────────────────────
+    # Vendored 2026-08-12, the sixteenth crate: the reflex engine. A rule is
+    # *when this condition holds, do this action*, evaluated against world
+    # memory with debounce, rate limits and an escalation budget, and no LLM in
+    # the loop. `Action::Escalate` is the one that wakes System 2.
+    #
+    # This is the half of the README's reflex claim that has been missing since
+    # obc-telemetry arrived. That entry, five crates ago, said so in as many
+    # words: "the reflex *engine* is in the core crate's `agent/` behind
+    # thirteen blocking edges and cannot follow yet, so this backs
+    # perceive-and-classify, not the whole sentence." The sentence is now whole
+    # — `bodies/trailwatch`'s escalation text, the firmware's `src/reflex.rs`
+    # already vendored here, and the host evaluator that mirrors it are finally
+    # in one repository.
+    #
+    # Thirteen edges became one, and then none. The last was `SpineActionSink`:
+    # one field, one constructor parameter, two topic constants, moved upstream
+    # to `src/spine/action.rs` where it implements this crate's `ActionSink`
+    # from the other side. Same manoeuvre that freed obc-movement (a sink) and
+    # obc-a2a (an executor) — the trait stays where the abstraction is, the
+    # implementation goes where the dependency is.
+    #
+    # One test did not come with it. `content_relayed_by_a_trusted_writer_is_
+    # now_gated` needs the tool layer to say what it means, so it is an
+    # integration test upstream now rather than a unit test here. The count in
+    # the README moves by less than the crate's size suggests, for that reason.
+    ("crates/obc-reflex/Cargo.toml",
+     "crates/obc-reflex/Cargo.toml",
+     None),
+    ("crates/obc-reflex/src/lib.rs",
+     "crates/obc-reflex/src/lib.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,

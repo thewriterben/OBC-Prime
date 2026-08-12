@@ -5,6 +5,59 @@ New entries go at the top.
 
 ---
 
+## 2026-08-12 — Turn the edge; do not wait in the queue
+
+`obc-reflex` is here, and the entry below it — dated 2026-08-01 — says the
+reflex engine "is in the core crate's `agent/` behind thirteen blocking edges
+and cannot move yet." That was true when written. What made it stop being true
+is worth a decision record, because it changes how the queue is read.
+
+The extraction queue is produced by upstream's `scripts/extractability.py`,
+which ranks each module by how many outward edges point at something still in
+the core tree. Read naively it is a work order: take the zeroes, wait on the
+rest. Three times now the useful move has been the opposite — pick the edge
+rather than the module, and reverse it:
+
+| what left | what was blocking it | what moved |
+|---|---|---|
+| `obc-movement` | `Arc<SpineClient>` in one actuator sink | the sink, to the spine — 39 lines |
+| `obc-a2a` | nothing; nothing referenced it either | an executor, written next to the agent |
+| `obc-reflex` | `Arc<SpineClient>` in one action sink | the sink, to the spine |
+
+The shape is the same each time: **the trait stays where the abstraction is, the
+implementation goes where the dependency is.** The crate declares `ActionSink`
+or `ActuatorSink` or `TaskExecutor`; the thing that needs the spine, or the
+agent, implements it from the other side and stays behind. The dependency
+arrow reverses without either side changing what it does.
+
+The cost of not knowing this: `obc-navigation` is 3714 lines and was blocked by
+`obc-movement`, which was blocked by 39 lines. Read as a queue, that is a large
+job waiting on a medium job waiting on a small one. Read as edges, it is one
+`Arc<SpineClient>` field holding back 4416 lines — `wc -l` across both crates'
+`src/` as vendored here — and it took an afternoon.
+`obc-reflex` at thirteen edges and `obc-navigation` at one looked like very
+different problems and were not.
+
+What the instrument cannot tell you, stated so nobody mistakes the ranking for
+the answer: **a count of blocking edges says nothing about how expensive each
+edge is to turn.** Thirteen small edges is a smaller job than one that runs
+through a cycle. Upstream's `scripts/core_endgame.py` was written for the
+second half of that sentence — what remains in the core is cyclic rather than
+merely dense, and no ordering of extractions solves a cycle.
+
+One other thing this entry records, because it is the same failure this
+repository keeps documenting in its own code: **eleven crates arrived between
+the entry below and this one, and none of them got an entry here.** The
+narrative went into `scripts/sync_upstream.py` comments, the `substrate` job's
+comment block and the README instead — all three of which are read more often
+than this file, which is most of why it happened. The log was not wrong; it
+just quietly stopped being the place the reasoning lived. It is not
+back-filled here — inventing eleven contemporaneous records after the fact
+would be worse than the gap — but the gap is now on the page rather than
+implied by a date.
+
+---
+
 ## 2026-08-01 — The next piece is chosen by a script now, and this is the first one
 
 `obc-telemetry` — `power`, `comms`, `sensing`, 1,015 lines, 18 tests — is the
