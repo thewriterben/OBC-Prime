@@ -75,8 +75,19 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 632 tests across eighteen
-    # crates as of 2026-08-13, when obc-foresight and obc-learning arrived —
+    # source that is never compiled is a listing. 653 tests across twenty-one
+    # crates as of 2026-08-13, when obc-fleet, obc-audio and obc-mission
+    # arrived — the first three chosen by attacking dependency cycles rather
+    # than by finding something already separable. A bridge moved to the
+    # transport, two sinks moved to what they depend on, and a mission runner
+    # came free behind them.
+    #
+    # obc-mission is also why this job's second half exists, read backwards:
+    # `cargo check -p obc-mission` was green while `cargo test -p --all-targets`
+    # failed on four #[tokio::test] attributes a check never builds. obc-tunnel
+    # went through on features, obc-a2a on a dev-dependency hiding a real one,
+    # and this one on a real build hiding a missing dev one.
+    # 632 across eighteen the same day, when obc-foresight and obc-learning arrived —
     # Track 1 and the layer that authors its own rules. Neither was chosen:
     # learning was blocked by foresight, foresight by reflex, and reflex by one
     # action sink holding an Arc<SpineClient>. 2455 lines came out from behind
