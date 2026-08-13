@@ -207,8 +207,8 @@ of the crate before them. The last three were not separable when the day
 started. They came out of upstream going after the dependency *cycles*
 deliberately, and each was released by turning one edge around. Each carries the
 tests it had upstream. The counts below are the 649 unit tests plus the 4
-doctests; this line said "370 tests" and counted only the unit tests, which was
-the sort of quiet exclusion this page otherwise objects to.
+doctests; until 2026-08-02 this line said "370 tests" and counted only the unit
+tests, which was the sort of quiet exclusion this page otherwise objects to.
 
 **If you want to write something rather than read something, start with
 `obc-tool-api`.** It is 175 lines and no implementation: the `Tool` trait, the

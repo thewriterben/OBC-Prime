@@ -197,6 +197,22 @@ jobs:
             exit 1
           fi
 
+      # Every stated test count in this repository's own prose matches what the
+      # harness just produced.
+      #
+      # Added 2026-08-13, one commit after the sync that made it necessary. That
+      # sync raised the substrate from eighteen crates to twenty-one and
+      # carefully updated the README from 632 to 653 — and missed `Cargo.toml`,
+      # which still said 473 from the six-crate era, and `demo/src/main.rs`,
+      # which said 589. Both were written as arguments rather than as data
+      # ("executes N tests of real agent code"), which is exactly why neither
+      # was updated alongside the count it was arguing from.
+      #
+      # The commit that missed them was the commit whose entire purpose was
+      # fixing a stale count. That is an argument for a gate, not for more care.
+      - name: every stated test count is current
+        run: python3 scripts/check_test_count.py
+
   # ── The demos still run ───────────────────────────────────────────────────
   # demo/ is the only Rust here written rather than vendored, and its whole
   # purpose is that a stranger can watch a claim hold instead of reading that it
