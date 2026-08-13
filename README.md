@@ -15,11 +15,12 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but sixteen crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but eighteen crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
 > `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
-> `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api` and `obc-reflex`
-> are here, vendored and hash-checked, and CI builds and tests them: **617
+> `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api`, `obc-reflex`,
+> `obc-foresight` and `obc-learning`
+> are here, vendored and hash-checked, and CI builds and tests them: **632
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
@@ -31,7 +32,10 @@ the reflex layer keeps working when the brain is unreachable.
 > those safety bounds exists to constrain, the localization, SLAM and
 > planning stack that decides where to go, and the reflex engine itself — the
 > rules that fire on sensed state without waking the model, which this page has
-> claimed since its first paragraph and could not show until now.
+> claimed since its first paragraph and could not show until now — plus the
+> predictive layer above it, which fires on a *forecast* threshold crossing
+> instead of a present one, and the layer above that, which mines the history
+> for rules nobody wrote and holds them inert until someone approves them.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -166,7 +170,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 617 tests
+cargo test --workspace     # 632 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -185,13 +189,15 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "617 tests pass" and "you can see it refuse" are different
+That matters because "632 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Sixteen pieces have moved, each chosen by measuring what was separable rather
-than what sounded impressive, and each carrying the tests it had upstream. The
-counts below are the 613 unit tests plus the 4 doctests; this line said "370
+Eighteen pieces have moved, most chosen by measuring what was separable rather
+than what sounded impressive, and each carrying the tests it had upstream. Two
+of the eighteen were not chosen at all — see `obc-foresight` and `obc-learning`
+below, which fell out of the crate before them. The
+counts below are the 628 unit tests plus the 4 doctests; this line said "370
 tests" and counted only the unit tests, which was the sort of quiet exclusion
 this page otherwise objects to.
 
@@ -249,6 +255,8 @@ CI now does both.
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
 | `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
 | `obc-reflex` | System 1: a rule language of conditions and actions evaluated against world memory without waking the model, with debounce, rate limits, an escalation budget and a pluggable action sink — the same evaluator that runs mirrored on the node, and the half of this page's reflex claim that had no host-side code here until now | 28 |
+| `obc-foresight` | Track 1: trend forecasts fitted to each entity's bitemporal history, and rules that fire on a *predicted* threshold crossing — `battery predicted ≤ 10% within 60s → return to base` acts while the pack is still at 20% and draining. Forecasts are written back into world memory, so a rule that fired on a bad forecast leaves the bad forecast behind as evidence | 11 |
+| `obc-learning` | the layer that authors rules nobody wrote: mine the history for conditions that repeatedly preceded a bad outcome, propose an anticipatory rule with support and confidence, and hold it **inert** until a human or policy approves it. The approval gate is asserted upstream against a real engine, which is why the count here is small | 4 |
 | `obc-tool-api` | the contract, with no implementation: the `Tool` trait, `ToolResult`, and the Track 0 vocabulary a tool declares about itself. The smallest crate here and the one to read first if you intend to write a tool | 0 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
@@ -296,6 +304,29 @@ temperature must not actuate while a driver-*measured* one must needs the tool
 layer to say what it means, so it is an integration test upstream now rather
 than a unit test here. It is the one place the vendored copy is knowingly
 thinner than the original, and this sentence is why the count says 28.
+
+`obc-foresight` and `obc-learning` arrived the next day and neither was chosen.
+`learning` was blocked by `foresight`, `foresight` was blocked by `reflex`, and
+`reflex` was blocked by one action sink holding an `Arc<SpineClient>` — one
+field, one constructor parameter, two topic constants. **2455 lines came out
+from behind that one field**, across three commits, and the two crates above
+moved no logic at all: eight paths spelled `crate::memory::world::` became
+`obc_memory::`, names that had been a crate here since July and were still being
+read through the agent's re-export table.
+
+That is the third time in this list a large piece has followed a small one —
+`obc-navigation` behind `obc-movement` behind 39 lines was the first — and it is
+the reason the ranking upstream produces is a reading order rather than a work
+order. A count of blocking edges says nothing about what each edge costs to
+turn. `obc-reflex` was listed at thirteen and left on one move; `obc-navigation`
+was listed at one and was worth 3714 lines.
+
+One dependency in `obc-learning` is worth a sentence because it is the argument
+for the second CI pass in miniature. The crate needs `anyhow`, which appears in
+no `use` line anywhere in it — both call sites write `anyhow::Result<…>` inline
+in a return type. That is the same shape that made upstream's extractability
+survey report the config module as edge-free in its first version. No amount of
+reading imports finds it; `cargo check -p obc-learning` found it in seconds.
 
 `obc-observability` is the smallest honest thing in the
 list: no claim on this page rests on it. It is here because it was next by the

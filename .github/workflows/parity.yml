@@ -75,8 +75,18 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 617 tests across sixteen
-    # crates as of 2026-08-12, when obc-reflex arrived — System 1 itself, the
+    # source that is never compiled is a listing. 632 tests across eighteen
+    # crates as of 2026-08-13, when obc-foresight and obc-learning arrived —
+    # Track 1 and the layer that authors its own rules. Neither was chosen:
+    # learning was blocked by foresight, foresight by reflex, and reflex by one
+    # action sink holding an Arc<SpineClient>. 2455 lines came out from behind
+    # one field across three commits, and these two moved no logic at all.
+    #
+    # obc-learning is also the crates-alone argument in miniature: it needs
+    # `anyhow`, which appears in no `use` line anywhere in it — both call sites
+    # write `anyhow::Result<…>` inline in a return type, which no import survey
+    # can see and `cargo check -p` found in seconds.
+    # 617 across sixteen on 2026-08-12, when obc-reflex arrived — System 1 itself, the
     # rule engine the README has claimed since its first paragraph and could
     # not show. It was listed at thirteen blocking edges on 2026-08-01 and left
     # with one: an action sink holding an `Arc<SpineClient>`, moved upstream to
