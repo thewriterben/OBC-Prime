@@ -5,6 +5,43 @@ New entries go at the top.
 
 ---
 
+## 2026-08-13 — Two crates arrived that nobody decided to move
+
+`obc-foresight` (677 lines) and `obc-learning` (454) are here, and this entry
+exists mostly to record that neither was a decision. They are the first
+arrivals in this repository that were not selected — by reading imports, by
+`extractability.py`, or by anyone weighing what the public repo most needed.
+They fell out.
+
+The chain, smallest thing last: `learning` was blocked by `foresight`,
+`foresight` was blocked by `reflex`, and `reflex` was blocked by a single action
+sink holding an `Arc<SpineClient>` — one field, one constructor parameter, two
+topic constants. Turning that one edge released **2455 lines across three
+crates** in three commits, and the two here moved no logic whatsoever: eight
+paths spelled `crate::memory::world::` became `obc_memory::`, names that had
+been a crate since 2026-07-30 and were still being read through the agent's
+re-export table.
+
+The entry below this one already argued that a blocking-edge count says nothing
+about what an edge costs to turn. This is the same claim from the other end:
+**turning one cheap edge can release work you were not planning to do.** The
+useful consequence is scheduling, not philosophy — after any edge-turning
+commit, re-run the survey before deciding what is next, because the answer may
+have changed underneath the plan. Upstream's `docs/ENDGAME.md` predicted these
+two specifically and was right about them, and wrong in the same paragraph
+about which back-edges the move would break. Both halves are recorded there.
+
+One thing here is a decision rather than a consequence: **the approval gate did
+not come with `obc-learning`.** `tests/learning_approval_gate.rs` asserts that a
+mined rule is inert until approved, and it does so against a real
+`ForesightEngine` rather than a mock. Vendoring the crate without it would have
+put a rule-synthesis engine in a public repository with its central safety
+property untested here. Keeping it upstream is the honest option of the two
+available — the alternative was a weaker local restatement — and it is why this
+crate's row in the README says 4 tests rather than a number that flatters it.
+
+---
+
 ## 2026-08-12 — Turn the edge; do not wait in the queue
 
 `obc-reflex` is here, and the entry below it — dated 2026-08-01 — says the

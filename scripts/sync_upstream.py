@@ -600,6 +600,58 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-reflex/src/lib.rs",
      None),
 
+    # ── Track 1, and the layer that writes its own rules ─────────────────────
+    # Vendored 2026-08-13, the seventeenth and eighteenth crates, and neither
+    # was chosen. Both fell out of obc-reflex landing the day before.
+    #
+    # `obc-foresight` is the predictive half of the control stack. Reflexes
+    # react to the present; this reacts to a forecast. World memory is
+    # bitemporal and append-only, so every entity carries a time-series — fit
+    # the recent trend and you can say *when* a value will cross a threshold.
+    # `battery predicted <= 10% within 60s -> return to base` fires while the
+    # pack is still at 20% and draining, which is time a reactive rule cannot
+    # buy. Forecasts are written back into world memory under
+    # `foresight.{entity}`, so a rule that fired on a bad forecast leaves the
+    # bad forecast behind as evidence.
+    #
+    # `obc-learning` is the layer that authors rules from experience rather than
+    # from an operator: it mines the history for conditions that repeatedly
+    # preceded a bad outcome and proposes anticipatory rules with a support
+    # count and a confidence measured against the background rate. The thing
+    # that makes it safe to ship publicly is what it deliberately does not do —
+    # a proposal is inert until a human or policy approves it, and only then is
+    # it converted, escalate-only, into a foresight rule. That invariant is
+    # asserted upstream in `tests/learning_approval_gate.rs` against a real
+    # `ForesightEngine`, which is why the test stayed there when the crate left,
+    # and why this crate's own count is only 4.
+    #
+    # The chain is the point. learning was blocked by foresight, which was
+    # blocked by reflex, which was blocked by one action sink holding an
+    # `Arc<SpineClient>` — one field, one constructor parameter, two topic
+    # constants. 2455 lines came out from behind it across three commits, and
+    # the two crates here moved no logic at all: eight `crate::memory::world::`
+    # paths became `obc_memory::`, names that had been a crate since 2026-07-30
+    # and were still being read through the agent's re-export table.
+    #
+    # One dependency was found by the compiler and would have been missed by any
+    # survey: obc-learning needs `anyhow`, which appears in no `use` line —
+    # both call sites write `anyhow::Result<…>` inline in a return type. That is
+    # the same shape that made upstream's `extractability.py` report `config` as
+    # edge-free in its first version. `cargo check -p obc-learning` found it in
+    # seconds, which is the whole argument for the crates-alone job below.
+    ("crates/obc-foresight/Cargo.toml",
+     "crates/obc-foresight/Cargo.toml",
+     None),
+    ("crates/obc-foresight/src/lib.rs",
+     "crates/obc-foresight/src/lib.rs",
+     None),
+    ("crates/obc-learning/Cargo.toml",
+     "crates/obc-learning/Cargo.toml",
+     None),
+    ("crates/obc-learning/src/lib.rs",
+     "crates/obc-learning/src/lib.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,

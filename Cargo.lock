@@ -2074,6 +2074,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-foresight"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "obc-memory",
+ "obc-reflex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "obc-learning"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "obc-foresight",
+ "obc-memory",
+ "obc-reflex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "obc-memory"
 version = "0.1.0"
 dependencies = [

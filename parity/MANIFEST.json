@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-12T21:10:24+00:00",
+  "generated": "2026-08-13T17:41:54+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -370,6 +370,22 @@
     "crates/obc-reflex/src/lib.rs": {
       "sha256": "68b4dfdb18076c4fcbe304145465841443eddcdd9ec58beb9f7432320315ffc3",
       "bytes": 49480
+    },
+    "crates/obc-foresight/Cargo.toml": {
+      "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
+      "bytes": 2488
+    },
+    "crates/obc-foresight/src/lib.rs": {
+      "sha256": "516573431169eef01300116018baa41be49ab4c7049aee901511f5d88e982a07",
+      "bytes": 24871
+    },
+    "crates/obc-learning/Cargo.toml": {
+      "sha256": "ed3c707b69fc8d6df7475774fbfb75059f8c3220e7c7368818c52fc07c229344",
+      "bytes": 2185
+    },
+    "crates/obc-learning/src/lib.rs": {
+      "sha256": "bdbc8acd66161fa9fbdbe847df45459e7d3f924b973dccff48fa0fcb8f8b5f7b",
+      "bytes": 14821
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",
