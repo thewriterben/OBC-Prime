@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 158 artifacts).
+        also updates the generator app's mirrors (12 of the 160 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -740,6 +740,51 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-mission/src/lib.rs",
      "crates/obc-mission/src/lib.rs",
+     None),
+
+    # ── The human-in-the-loop gate ───────────────────────────────────────────
+    # Vendored 2026-08-14, the twenty-second, and the first one extracted after
+    # the core reached zero cycles rather than in order to get there.
+    #
+    # What it is: three autonomy levels -- full, supervised, manual -- and a
+    # per-call gate that consults a tool's declared risk class before asking a
+    # person. A grant can be given once or forever, and forever grants are
+    # persisted, so "yes, always" survives a restart rather than quietly meaning
+    # "yes, until you reboot". It also carries the trust half: a tool's output
+    # has an `OutputTrust`, and relayed content from an untrusted writer does
+    # not get the same standing as a driver-measured reading. `obc-safety`'s
+    # taint guard, already here, is the other end of that.
+    #
+    # It is worth being exact about why this crate is in a public repository
+    # that documents a robot's safety story. The claim "a human approves risky
+    # actions" is the kind a reader cannot check by reading prose about it, and
+    # thirty tests that run here are a different sort of evidence from a
+    # paragraph saying they exist. That argument is the same one that put
+    # obc-safety and obc-conscience here.
+    #
+    # How it reached zero blocking edges, in two steps, neither found by
+    # reading:
+    #
+    #   1. `crate::config::paths::in_data_dir` -- where forever grants are
+    #      written -- was naming upstream's root config module to reach
+    #      obc-paths, a crate since July. A facade nobody had noticed was one.
+    #   2. `AutonomyLevel` and `AutonomyConfig` spent an hour in `agent` before
+    #      landing here, and the cycle count refused to reach zero the whole
+    #      time. Autonomy *level* is the approval policy, and this is the module
+    #      that turns it into an `ApprovalManager`. The rule was right and the
+    #      noun was wrong; the graph said so before any reader did.
+    #
+    # Four dependencies in its manifest exist because the compiler asked, not
+    # because an import survey found them: chrono, uuid and tracing appear in no
+    # `use` line -- seven call sites write them at full paths -- and tempfile was
+    # invisible to `cargo check -p` entirely, surfacing only under
+    # `--all-targets` because the grants-persistence test writes to a temp dir.
+    # Both halves of the crates-alone CI job below earn their runtime again.
+    ("crates/obc-approval/Cargo.toml",
+     "crates/obc-approval/Cargo.toml",
+     None),
+    ("crates/obc-approval/src/lib.rs",
+     "crates/obc-approval/src/lib.rs",
      None),
 
     # ── The agent watching itself ────────────────────────────────────────────
