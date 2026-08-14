@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-14T20:11:09+00:00",
+  "generated": "2026-08-14T22:37:49+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -646,6 +646,34 @@
     "crates/obc-tools/src/lib.rs": {
       "sha256": "d18d7a08accd9c841a7563652f34699a0055dad91e734f9593351d2af43d7504",
       "bytes": 9128
+    },
+    "crates/obc-vision/Cargo.toml": {
+      "sha256": "1fcdc34ee72870eff6d49bddb3b01c68e42c5799b977f1b72d6ca0fe3c76a565",
+      "bytes": 2675
+    },
+    "crates/obc-vision/src/lib.rs": {
+      "sha256": "fd1f1589ef0aac1a35fadb7e9220e1046df1ecde78af9498418625bd661c86ff",
+      "bytes": 1079
+    },
+    "crates/obc-vision/src/clawcam_actuate.rs": {
+      "sha256": "6c27126e2467817c25b411965aff9ac20ad39fd300645262f2df6f339b7f8434",
+      "bytes": 4390
+    },
+    "crates/obc-vision/src/clawcam_analytics.rs": {
+      "sha256": "fa9af4ea177578905275717f332887d713ecddc2d6d28e9c1c2644e744aab441",
+      "bytes": 15408
+    },
+    "crates/obc-vision/src/clawcam_ingest.rs": {
+      "sha256": "a12fbcdc43fecee3a7cf3ee616a42780ff352b6878da7b18e0f534d7854d9147",
+      "bytes": 54709
+    },
+    "crates/obc-vision/src/clawcam_rules.rs": {
+      "sha256": "3dae903e3ffae420e999b43b69de7c8691ce21c726438e8fa6e9cf200bfc5918",
+      "bytes": 16702
+    },
+    "crates/obc-vision/src/clawcam_spatial.rs": {
+      "sha256": "b699b83dd491fbb1985ed1599da075e70c2783ece3a76099cb043e4d3dcfa81e",
+      "bytes": 4093
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",

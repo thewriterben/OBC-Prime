@@ -75,7 +75,12 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 987 tests across twenty-six
+    # source that is never compiled is a listing. 1036 tests across twenty-seven
+    # crates as of 2026-08-14, when obc-vision arrived and obc-channels and
+    # obc-gateway were recorded as deliberately not vendored — the same test
+    # applied to three crates on the same day, answered differently twice.
+    #
+    # 987 tests across twenty-six
     # crates as of 2026-08-14, when the tool layer, the model backends and MCP
     # arrived — and when four other crates that exist upstream were recorded as
     # deliberately not vendored. Both halves of that are decisions; the drift

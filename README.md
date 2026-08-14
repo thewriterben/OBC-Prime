@@ -15,14 +15,14 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-six crates of it now are. `obc-paths`,
+> repository** — but twenty-seven crates of it now are. `obc-paths`,
 > `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
 > `obc-observability`, `obc-scheduler`, `obc-conscience`, `obc-approval`,
-> `obc-spine`, `obc-tools`, `obc-providers`, `obc-mcp`, `obc-position`,
-> `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`, `obc-navigation`,
-> `obc-tool-api`, `obc-reflex`, `obc-foresight`, `obc-learning`, `obc-fleet`,
-> `obc-audio` and `obc-mission` are here, vendored and hash-checked, and CI
-> builds and tests them: **987 tests**.
+> `obc-spine`, `obc-tools`, `obc-providers`, `obc-mcp`, `obc-vision`,
+> `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
+> `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
+> `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
+> and hash-checked, and CI builds and tests them: **1036 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -66,15 +66,22 @@ the reflex layer keeps working when the brain is unreachable.
 > another agent can drive a robot *through* the Track 0 gate rather than around
 > it.
 >
-> **Where the line is.** Four crates that exist upstream are deliberately not
+> **Where the line is.** Six crates that exist upstream are deliberately not
 > here: the agent loop, the self-improvement layer, the configuration that
-> composes every module's block, and the peripheral drivers. Everything this
-> repository vendors, it vendors because a document here makes a claim a reader
-> cannot check by reading it. Those four are not evidence for a claim — they
-> are most of the product, and vendoring them would make this "the agent, minus
-> the binary" rather than the substrate the documents rest on. The decision is
-> recorded in `scripts/sync_upstream.py`, and the drift gate fails if anything
-> else appears upstream unannounced: silence is the one option not available.
+> composes every module's block, the peripheral drivers, the eleven chat
+> adapters and the HTTP gateway. Everything this repository vendors, it vendors
+> because a document here makes a claim a reader cannot check by reading it.
+> Those six are not evidence for a claim — they are most of the product, and
+> vendoring them would make this "the agent, minus the binary" rather than the
+> substrate the documents rest on. The decision is recorded in
+> `scripts/sync_upstream.py`, and the drift gate fails if anything else appears
+> upstream unannounced: silence is the one option not available.
+>
+> `obc-vision` went the other way on the same test, and is here. It is the
+> pipeline `docs/CONSCIENCE.md` is *about* — what the agent may observe, gated
+> before the frame reaches world memory, with the refusal written where it can
+> be replayed. A camera is the sharpest case for that claim and the easiest to
+> get wrong, which is why it is worth being able to run rather than read about.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -212,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 987 tests
+cargo test --workspace     # 1036 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -231,11 +238,11 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "987 tests pass" and "you can see it refuse" are different
+That matters because "1036 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Twenty-six pieces have moved, and how they were chosen changed three times. The
+Twenty-seven pieces have moved, and how they were chosen changed three times. The
 first eighteen were chosen by measuring what was separable — and two of those
 were not chosen at all, `obc-foresight` and `obc-learning`, which fell out of the
 crate before them. The next three were not separable when that day started: they
@@ -255,22 +262,29 @@ one that moved released a module that then became a crate — `obc-movement`,
 `obc-reflex`, `obc-fleet`, `obc-audio`, all four above it in this table. The
 spine did not get smaller. It stopped pointing and started being pointed at.
 
-The last three — `obc-tools`, `obc-providers`, `obc-mcp` — were chosen under a
-third rule again, and it is the one that also decided what *stopped*. By the
-time they were extractable upstream, nothing was blocked by anything: every
-module left had zero blocking edges, so "what can come out" had no answer left
-to give. What remained was "what should be public", and the test this page has
-always applied — does a document here make a claim a reader cannot check by
-reading it? The tool contract had no implementations behind it. "Bring your own
-model" had no failover chain to run. `docs/CONSCIENCE.md` described gating an
-ingress that was not here. Those three close those three gaps.
+The last four — `obc-tools`, `obc-providers`, `obc-mcp` and `obc-vision` — were
+chosen under a third rule again, and it is the one that also decided what
+*stopped*. By the time they were extractable upstream, nothing was blocked by
+anything: every module left had zero blocking edges, so "what can come out" had
+no answer left to give. What remained was "what should be public", and the test
+this page has always applied — does a document here make a claim a reader cannot
+check by reading it? The tool contract had no implementations behind it. "Bring
+your own model" had no failover chain to run. `docs/CONSCIENCE.md` described
+gating an ingress that was not here, and described gating a camera whose
+pipeline was not here either. Those four close those four gaps.
 
-The agent loop, the self-improvement layer, the root configuration and the
-peripheral drivers fail the same test and are deliberately not vendored, which
-is recorded in `scripts/sync_upstream.py` rather than left as an absence. They
-are not evidence for a claim; they are most of the product.
+The agent loop, the self-improvement layer, the root configuration, the
+peripheral drivers, the chat adapters and the HTTP gateway fail the same test
+and are deliberately not vendored, which is recorded in
+`scripts/sync_upstream.py` rather than left as an absence. They are not evidence
+for a claim; they are most of the product.
 
-Each carries the tests it had upstream. The counts below are the 983 unit tests
+That the same test was applied to three crates on 2026-08-14 and answered
+differently — vision in, channels and gateway out — is the argument for having a
+test at all. A rule that only ever says yes is a preference wearing a rule's
+clothes.
+
+Each carries the tests it had upstream. The counts below are the 1032 unit tests
 plus the 4 doctests; until 2026-08-02 this line said "370 tests" and counted
 only the unit tests, which was the sort of quiet exclusion this page otherwise
 objects to.
@@ -325,6 +339,7 @@ CI now does both.
 | `obc-tools` | every built-in tool the model can call — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser, world memory, missions, incidents, OTA — each declaring its own risk class, blast radius and output trust to the gate that reads them. `obc-tool-api` is the contract; this is what implements it, and the pair is what makes "the model may only call what the gate allows" checkable rather than stated | 170 |
 | `obc-providers` | Anthropic, OpenAI, OpenRouter, Ollama and any OpenAI-compatible endpoint behind one trait, with an ordered failover chain so a dead endpoint moves to the next rather than failing the turn, bounded retries, SSE streaming, and a registry that pins model names. The crate behind this page's "bring your own model" — the parts that decide whether the promise holds when a key is wrong | 22 |
 | `obc-mcp` | Model Context Protocol both ways: a client that dials stdio or HTTP and turns whatever it finds into callable tools, and a server that exposes this agent's own tools so something else can drive a robot **through** the Track 0 gate rather than around it. Depends on `obc-conscience` because a server is an ingress | 38 |
+| `obc-vision` | the camera pipeline: ClawCam detections ingested into world memory as facts with provenance, projected through the site frame into the coordinates the navigation stack shares, evaluated against rules that can fire an actuation. The pipeline [docs/CONSCIENCE.md](docs/CONSCIENCE.md) is *about* — `clawcam_ingest` names the decision log directly, because what the agent may observe is gated **before** the frame reaches memory | 49 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
 | `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |
