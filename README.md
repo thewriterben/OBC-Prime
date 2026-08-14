@@ -360,13 +360,29 @@ transport. That is what a two-module cycle often turns out to be, and it is less
 comfortable than a misplaced file, because both halves looked reasonable where
 they sat.
 
-What this repository is deliberately not printing: a cycle count. Upstream has
-one and it moved a long way, but it also found that the script producing it had
-been treating the config module as already-extracted — a regex with an optional
-group matching `pub use config::Config;` — which made every edge *into* config
-invisible and every count low. That is written up in upstream's
-`docs/ENDGAME.md`. A number this repository cannot re-run is a number it should
-not repeat, and the correction is more useful than the figure anyway.
+What this repository declined to print for a day, and now will: a cycle count.
+Upstream's core has **zero** dependency cycles as of 2026-08-13, down from
+twenty-five.
+
+The delay was the point. When that number first read zero it was wrong — the
+script producing it had been treating the config module as already-extracted, a
+regex with an optional group matching `pub use config::Config;`, which made
+every edge *into* config invisible and every count low. The real figure at that
+moment was sixteen. The correction, the guard that would have caught it on day
+one, and the five-item list of everything else that page got wrong are in
+upstream's `docs/ENDGAME.md`, which is worth more than the figure.
+
+So: zero, from the fixed instrument, and this repository is repeating it rather
+than deriving it — the script and the tree it measures both live upstream. What
+it means here is that the pieces still to arrive are no longer waiting on each
+other. `spine` (5100 lines) and `approval` (1348) are at zero blocking edges and
+can be vendored whenever they are wanted; `tools` is behind `spine` alone.
+
+The last seven cycles turned out to be one rule not applied in four places — the
+module owns its own configuration block, and the root `Config` composes it. That
+is the arrangement every crate in the table above already uses, and it is why
+`ProviderConfig`, `SpineConfig`, `AgentConfig` and `AutonomyConfig` each moved to
+the module that reads them. Not architecture. Filing.
 
 `obc-observability` is the smallest honest thing in the
 list: no claim on this page rests on it. It is here because it was next by the
