@@ -197,21 +197,30 @@ jobs:
             exit 1
           fi
 
-      # Every stated test count in this repository's own prose matches what the
-      # harness just produced.
+      # Every count this repository states about itself matches what was just
+      # measured: tests from the harness, artifacts and generator mirrors from
+      # sync_upstream.ARTIFACTS.
       #
-      # Added 2026-08-13, one commit after the sync that made it necessary. That
-      # sync raised the substrate from eighteen crates to twenty-one and
-      # carefully updated the README from 632 to 653 — and missed `Cargo.toml`,
-      # which still said 473 from the six-crate era, and `demo/src/main.rs`,
-      # which said 589. Both were written as arguments rather than as data
-      # ("executes N tests of real agent code"), which is exactly why neither
-      # was updated alongside the count it was arguing from.
+      # Added 2026-08-13, and then immediately widened. The first version
+      # checked test counts in four named files, because the miss that prompted
+      # it was two stale test counts. It could not have caught what came next:
+      # on 2026-08-13 `parity/README.md` told a reader the sync "copies all 43
+      # artifacts here, updates the generator's 11 mirrors" (2026-08-13) — 157
+      # and 12 — and repeated both figures in sync_upstream.py's own docstring.
+      # Wrong metric, wrong files. This version derives the numbers and the
+      # file set instead.
       #
-      # The commit that missed them was the commit whose entire purpose was
-      # fixing a stale count. That is an argument for a gate, not for more care.
-      - name: every stated test count is current
-        run: python3 scripts/check_test_count.py
+      # (Those two lines carry a date because this gate flagged them on the run
+      # that added it. Quoting a number you have just corrected is the one case
+      # where the escape hatch is the right answer rather than a dodge.)
+      #
+      # It also skips more than it checks, on purpose: vendored prose (belongs
+      # upstream), the append-only logs (PLAN.md, DECISIONS.md, MIGRATION.md —
+      # their numbers are old by construction), dated lines, and the
+      # generator's own npm counts. Twelve of the first sixteen hits were noise,
+      # and a gate that cries wolf is a gate someone turns off.
+      - name: every stated count is current
+        run: python3 scripts/check_counts.py
 
   # ── The demos still run ───────────────────────────────────────────────────
   # demo/ is the only Rust here written rather than vendored, and its whole
@@ -247,8 +256,8 @@ jobs:
   peer:
     name: generator mirrors match
     runs-on: ubuntu-latest
-    # Covers the 11 artifacts the generator also carries (registry, fixtures,
-    # wasm); the 32 firmware files have no peer copy.
+    # Covers the generator's 12 mirrors (registry, firmware templates, fixtures,
+    # wasm); the 33 firmware files have no peer copy.
     #
     # **The generator repository is private.** Settled 2026-07-30 by running this
     # job, not by reading anything: it failed on the peer checkout, and setting
@@ -309,7 +318,7 @@ jobs:
     # sources passes by construction. Both happened. `crates/obc-memory/src/image.rs`
     # sat here for two commits after upstream deleted it, compiling into the
     # `substrate` job, with every gate green; and the WASM bundle was six weeks
-    # stale while all 43 artifacts reported identical.
+    # stale on 2026-07-29 while all 43 artifacts reported identical.
     #
     # Enabled 2026-07-30, once the two things blocking it were actually solved
     # rather than noted:

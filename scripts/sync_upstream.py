@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (11 of the 43 artifacts).
+        also updates the generator app's mirrors (12 of the 157 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -1369,7 +1369,8 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
     if carried:
         # Printed every run, like the `check --upstream` skips. A sync that
         # quietly declines to sync part of what it lists is worse than one that
-        # fails: the summary line would say 43 artifacts and mean 36.
+        # fails: on 2026-07-30 the summary line would have said 43 artifacts
+        # and meant 36.
         print(f"{YELLOW}kept{RESET} {len(carried)} artifact(s) the upstream checkout "
               f"does not carry — hashes unchanged, not re-copied:")
         for local, why in carried:
