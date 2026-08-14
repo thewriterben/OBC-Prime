@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 160 artifacts).
+        also updates the generator app's mirrors (12 of the 170 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -785,6 +785,74 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-approval/src/lib.rs",
      "crates/obc-approval/src/lib.rs",
+     None),
+
+    # ── The communication spine ──────────────────────────────────────────────
+    # Vendored 2026-08-14, the twenty-third, 5100 lines, and the largest thing
+    # that had ever been extracted from upstream's tree. It is also the host
+    # half of a claim this repository has been making with only the node half
+    # present.
+    #
+    # firmware/ has been here in full for weeks: the ESP32 and Heltec sources
+    # implement the frame authentication docs/SPINE-AUTH.md specifies -- tag,
+    # replay window, outbound counter -- and a reader could check that end.
+    # The brain end was described and not shown. Both ends are here now, and
+    # `cargo test -p obc-spine` runs 63 of them.
+    #
+    # What it is: the MQTT backbone between brain and nodes, a serial LoRa
+    # gateway and a LoRa mesh with a relay, the mesh supervisor that decides a
+    # node is lost, a P2P transport over TCP and UDP, and four sinks that put
+    # movement commands, reflex actions, speech and fleet assignments onto the
+    # wire.
+    #
+    # It never had a refactor, which is the part worth reading. Its
+    # blocking-edge count went four to zero without a line of its own code
+    # changing, because all four edges were the same mistake made four times --
+    # an implementation living beside the abstraction it implements rather than
+    # beside the dependency it holds. SpineActuatorSink left `movement`,
+    # SpineActionSink left the agent's reflex module, the fleet bridge left the
+    # coordinator, SpineSpeechSink left the audio suite. Each move released a
+    # module that then became a crate, and three of those four crates are above
+    # this entry. The spine did not get smaller; it stopped pointing.
+    #
+    # One thing this vendoring carries that is not code. Upstream's security
+    # audit went red on the extraction, and not because anything new arrived:
+    # the new manifest declared `rumqttc = "0.24"` where the root had
+    # `default-features = false` under a comment naming four RUSTSEC advisories
+    # in rustls-webpki 0.102.8. Cargo unifies features across a workspace, so
+    # one manifest asking for defaults re-enabled a vulnerable certificate
+    # stack for everything -- for MQTT-over-TLS, which is never wired. Build,
+    # clippy, fmt and the full suite stayed green. The manifest below is the
+    # corrected one, and `cargo audit` is why anyone knew.
+    ("crates/obc-spine/Cargo.toml",
+     "crates/obc-spine/Cargo.toml",
+     None),
+    ("crates/obc-spine/src/lib.rs",
+     "crates/obc-spine/src/lib.rs",
+     None),
+    ("crates/obc-spine/src/action.rs",
+     "crates/obc-spine/src/action.rs",
+     None),
+    ("crates/obc-spine/src/actuator.rs",
+     "crates/obc-spine/src/actuator.rs",
+     None),
+    ("crates/obc-spine/src/fleet_bridge.rs",
+     "crates/obc-spine/src/fleet_bridge.rs",
+     None),
+    ("crates/obc-spine/src/lora_gateway.rs",
+     "crates/obc-spine/src/lora_gateway.rs",
+     None),
+    ("crates/obc-spine/src/lora_mesh.rs",
+     "crates/obc-spine/src/lora_mesh.rs",
+     None),
+    ("crates/obc-spine/src/mesh_supervisor.rs",
+     "crates/obc-spine/src/mesh_supervisor.rs",
+     None),
+    ("crates/obc-spine/src/p2p.rs",
+     "crates/obc-spine/src/p2p.rs",
+     None),
+    ("crates/obc-spine/src/speech.rs",
+     "crates/obc-spine/src/speech.rs",
      None),
 
     # ── The agent watching itself ────────────────────────────────────────────

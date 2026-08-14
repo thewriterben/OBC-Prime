@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-14T03:22:07+00:00",
+  "generated": "2026-08-14T04:47:37+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -426,6 +426,46 @@
     "crates/obc-approval/src/lib.rs": {
       "sha256": "3617c24e69153920ec2388e8651dcb927bd8d0e780bedad14b7164a2dc5db512",
       "bytes": 49363
+    },
+    "crates/obc-spine/Cargo.toml": {
+      "sha256": "403fda58d7798f86f6ddf5c769b79f6d5527004f5fb9d3caa35485100034d7cb",
+      "bytes": 5310
+    },
+    "crates/obc-spine/src/lib.rs": {
+      "sha256": "cbf805a2eaaaf9ec70e6c55528623b679c2b399f50e44eb7b7a3bce93e489830",
+      "bytes": 36281
+    },
+    "crates/obc-spine/src/action.rs": {
+      "sha256": "4a1d63f023e0de5149bbf1e3c643551172db8e8ec7211eba9d03fba73a11815a",
+      "bytes": 4317
+    },
+    "crates/obc-spine/src/actuator.rs": {
+      "sha256": "713d8ac68d4a4d10387dfd097918e78a40434d9a3949baf2579356454fa73a2a",
+      "bytes": 2617
+    },
+    "crates/obc-spine/src/fleet_bridge.rs": {
+      "sha256": "add1f9b521572870b25eeabd04463f64ccaa0685d24c53347d2827e911a42749",
+      "bytes": 5014
+    },
+    "crates/obc-spine/src/lora_gateway.rs": {
+      "sha256": "dd4cbbd775b433fcbef954f41b1d34313564481c3e7b8da0d8c0f8bab30a98d9",
+      "bytes": 33942
+    },
+    "crates/obc-spine/src/lora_mesh.rs": {
+      "sha256": "3eedb40a620bf3fd9e72aea81e6d72dc0d99b37b9e42455b6b9822f3d9f91f01",
+      "bytes": 29181
+    },
+    "crates/obc-spine/src/mesh_supervisor.rs": {
+      "sha256": "15ba83bf1c384936f1118294b404721447832dd8756cb1f91784ee49e0f4cb40",
+      "bytes": 55896
+    },
+    "crates/obc-spine/src/p2p.rs": {
+      "sha256": "c29c1c74bc5e83a453cc619a217334779d6ccc2d828e0c6e125acc3d39705a64",
+      "bytes": 28101
+    },
+    "crates/obc-spine/src/speech.rs": {
+      "sha256": "11d98219da711f768c20ab9a689d2144b67b53d54481ea2dd2c901af24a4c59d",
+      "bytes": 2467
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",
