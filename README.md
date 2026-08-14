@@ -15,13 +15,14 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-two crates of it now are. `obc-paths`, `obc-memory`,
-> `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
-> `obc-scheduler`, `obc-conscience`, `obc-approval`, `obc-position`, `obc-cost`,
-> `obc-tunnel`, `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api`,
-> `obc-reflex`, `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and
-> `obc-mission` are here, vendored and hash-checked, and CI builds and tests
-> them: **688 tests**.
+> repository** — but twenty-three crates of it now are. `obc-paths`,
+> `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
+> `obc-observability`, `obc-scheduler`, `obc-conscience`, `obc-approval`,
+> `obc-spine`, `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`,
+> `obc-movement`, `obc-navigation`, `obc-tool-api`, `obc-reflex`,
+> `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission`
+> are here, vendored and hash-checked, and CI builds and tests them:
+> **751 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -48,6 +49,13 @@ the reflex layer keeps working when the brain is unreachable.
 > person, with "yes, always" written to disk so it means what it says after a
 > restart. Everything else here bounds what the agent *may* do. This is the
 > part that decides when it has to ask first.
+>
+> And, the same day, the wire all of it runs on: the MQTT backbone between
+> brain and nodes, a serial LoRa gateway and mesh, the supervisor that decides
+> a node is lost, a P2P transport, and the sinks that put movement commands,
+> reflex actions, speech and fleet assignments onto it. `firmware/` has held
+> the node end of that conversation for weeks and this page could point at it;
+> the brain end was described and not shown. Both ends are here now.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -185,7 +193,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 688 tests
+cargo test --workspace     # 751 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -204,22 +212,31 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "688 tests pass" and "you can see it refuse" are different
+That matters because "751 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Twenty-two pieces have moved, and how they were chosen changed twice. The first
-eighteen were chosen by measuring what was separable — and two of those were not
-chosen at all, `obc-foresight` and `obc-learning`, which fell out of the crate
-before them. The next three were not separable when that day started: they came
-out of upstream going after the dependency *cycles* deliberately, and each was
-released by turning one edge around. `obc-approval` is the first chosen under
+Twenty-three pieces have moved, and how they were chosen changed twice. The
+first eighteen were chosen by measuring what was separable — and two of those
+were not chosen at all, `obc-foresight` and `obc-learning`, which fell out of the
+crate before them. The next three were not separable when that day started: they
+came out of upstream going after the dependency *cycles* deliberately, and each
+was released by turning one edge around. `obc-approval` is the first chosen under
 neither rule. It left after the cycle count had already reached zero, which
 means the question stopped being "what can come out" and went back to being
 "what should be public" — and a gate deciding when a person has to confirm an
 action is a claim a reader cannot check by reading a paragraph about it.
 
-Each carries the tests it had upstream. The counts below are the 684 unit tests
+`obc-spine` is the clearest case of the middle rule, and the largest. 5100
+lines, and for most of upstream's history the biggest thing in its tree that
+could not move. Its blocking-edge count went four to zero without a line of its
+own code changing: all four edges were an implementation sitting beside the
+abstraction it implements instead of beside the dependency it holds, and each
+one that moved released a module that then became a crate — `obc-movement`,
+`obc-reflex`, `obc-fleet`, `obc-audio`, all four above it in this table. The
+spine did not get smaller. It stopped pointing and started being pointed at.
+
+Each carries the tests it had upstream. The counts below are the 747 unit tests
 plus the 4 doctests; until 2026-08-02 this line said "370 tests" and counted
 only the unit tests, which was the sort of quiet exclusion this page otherwise
 objects to.
@@ -270,6 +287,7 @@ CI now does both.
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 104 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
 | `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
+| `obc-spine` | the wire: an MQTT backbone between brain and nodes, a serial LoRa gateway and a LoRa mesh with a relay, the supervisor that decides a node is lost and escalates, a P2P transport over TCP and UDP, and the four sinks that put movement commands, reflex actions, speech and fleet assignments onto it. The host end of the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies and `firmware/` already implemented | 63 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
 | `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |
@@ -277,7 +295,7 @@ CI now does both.
 | `obc-tunnel` | Cloudflare, ngrok and Tailscale behind one interface, so a gateway on a home network can be reached without opening a port — the crate whose under-declared tokio features are why CI now compiles each crate alone | 14 |
 | `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
-| `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
+| `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — 3714 lines that needed no refactoring to move, and the largest piece here until the spine arrived | 55 |
 | `obc-reflex` | System 1: a rule language of conditions and actions evaluated against world memory without waking the model, with debounce, rate limits, an escalation budget and a pluggable action sink — the same evaluator that runs mirrored on the node, and the half of this page's reflex claim that had no host-side code here until now | 29 |
 | `obc-foresight` | Track 1: trend forecasts fitted to each entity's bitemporal history, and rules that fire on a *predicted* threshold crossing — `battery predicted ≤ 10% within 60s → return to base` acts while the pack is still at 20% and draining. Forecasts are written back into world memory, so a rule that fired on a bad forecast leaves the bad forecast behind as evidence | 11 |
 | `obc-learning` | the layer that authors rules nobody wrote: mine the history for conditions that repeatedly preceded a bad outcome, propose an anticipatory rule with support and confidence, and hold it **inert** until a human or policy approves it. The approval gate is asserted upstream against a real engine, which is why the count here is small | 4 |

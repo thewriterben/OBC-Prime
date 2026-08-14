@@ -75,7 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 688 tests across twenty-two
+    # source that is never compiled is a listing. 751 tests across twenty-three
+    # crates as of 2026-08-14, when obc-spine arrived — 5100 lines, the largest
+    # piece ever moved, and the host end of a conversation firmware/ has been
+    # holding up alone. Its blocking-edge count went four to zero with none of
+    # its own code changing; four implementations moved to it instead.
+    #
+    # 688 tests across twenty-two
     # crates as of 2026-08-14, when obc-approval arrived — the human-in-the-loop
     # gate, and the first extraction made after the cycle count reached zero.
     # With nothing left to unblock, the question went back to being what should
@@ -259,6 +265,35 @@ jobs:
             echo "expected a non-zero exit for an unknown demo"
             exit 1
           fi
+
+  # ── The vendored crates carry no known-vulnerable dependency ──────────────
+  # Added 2026-08-14 with obc-spine, and the timing is the argument.
+  #
+  # This repository has vendored and *run* the substrate for weeks, with a
+  # committed Cargo.lock, and had never once checked that lock against the
+  # advisory database. "We run what we document" was true about the tests and
+  # not about the dependencies.
+  #
+  # obc-spine is the crate that made the gap concrete. Upstream's audit went red
+  # on its extraction — not from anything new, but because the crate's manifest
+  # took rumqttc's default features where the workspace root had turned them off
+  # under a comment naming four RUSTSEC advisories in rustls-webpki. Cargo
+  # unifies features across a workspace, so one manifest asking for defaults
+  # re-enabled a vulnerable certificate stack everywhere, for MQTT-over-TLS that
+  # is never wired. Build, clippy, fmt and the whole suite stayed green.
+  #
+  # Here the manifest is vendored and hash-checked, so a repeat cannot arrive by
+  # drift — but it can arrive by an advisory published tomorrow against a crate
+  # already in the lock, which no upstream sync would announce.
+  audit:
+    name: no known-vulnerable dependency in the vendored substrate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - run: cargo audit
 
   peer:
     name: generator mirrors match
