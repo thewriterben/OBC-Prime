@@ -5,6 +5,48 @@ New entries go at the top.
 
 ---
 
+## 2026-08-13 — At eight occurrences it is a rule, not a knack
+
+An entry below, written yesterday, called turning an edge "the answer three
+times now" and listed three. It is eight. Recording that as its own entry rather
+than editing the count, because the number *is* the argument: three times is a
+run of luck, eight times is a shape the codebase reliably produces.
+
+| what left | what was in the way | what moved |
+|---|---|---|
+| `obc-movement` | `Arc<SpineClient>` in an actuator sink | the sink, to the spine |
+| `obc-a2a` | nothing referenced it | an executor, written next to the agent |
+| `obc-reflex` | `Arc<SpineClient>` in an action sink | the sink, to the spine |
+| `tools -> agent` | two `use` lines in a `#[cfg(test)]` module | the tests, to `tests/` |
+| `spine -> agent` | `Severity`, `DIGEST_PREFIX` in the notify module | the vocabulary, to `obc-reflex` |
+| `agent <-> skill_forge` | `impl ReplayExecutor for Agent`, next to the trait | the impl, next to the type |
+| `obc-fleet` | a 60-line MQTT bridge in the coordinator | the bridge, to the spine |
+| `obc-audio` | two `SpeechSink` impls with dependencies | both impls, to the spine and the tool layer |
+
+The shape: **a trait declared next to its caller, implemented next to its
+caller, for a type that lives somewhere else.** Rust permits the implementation
+in either place as long as one of them owns the trait, so the compiler never
+objects. Only the dependency graph does, and only if something is looking.
+
+Three of the eight were not production code at all — two test modules and a doc
+comment. That is the least intuitive part and worth stating plainly: a `use`
+line inside `#[cfg(test)]` and a rustdoc link are both dependency edges, and a
+graph built from text cannot tell either one from a call in a hot loop.
+
+`obc-fleet` is a genuinely different animal, and it is why this is a new entry
+rather than `s/three/eight/`. The others were each one thing in the wrong place.
+That one was the *same integration implemented from both ends* — the coordinator
+bridging itself onto MQTT, while the spine was already bridging LoRa into the
+coordinator from its own side. Both halves looked reasonable where they sat.
+Neither is a mistake anyone made; it is what happens when two modules are each
+maintained by someone who reasonably believes the integration is theirs.
+
+The actionable consequence: **when a two-module cycle resists the "one misplaced
+item" reading, look for a duplicated responsibility before looking for a design
+problem.** It was faster to find than either.
+
+---
+
 ## 2026-08-13 — Two crates arrived that nobody decided to move
 
 `obc-foresight` (677 lines) and `obc-learning` (454) are here, and this entry

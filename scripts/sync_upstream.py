@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (11 of the 43 artifacts).
+        also updates the generator app's mirrors (12 of the 157 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -650,6 +650,76 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-learning/src/lib.rs",
      "crates/obc-learning/src/lib.rs",
+     None),
+
+    # ── Three crates that came out of cutting cycles ─────────────────────────
+    # Vendored 2026-08-13: the nineteenth, twentieth and twenty-first. They
+    # arrived differently from everything above them, and the difference is the
+    # story of the day upstream.
+    #
+    # Every crate before these left because it was *separable* — measured, found
+    # loose, moved. These three were not loose. They came out of a deliberate
+    # attack on the dependency cycles in the core, and each one was released by
+    # turning a single edge around:
+    #
+    #   obc-fleet    a 60-line MQTT bridge sitting in the coordinator. Moved to
+    #                the spine, where the transport is, and where `lora_mesh`
+    #                was already bridging the *other* transport into the same
+    #                coordinator from that side. The same integration had been
+    #                built from both ends and only one end was the transport.
+    #
+    #   obc-audio    two `SpeechSink` implementations, one holding a
+    #                `SpineClient` and one holding a `TextToSpeechTool`. The
+    #                trait stayed; the implementations went to the spine and the
+    #                tool layer. `LoggingSpeechSink` stayed too, because it
+    #                depends on nothing, which is exactly what qualifies it as
+    #                the safe default.
+    #
+    #   obc-mission  nothing, in the end. It reached zero blocking edges the
+    #                moment obc-audio left — it had been holding an
+    #                `AudioController` so a mission can speak.
+    #
+    # `obc-fleet` is the coordinator: a node registry, a task auction that
+    # allocates by cost rather than by turn, and frontier exploration with a
+    # minimum separation so two robots do not crowd one pocket. `NodeState`
+    # comes from obc-telemetry, which is why that crate is a dependency here.
+    #
+    # `obc-audio` is hearing and speaking recorded into world memory as facts
+    # with an `Origin`, so what the agent *said* is evidence on the same footing
+    # as what it heard.
+    #
+    # `obc-mission` is an ordered sequence of guarded steps advanced against
+    # world memory, so a multi-step job survives a restart and can say where it
+    # got to.
+    #
+    # A note on what is *not* claimed. Upstream's cycle count went from 25 to
+    # sixteen across this work, not to zero — a measurement script was reporting
+    # zero because of a regex bug that made every edge into the config module
+    # invisible. That is written up in upstream's docs/ENDGAME.md rather than
+    # summarised here, because a number this repository cannot re-run is a
+    # number it should not print.
+    ("crates/obc-fleet/Cargo.toml",
+     "crates/obc-fleet/Cargo.toml",
+     None),
+    ("crates/obc-fleet/src/lib.rs",
+     "crates/obc-fleet/src/lib.rs",
+     None),
+
+    ("crates/obc-audio/Cargo.toml",
+     "crates/obc-audio/Cargo.toml",
+     None),
+    ("crates/obc-audio/src/lib.rs",
+     "crates/obc-audio/src/lib.rs",
+     None),
+    ("crates/obc-audio/src/suite.rs",
+     "crates/obc-audio/src/suite.rs",
+     None),
+
+    ("crates/obc-mission/Cargo.toml",
+     "crates/obc-mission/Cargo.toml",
+     None),
+    ("crates/obc-mission/src/lib.rs",
+     "crates/obc-mission/src/lib.rs",
      None),
 
     # ── The agent watching itself ────────────────────────────────────────────
@@ -1299,7 +1369,8 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
     if carried:
         # Printed every run, like the `check --upstream` skips. A sync that
         # quietly declines to sync part of what it lists is worse than one that
-        # fails: the summary line would say 43 artifacts and mean 36.
+        # fails: on 2026-07-30 the summary line would have said 43 artifacts
+        # and meant 36.
         print(f"{YELLOW}kept{RESET} {len(carried)} artifact(s) the upstream checkout "
               f"does not carry — hashes unchanged, not re-copied:")
         for local, why in carried:

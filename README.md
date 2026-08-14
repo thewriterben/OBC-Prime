@@ -15,12 +15,12 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but eighteen crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but twenty-one crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
 > `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
 > `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api`, `obc-reflex`,
-> `obc-foresight` and `obc-learning`
-> are here, vendored and hash-checked, and CI builds and tests them: **632
+> `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission`
+> are here, vendored and hash-checked, and CI builds and tests them: **653
 > tests** covering the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
@@ -35,13 +35,20 @@ the reflex layer keeps working when the brain is unreachable.
 > claimed since its first paragraph and could not show until now — plus the
 > predictive layer above it, which fires on a *forecast* threshold crossing
 > instead of a present one, and the layer above that, which mines the history
-> for rules nobody wrote and holds them inert until someone approves them.
+> for rules nobody wrote and holds them inert until someone approves them —
+> plus, as of 2026-08-13, the multi-node coordinator that decides which robot
+> takes which task, the audio suite that records what was heard and said as
+> facts on the same footing, and the mission runner that advances a guarded
+> sequence of steps across restarts.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
 > built as a test target links its dev-dependencies and can hide a dependency it
 > genuinely needs. Both distinctions were found by a crate walking through the
-> weaker check: obc-tunnel on the features, obc-a2a on the dev-dependency.
+> weaker check: obc-tunnel on the features, obc-a2a on the dev-dependency, and
+> obc-mission on the same distinction read backwards — `cargo check -p` green
+> while `cargo test -p --all-targets` failed on four `#[tokio::test]`
+> attributes a check never builds. Three crates, three ways through, one job.
 > The firmware is here in full — see [firmware/](firmware/README.md) — so there
 > is something to flash and watch today, and `cargo run -p obc-demo` runs the
 > safety gate, the planner and the perception gate on the host. What is still
@@ -170,7 +177,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 632 tests
+cargo test --workspace     # 653 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -189,17 +196,19 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "632 tests pass" and "you can see it refuse" are different
+That matters because "653 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Eighteen pieces have moved, most chosen by measuring what was separable rather
-than what sounded impressive, and each carrying the tests it had upstream. Two
-of the eighteen were not chosen at all — see `obc-foresight` and `obc-learning`
-below, which fell out of the crate before them. The
-counts below are the 628 unit tests plus the 4 doctests; this line said "370
-tests" and counted only the unit tests, which was the sort of quiet exclusion
-this page otherwise objects to.
+Twenty-one pieces have moved, and how they were chosen changed partway through.
+The first eighteen were chosen by measuring what was separable — and two of
+those were not chosen at all, `obc-foresight` and `obc-learning`, which fell out
+of the crate before them. The last three were not separable when the day
+started. They came out of upstream going after the dependency *cycles*
+deliberately, and each was released by turning one edge around. Each carries the
+tests it had upstream. The counts below are the 649 unit tests plus the 4
+doctests; until 2026-08-02 this line said "370 tests" and counted only the unit
+tests, which was the sort of quiet exclusion this page otherwise objects to.
 
 **If you want to write something rather than read something, start with
 `obc-tool-api`.** It is 175 lines and no implementation: the `Tool` trait, the
@@ -254,9 +263,12 @@ CI now does both.
 | `obc-a2a` | Google's Agent-to-Agent v1.0: the wire types, the JSON-RPC task lifecycle and the HTTP transport, so another agent can discover this one and send it work — 5 of its tests drive a real socket | 23 |
 | `obc-movement` | the act side of perceive→remember→reflex→act: typed actuator commands bounded by the Track 0 gate *before* they reach hardware, recorded into world memory as `actuator.{name}` facts, dispatched through a pluggable sink — the caller `obc-safety`'s limit table exists to constrain | 14 |
 | `obc-navigation` | Monte Carlo localization against a beam model and likelihood field, pose-graph SLAM with loop closure, occupancy and inflation cost maps, A* with an admissible heuristic, frontier exploration, pose fusion — the largest piece moved so far, and the one that needed no refactoring to move | 55 |
-| `obc-reflex` | System 1: a rule language of conditions and actions evaluated against world memory without waking the model, with debounce, rate limits, an escalation budget and a pluggable action sink — the same evaluator that runs mirrored on the node, and the half of this page's reflex claim that had no host-side code here until now | 28 |
+| `obc-reflex` | System 1: a rule language of conditions and actions evaluated against world memory without waking the model, with debounce, rate limits, an escalation budget and a pluggable action sink — the same evaluator that runs mirrored on the node, and the half of this page's reflex claim that had no host-side code here until now | 29 |
 | `obc-foresight` | Track 1: trend forecasts fitted to each entity's bitemporal history, and rules that fire on a *predicted* threshold crossing — `battery predicted ≤ 10% within 60s → return to base` acts while the pack is still at 20% and draining. Forecasts are written back into world memory, so a rule that fired on a bad forecast leaves the bad forecast behind as evidence | 11 |
 | `obc-learning` | the layer that authors rules nobody wrote: mine the history for conditions that repeatedly preceded a bad outcome, propose an anticipatory rule with support and confidence, and hold it **inert** until a human or policy approves it. The approval gate is asserted upstream against a real engine, which is why the count here is small | 4 |
+| `obc-fleet` | multi-node coordination: a registry of who is where with how much left, a task auction that allocates by cost rather than by turn, and frontier exploration handed out with a minimum separation so two robots do not crowd one pocket. Knows nothing about how a node is reached — the MQTT bridge that used to live here is on the transport's side now | 9 |
+| `obc-audio` | hearing and speaking, both recorded into world memory as facts with an `Origin` — so what the agent *said* is evidence on the same footing as what it heard. Ships the `SpeechSink` trait and the one implementation that depends on nothing, which is what makes audio output a safe dry run until a real engine is wired | 6 |
+| `obc-mission` | an ordered sequence of guarded steps advanced against world memory, so a multi-step job survives a restart and can say where it got to | 5 |
 | `obc-tool-api` | the contract, with no implementation: the `Tool` trait, `ToolResult`, and the Track 0 vocabulary a tool declares about itself. The smallest crate here and the one to read first if you intend to write a tool | 0 |
 | `obc-cost` | what the agent spends: per-call token accounting in SQLite, daily budgets and the warning before the ceiling — so "bring your own model" comes with a number attached rather than a surprise | 8 |
 | `obc-paths` | where data lives, resolved in one place | 6 |
@@ -327,6 +339,34 @@ no `use` line anywhere in it — both call sites write `anyhow::Result<…>` inl
 in a return type. That is the same shape that made upstream's extractability
 survey report the config module as edge-free in its first version. No amount of
 reading imports finds it; `cargo check -p obc-learning` found it in seconds.
+
+`obc-fleet`, `obc-audio` and `obc-mission` arrived on 2026-08-13 and were chosen
+differently from everything above them. Every crate before them left because it
+was found to be separable. These three were not separable that morning. They
+came out of upstream going after the dependency *cycles* directly, and each was
+released by turning one edge around:
+
+| crate | what was holding it | what moved |
+|---|---|---|
+| `obc-fleet` | a 60-line MQTT bridge inside the coordinator | the bridge, to the spine |
+| `obc-audio` | two `SpeechSink` impls, one holding a spine client, one a TTS tool | both impls, to the spine and the tool layer |
+| `obc-mission` | `obc-audio` | nothing — it came free |
+
+`obc-fleet` is the one worth reading twice. The bridge it was carrying —
+heartbeat ingress, assignment topic and payload — was a second implementation of
+an integration the spine was *already* doing from its own side for the LoRa
+transport. Two ends, one integration, and only one of the ends was the
+transport. That is what a two-module cycle often turns out to be, and it is less
+comfortable than a misplaced file, because both halves looked reasonable where
+they sat.
+
+What this repository is deliberately not printing: a cycle count. Upstream has
+one and it moved a long way, but it also found that the script producing it had
+been treating the config module as already-extracted — a regex with an optional
+group matching `pub use config::Config;` — which made every edge *into* config
+invisible and every count low. That is written up in upstream's
+`docs/ENDGAME.md`. A number this repository cannot re-run is a number it should
+not repeat, and the correction is more useful than the figure anyway.
 
 `obc-observability` is the smallest honest thing in the
 list: no claim on this page rests on it. It is here because it was next by the

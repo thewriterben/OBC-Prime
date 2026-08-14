@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-13T17:41:54+00:00",
+  "generated": "2026-08-13T22:57:42+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -368,8 +368,8 @@
       "bytes": 2376
     },
     "crates/obc-reflex/src/lib.rs": {
-      "sha256": "68b4dfdb18076c4fcbe304145465841443eddcdd9ec58beb9f7432320315ffc3",
-      "bytes": 49480
+      "sha256": "210d6224694cc98a808f81edfdf1760d828725944b6498e21d1bf20bcbf93398",
+      "bytes": 52715
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -386,6 +386,34 @@
     "crates/obc-learning/src/lib.rs": {
       "sha256": "bdbc8acd66161fa9fbdbe847df45459e7d3f924b973dccff48fa0fcb8f8b5f7b",
       "bytes": 14821
+    },
+    "crates/obc-fleet/Cargo.toml": {
+      "sha256": "cbd4ed10a1c4ca3f64f20bd68e9c8a9a8163435575c998ae592d856060a8c53b",
+      "bytes": 2573
+    },
+    "crates/obc-fleet/src/lib.rs": {
+      "sha256": "797a121fd1d7306a95081bbd4eee808f1664d2c3f4ef9bf984848077a5594055",
+      "bytes": 27536
+    },
+    "crates/obc-audio/Cargo.toml": {
+      "sha256": "4a0222e9ddd3a048e845b00e7220186b845a2c3b7485cdcd23257c5a43c96dcd",
+      "bytes": 2360
+    },
+    "crates/obc-audio/src/lib.rs": {
+      "sha256": "3d9aecfb25cf9d3701f0aa558c327241da6e46747893e1dba41a0c280d0506ef",
+      "bytes": 1682
+    },
+    "crates/obc-audio/src/suite.rs": {
+      "sha256": "8db2bdbf14f2713ca21304d78e5864eb7a68c072ff9f8b3897c55dbaca544a75",
+      "bytes": 10107
+    },
+    "crates/obc-mission/Cargo.toml": {
+      "sha256": "a62a35e2b4d4680dca21ec17ce93633593f1ac1c041156a3d1e46b0ae15dccf5",
+      "bytes": 2776
+    },
+    "crates/obc-mission/src/lib.rs": {
+      "sha256": "8d55606d77bce94aabc0e445675ee6f550aee899fdca08fbc9e8ef5b9b1168ab",
+      "bytes": 19987
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",

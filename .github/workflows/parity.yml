@@ -75,8 +75,19 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 632 tests across eighteen
-    # crates as of 2026-08-13, when obc-foresight and obc-learning arrived —
+    # source that is never compiled is a listing. 653 tests across twenty-one
+    # crates as of 2026-08-13, when obc-fleet, obc-audio and obc-mission
+    # arrived — the first three chosen by attacking dependency cycles rather
+    # than by finding something already separable. A bridge moved to the
+    # transport, two sinks moved to what they depend on, and a mission runner
+    # came free behind them.
+    #
+    # obc-mission is also why this job's second half exists, read backwards:
+    # `cargo check -p obc-mission` was green while `cargo test -p --all-targets`
+    # failed on four #[tokio::test] attributes a check never builds. obc-tunnel
+    # went through on features, obc-a2a on a dev-dependency hiding a real one,
+    # and this one on a real build hiding a missing dev one.
+    # 632 across eighteen the same day, when obc-foresight and obc-learning arrived —
     # Track 1 and the layer that authors its own rules. Neither was chosen:
     # learning was blocked by foresight, foresight by reflex, and reflex by one
     # action sink holding an Arc<SpineClient>. 2455 lines came out from behind
@@ -186,6 +197,31 @@ jobs:
             exit 1
           fi
 
+      # Every count this repository states about itself matches what was just
+      # measured: tests from the harness, artifacts and generator mirrors from
+      # sync_upstream.ARTIFACTS.
+      #
+      # Added 2026-08-13, and then immediately widened. The first version
+      # checked test counts in four named files, because the miss that prompted
+      # it was two stale test counts. It could not have caught what came next:
+      # on 2026-08-13 `parity/README.md` told a reader the sync "copies all 43
+      # artifacts here, updates the generator's 11 mirrors" (2026-08-13) — 157
+      # and 12 — and repeated both figures in sync_upstream.py's own docstring.
+      # Wrong metric, wrong files. This version derives the numbers and the
+      # file set instead.
+      #
+      # (Those two lines carry a date because this gate flagged them on the run
+      # that added it. Quoting a number you have just corrected is the one case
+      # where the escape hatch is the right answer rather than a dodge.)
+      #
+      # It also skips more than it checks, on purpose: vendored prose (belongs
+      # upstream), the append-only logs (PLAN.md, DECISIONS.md, MIGRATION.md —
+      # their numbers are old by construction), dated lines, and the
+      # generator's own npm counts. Twelve of the first sixteen hits were noise,
+      # and a gate that cries wolf is a gate someone turns off.
+      - name: every stated count is current
+        run: python3 scripts/check_counts.py
+
   # ── The demos still run ───────────────────────────────────────────────────
   # demo/ is the only Rust here written rather than vendored, and its whole
   # purpose is that a stranger can watch a claim hold instead of reading that it
@@ -220,8 +256,8 @@ jobs:
   peer:
     name: generator mirrors match
     runs-on: ubuntu-latest
-    # Covers the 11 artifacts the generator also carries (registry, fixtures,
-    # wasm); the 32 firmware files have no peer copy.
+    # Covers the generator's 12 mirrors (registry, firmware templates, fixtures,
+    # wasm); the 33 firmware files have no peer copy.
     #
     # **The generator repository is private.** Settled 2026-07-30 by running this
     # job, not by reading anything: it failed on the peer checkout, and setting
@@ -282,7 +318,7 @@ jobs:
     # sources passes by construction. Both happened. `crates/obc-memory/src/image.rs`
     # sat here for two commits after upstream deleted it, compiling into the
     # `substrate` job, with every gate green; and the WASM bundle was six weeks
-    # stale while all 43 artifacts reported identical.
+    # stale on 2026-07-29 while all 43 artifacts reported identical.
     #
     # Enabled 2026-07-30, once the two things blocking it were actually solved
     # rather than noted:

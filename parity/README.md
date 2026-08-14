@@ -109,8 +109,8 @@ cloned them as. Use your actual paths.
 
 ## Putting everything back in step
 
-One command. It rebuilds the WASM in the core repo, copies all 43 artifacts
-here, updates the generator's 11 mirrors, and records what the bundle was
+One command. It rebuilds the WASM in the core repo, copies all 157 artifacts
+here, updates the generator's 12 mirrors, and records what the bundle was
 compiled from:
 
 ```bash

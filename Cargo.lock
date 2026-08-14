@@ -2037,6 +2037,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-audio"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "obc-memory",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "obc-conscience"
 version = "0.1.0"
 dependencies = [
@@ -2071,6 +2084,17 @@ dependencies = [
  "obc-navigation",
  "obc-safety",
  "tokio",
+]
+
+[[package]]
+name = "obc-fleet"
+version = "0.1.0"
+dependencies = [
+ "obc-memory",
+ "obc-navigation",
+ "obc-telemetry",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2114,6 +2138,21 @@ dependencies = [
  "tempfile",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "obc-mission"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "obc-audio",
+ "obc-memory",
+ "obc-navigation",
+ "obc-reflex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
