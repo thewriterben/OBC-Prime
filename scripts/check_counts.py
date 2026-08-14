@@ -83,6 +83,18 @@ import sync_upstream  # noqa: E402
 DATE = re.compile(r"20\d\d-\d\d-\d\d")
 HEADING = re.compile(r"^\s*#{1,6}\s")
 
+# What ends a paragraph, besides a blank line.
+#
+# A comment block has no blank lines in it — the `#` column is unbroken from
+# the first line to the last — so a sixteen-line block was one paragraph, and
+# one date anywhere in it excluded every number in the block. That is not a
+# hypothetical: `Cargo.toml` said "653 tests" for a tree running 658, three
+# lines above a sentence dated 2026-08-13, and this gate printed ok.
+#
+# Comment blocks are paragraphed the way their authors already write them:
+# a bare marker (`#`, `//`, `--`) or a rule of dashes on its own line.
+PARA_BREAK = re.compile(r"^\s*(?:#|//|--)\s*[-─━═—=*_]*\s*$")
+
 # Append-only records. See the docstring: their numbers are meant to be old.
 LOGS = {"PLAN.md", "docs/DECISIONS.md", "docs/MIGRATION.md"}
 
@@ -141,9 +153,16 @@ def stale(rel: str) -> list[tuple[int, str, int, str]]:
     cost two rounds of chasing before the rule was written this way. A
     blank-line-delimited block carrying a date anywhere in it is a record.
 
-    The trade: a long block with one date in it can hide a live number. That is
-    the same trade the heading rule already makes, and it is the reason both
-    rules prefer small blocks. It is written here rather than discovered again.
+    The trade was written here first as a known risk — "a long block with one
+    date in it can hide a live number" — and then collected on 2026-08-14. A
+    comment block has no blank lines, so `Cargo.toml`'s sixteen-line header was
+    a single paragraph, and the date in its fourth sentence excluded the "653
+    tests" in its second. Knowing about a hole is not the same as closing it.
+
+    So a paragraph now also ends at a bare comment marker or a rule of dashes,
+    which is how comment blocks are already punctuated, and the heading rule is
+    applied only to Markdown — in a .toml or .py file every comment line
+    matched it.
     """
     try:
         lines = (ROOT / rel).read_text(encoding="utf-8").splitlines()
@@ -153,16 +172,22 @@ def stale(rel: str) -> list[tuple[int, str, int, str]]:
     # Pre-pass: which paragraph is each line in, and is that paragraph dated?
     para_of, dated_para, para = [], {}, 0
     for line in lines:
-        if not line.strip():
+        if not line.strip() or PARA_BREAK.match(line):
             para += 1
         para_of.append(para)
         if DATE.search(line):
             dated_para[para] = True
 
+    # The heading rule is a Markdown rule. In a .toml, .py or .yml file every
+    # comment line matches `^#{1,6}\s`, so "the section is dated" was being
+    # decided by whichever comment line came last — a rule with no meaning
+    # outside the syntax it was written for.
+    markdown = rel.endswith(".md")
+
     hits, dated_section = [], False
     for idx, line in enumerate(lines):
         i = idx + 1
-        if HEADING.match(line):
+        if markdown and HEADING.match(line):
             dated_section = bool(DATE.search(line))
         if dated_section or dated_para.get(para_of[idx]) or FOREIGN.search(line):
             continue

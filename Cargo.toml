@@ -3,13 +3,18 @@
 # These are copies, verified by SHA-256 against the core repository — the same
 # arrangement as `registry/`, `parity/fixtures/`, `wasm/` and `firmware/`. What
 # makes them different is that this repository can *run* them: `cargo test
-# --workspace` here executes 653 tests of real agent code, so the public project
+# --workspace` here executes 658 tests of real agent code, so the public project
 # checks the substrate it documents instead of describing one it cannot build.
 #
 # That number said 473 until 2026-08-13 — true when six crates were vendored,
 # and left behind by every sync since. It was missed by the same sync that
 # existed to correct the README's stale count, which is the argument for
 # grepping for a figure rather than updating the copy you remember.
+#
+# Then it said 653 for a day, through a sync that took the tree to 658, while
+# `check_counts.py` printed ok — this comment block has no blank lines in it,
+# so the date on the line above was excluding every number in the block from
+# the gate. Fixed 2026-08-14 by ending a paragraph at a bare `#` as well.
 #
 # Do not edit these by hand. Change them upstream, then
 # `python scripts/sync_upstream.py sync --upstream ../Oh-Ben-Claw`; the drift
