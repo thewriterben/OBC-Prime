@@ -5,6 +5,49 @@ New entries go at the top.
 
 ---
 
+## 2026-08-13 — A crate owns its own configuration block, and that was the whole endgame
+
+Recorded here because this repository has been following the rule since its
+third crate without ever writing it down, and upstream's last seven dependency
+cycles turned out to be the four places it had not been applied.
+
+**The rule.** A module's configuration struct lives with the module. The root
+`Config` composes it. `obc-planner` owns `DeploymentConfig`, `obc-conscience`
+owns `ConscienceConfig`, `obc-cost` owns `CostConfig`, `obc-tunnel` owns its
+own — every crate vendored here already works this way, which is why none of
+them needed the root config module to exist in order to compile alone.
+
+**What it cost to have four exceptions.** `ProviderConfig` was defined in the
+root config module while two of its own field types lived in `providers`, and
+all ten provider files imported the struct back. One struct, split across two
+modules, pointing both ways — three cycles. `SpineConfig` and
+`MeshSupervisorConfig` were four references and the entire dependency of a
+5100-line module on anything else in the tree — four more cycles.
+`AutonomyConfig` was two.
+
+Moving each one to the module that reads it took the core from sixteen cycles
+to zero. No interfaces were designed and no logic changed.
+
+**Why it matters to a reader of this repository specifically.** The reason every
+crate here can be built and tested with no siblings is this rule, applied by
+accident at first and then on purpose. A crate that reaches into a central
+config module for its own settings cannot stand alone, and the `substrate` job
+would catch it — but only after someone had already written it that way. The
+rule is the thing that stops it being written.
+
+**One correction worth keeping**, because it is the argument for measuring
+rather than reasoning. Upstream put `AutonomyLevel` and `AutonomyConfig` in
+`agent` first, since the agent reads them. The cycle count stopped at two
+instead of zero. Autonomy *level* is the approval policy — how much a human has
+to confirm — and `approval` is the module that turns it into an
+`ApprovalManager`. One module further, and the count went to zero.
+
+The rule was right and the noun was wrong, and the instrument said so within
+minutes. That is the more useful half of "measure rather than judge": not
+measuring to prove you were right, but measuring so that being wrong is cheap.
+
+---
+
 ## 2026-08-13 — At eight occurrences it is a rule, not a knack
 
 An entry below, written yesterday, called turning an edge "the answer three
