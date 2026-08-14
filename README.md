@@ -15,13 +15,15 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-one crates of it now are. `obc-paths`, `obc-memory`,
+> repository** — but twenty-two crates of it now are. `obc-paths`, `obc-memory`,
 > `obc-planner`, `obc-safety`, `obc-telemetry`, `obc-observability`,
-> `obc-scheduler`, `obc-conscience`, `obc-position`, `obc-cost`, `obc-tunnel`,
-> `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api`, `obc-reflex`,
-> `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission`
-> are here, vendored and hash-checked, and CI builds and tests them: **658
-> tests** covering the bitemporal world model, the deployment planner the parity
+> `obc-scheduler`, `obc-conscience`, `obc-approval`, `obc-position`, `obc-cost`,
+> `obc-tunnel`, `obc-a2a`, `obc-movement`, `obc-navigation`, `obc-tool-api`,
+> `obc-reflex`, `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and
+> `obc-mission` are here, vendored and hash-checked, and CI builds and tests
+> them: **688 tests**.
+>
+> They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
 > perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
 > / sensor suites that feed the reflexes, the spans and counters the agent
@@ -40,6 +42,12 @@ the reflex layer keeps working when the brain is unreachable.
 > takes which task, the audio suite that records what was heard and said as
 > facts on the same footing, and the mission runner that advances a guarded
 > sequence of steps across restarts.
+>
+> And, as of 2026-08-14, the gate in front of all of it: three autonomy levels
+> and a per-call check that reads a tool's declared risk class before asking a
+> person, with "yes, always" written to disk so it means what it says after a
+> restart. Everything else here bounds what the agent *may* do. This is the
+> part that decides when it has to ask first.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -177,7 +185,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 658 tests
+cargo test --workspace     # 688 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -196,19 +204,25 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "658 tests pass" and "you can see it refuse" are different
+That matters because "688 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Twenty-one pieces have moved, and how they were chosen changed partway through.
-The first eighteen were chosen by measuring what was separable — and two of
-those were not chosen at all, `obc-foresight` and `obc-learning`, which fell out
-of the crate before them. The last three were not separable when the day
-started. They came out of upstream going after the dependency *cycles*
-deliberately, and each was released by turning one edge around. Each carries the
-tests it had upstream. The counts below are the 654 unit tests plus the 4
-doctests; until 2026-08-02 this line said "370 tests" and counted only the unit
-tests, which was the sort of quiet exclusion this page otherwise objects to.
+Twenty-two pieces have moved, and how they were chosen changed twice. The first
+eighteen were chosen by measuring what was separable — and two of those were not
+chosen at all, `obc-foresight` and `obc-learning`, which fell out of the crate
+before them. The next three were not separable when that day started: they came
+out of upstream going after the dependency *cycles* deliberately, and each was
+released by turning one edge around. `obc-approval` is the first chosen under
+neither rule. It left after the cycle count had already reached zero, which
+means the question stopped being "what can come out" and went back to being
+"what should be public" — and a gate deciding when a person has to confirm an
+action is a claim a reader cannot check by reading a paragraph about it.
+
+Each carries the tests it had upstream. The counts below are the 684 unit tests
+plus the 4 doctests; until 2026-08-02 this line said "370 tests" and counted
+only the unit tests, which was the sort of quiet exclusion this page otherwise
+objects to.
 
 **If you want to write something rather than read something, start with
 `obc-tool-api`.** It is 175 lines and no implementation: the `Tool` trait, the
@@ -255,6 +269,7 @@ CI now does both.
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 104 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
+| `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
 | `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |

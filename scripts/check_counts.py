@@ -95,6 +95,25 @@ HEADING = re.compile(r"^\s*#{1,6}\s")
 # a bare marker (`#`, `//`, `--`) or a rule of dashes on its own line.
 PARA_BREAK = re.compile(r"^\s*(?:#|//|--)\s*[-─━═—=*_]*\s*$")
 
+# Dropped when lines are joined into a paragraph, so that a phrase wrapped over
+# a newline reads as one phrase. On 2026-08-14 `**658` / `> tests**` was one
+# claim to a person and two lines to a regex, and was wrong for a day.
+PREFIX = re.compile(r"^\s*(?:>+|#+|//|\*)?\s*")
+
+# Where a sentence ends, once a paragraph has been joined back together.
+#
+# "Historical" is a property of a *sentence*, not of the block it sits in. That
+# was not the first rule here: it was per line, then per paragraph, and both
+# were wrong in the same direction — per line because prose wraps and a date
+# lands one line away from its number, per paragraph because a sixteen-line
+# comment header and a thirty-line README blockquote are each one paragraph,
+# and one date in either excused every figure in it. Both were caught the same
+# way on 2026-08-14, by a stale count sitting quietly inside a dated block.
+#
+# Joining first is what makes the narrow rule affordable: the wrap that broke
+# per-line matching is gone before the sentence is read.
+SENTENCE_END = re.compile(r"[.!?][\"'’)\]]*\s")
+
 # Append-only records. See the docstring: their numbers are meant to be old.
 LOGS = {"PLAN.md", "docs/DECISIONS.md", "docs/MIGRATION.md"}
 
@@ -155,28 +174,35 @@ def stale(rel: str) -> list[tuple[int, str, int, str]]:
 
     The trade was written here first as a known risk — "a long block with one
     date in it can hide a live number" — and then collected on 2026-08-14. A
-    comment block has no blank lines, so `Cargo.toml`'s sixteen-line header was
-    a single paragraph, and the date in its fourth sentence excluded the "653
-    tests" in its second. Knowing about a hole is not the same as closing it.
+    comment block has no blank lines, so on 2026-08-14 `Cargo.toml`'s
+    sixteen-line header was a single paragraph, and the date in its fourth
+    sentence excluded the "653 tests" in its second. Knowing about a hole is
+    not the same as closing it.
 
     So a paragraph now also ends at a bare comment marker or a rule of dashes,
     which is how comment blocks are already punctuated, and the heading rule is
     applied only to Markdown — in a .toml or .py file every comment line
     matched it.
+
+    Matching is done against the paragraph, not the line, for the same reason
+    the *date* rule already was. The README's status blockquote wrapped as
+    "**658" / "> tests**", and no line-anchored regex can see a phrase split
+    over a newline — it said 658 while the tree ran 688 and the gate was quiet
+    about it on 2026-08-14. Lines are joined with a space and their leading
+    `>`, `#`, `//` or `*` markers dropped, so the text a person reads is the
+    text this scans; matches are reported against the line they start on.
     """
     try:
         lines = (ROOT / rel).read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
         return []
 
-    # Pre-pass: which paragraph is each line in, and is that paragraph dated?
-    para_of, dated_para, para = [], {}, 0
+    # Pre-pass: which paragraph is each line in?
+    para_of, para = [], 0
     for line in lines:
         if not line.strip() or PARA_BREAK.match(line):
             para += 1
         para_of.append(para)
-        if DATE.search(line):
-            dated_para[para] = True
 
     # The heading rule is a Markdown rule. In a .toml, .py or .yml file every
     # comment line matches `^#{1,6}\s`, so "the section is dated" was being
@@ -184,18 +210,36 @@ def stale(rel: str) -> list[tuple[int, str, int, str]]:
     # outside the syntax it was written for.
     markdown = rel.endswith(".md")
 
-    hits, dated_section = [], False
+    # Which lines are eligible at all, grouped by paragraph, in order.
+    eligible, dated_section = {}, False
     for idx, line in enumerate(lines):
-        i = idx + 1
         if markdown and HEADING.match(line):
             dated_section = bool(DATE.search(line))
-        if dated_section or dated_para.get(para_of[idx]) or FOREIGN.search(line):
+        if dated_section or FOREIGN.search(line):
             continue
+        if line.strip():
+            eligible.setdefault(para_of[idx], []).append(idx)
+
+    hits = []
+    for idxs in eligible.values():
+        # Join the paragraph the way it reads, remembering where each line
+        # started so a match can be reported against a real line number.
+        text, starts = "", []
+        for idx in idxs:
+            starts.append((len(text), idx))
+            text += PREFIX.sub("", lines[idx]) + " "
+
+        ends = [m.end() for m in SENTENCE_END.finditer(text)]
         for name, pat in PATTERNS:
-            for m in pat.finditer(line):
+            for m in pat.finditer(text):
+                lo = max((e for e in ends if e <= m.start()), default=0)
+                hi = min((e for e in ends if e > m.start()), default=len(text))
+                if DATE.search(text, lo, hi):      # the sentence is a record
+                    continue
+                idx = next(i for off, i in reversed(starts) if off <= m.start())
                 stated = int(next(g for g in m.groups() if g))
-                hits.append((i, name, stated, line.strip()))
-    return hits
+                hits.append((idx + 1, name, stated, lines[idx].strip()))
+    return sorted(hits)
 
 
 def main() -> int:

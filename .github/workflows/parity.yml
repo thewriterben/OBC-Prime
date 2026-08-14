@@ -75,7 +75,14 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 653 tests across twenty-one
+    # source that is never compiled is a listing. 688 tests across twenty-two
+    # crates as of 2026-08-14, when obc-approval arrived — the human-in-the-loop
+    # gate, and the first extraction made after the cycle count reached zero.
+    # With nothing left to unblock, the question went back to being what should
+    # be public rather than what could come out: "a person confirms risky
+    # actions" is not a claim a reader can check by reading it.
+    #
+    # 653 tests across twenty-one
     # crates as of 2026-08-13, when obc-fleet, obc-audio and obc-mission
     # arrived — the first three chosen by attacking dependency cycles rather
     # than by finding something already separable. A bridge moved to the
