@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 215 artifacts).
+        also updates the generator app's mirrors (12 of the 222 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -1044,6 +1044,49 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-tools/src/lib.rs",
      None),
 
+    # ── The camera pipeline ──────────────────────────────────────────────────
+    # Vendored 2026-08-14. ClawCam detection ingest, rules over what was seen,
+    # spatial projection into the site frame, analytics over the record, and
+    # gated actuation from a detection.
+    #
+    # This is the crate `docs/CONSCIENCE.md` is about. That document describes
+    # gating what the agent may *observe* -- a consent registry, default-deny
+    # for humans, a fail-closed label classifier -- and until now the pipeline
+    # being gated was not here. `clawcam_ingest` names the decision log
+    # directly: the gate runs before the frame reaches world memory, and the
+    # refusal is written where a reader can replay it.
+    #
+    # A camera is the sharpest case for that claim and the easiest to get wrong,
+    # which is why it is worth being able to run rather than read about. Forty
+    # nine tests here.
+    #
+    # It also arrived without dragging the line: every crate it depends on --
+    # audio, conscience, foresight, mcp, memory, navigation, reflex, safety,
+    # telemetry -- was already vendored. That is not luck so much as the same
+    # fact from the practical side; a crate that backs a document tends to sit
+    # among the others that do.
+    ("crates/obc-vision/Cargo.toml",
+     "crates/obc-vision/Cargo.toml",
+     None),
+    ("crates/obc-vision/src/lib.rs",
+     "crates/obc-vision/src/lib.rs",
+     None),
+    ("crates/obc-vision/src/clawcam_actuate.rs",
+     "crates/obc-vision/src/clawcam_actuate.rs",
+     None),
+    ("crates/obc-vision/src/clawcam_analytics.rs",
+     "crates/obc-vision/src/clawcam_analytics.rs",
+     None),
+    ("crates/obc-vision/src/clawcam_ingest.rs",
+     "crates/obc-vision/src/clawcam_ingest.rs",
+     None),
+    ("crates/obc-vision/src/clawcam_rules.rs",
+     "crates/obc-vision/src/clawcam_rules.rs",
+     None),
+    ("crates/obc-vision/src/clawcam_spatial.rs",
+     "crates/obc-vision/src/clawcam_spatial.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,
@@ -1467,8 +1510,45 @@ UPSTREAM_TREES: dict[str, set[str]] = {
         "crates/obc-skill-forge/",
         "crates/obc-config/",
         "crates/obc-peripherals/",
+        # Added 2026-08-14, same rule, same test.
+        #
+        # `obc-channels` is eleven chat adapters. `obc-gateway` is the REST and
+        # WebSocket surface plus the PWA -- the product wearing a port number.
+        # Neither is evidence for a claim this repository makes, and both depend
+        # on obc-agent and obc-config, so vendoring either would drag the line
+        # along behind it.
+        #
+        # `obc-vision` went the other way and is vendored below, because it is
+        # the pipeline `docs/CONSCIENCE.md` is *about*: what the agent may
+        # observe, gated before the frame reaches world memory. Its dependencies
+        # were already all here, which is the practical half of the same fact.
+        "crates/obc-channels/",
+        "crates/obc-gateway/",
     },
 }
+
+
+def upstream_revision(upstream: Path) -> str:
+    """Describe the upstream checkout's current revision, for the log line.
+
+    Best-effort by design: this is context for a number, not a check, so a
+    repository without git or without a branch name still gets a usable answer
+    rather than an exception.
+    """
+    def git(*args: str) -> str:
+        try:
+            out = subprocess.run(["git", "-C", str(upstream), *args],
+                                 capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        return out.stdout.strip() if out.returncode == 0 else ""
+
+    head = git("rev-parse", "--short", "HEAD")
+    if not head:
+        return f"{upstream} (not a git checkout, or git unavailable)"
+    branch = git("rev-parse", "--abbrev-ref", "HEAD") or "detached"
+    dirty = " +uncommitted" if git("status", "--porcelain") else ""
+    return f"{upstream} @ {branch} {head}{dirty}"
 
 
 def undeclared_upstream_files(upstream: Path) -> list[str]:
@@ -1860,6 +1940,20 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
                         f"                    --upstream <core> --peer <generator> --rebuild-wasm")
 
     if upstream:
+        # Say which upstream revision this was measured against.
+        #
+        # `undeclared_upstream_files` runs `git ls-files` in the upstream
+        # checkout, so it reports whatever branch that checkout happens to be
+        # on -- not upstream's main. On 2026-08-14 this under-reported by nine
+        # files, because the sibling repository was sitting on a feature branch
+        # that predated a merge. The check was not wrong; it answered a question
+        # nobody had noticed they were asking.
+        #
+        # Printing the revision does not decide which one is correct -- a
+        # pre-sync check against a working branch is often exactly what you
+        # want. It makes the count interpretable, which is the difference
+        # between a number and a measurement.
+        print(f"upstream: {upstream_revision(upstream)}")
         for rel in undeclared_upstream_files(upstream):
             problems.append(
                 f"{rel}: exists upstream in a tree this repository vendors whole,\n"

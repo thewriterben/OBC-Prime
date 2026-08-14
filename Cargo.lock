@@ -2505,6 +2505,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "obc-vision"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "obc-audio",
+ "obc-conscience",
+ "obc-foresight",
+ "obc-mcp",
+ "obc-memory",
+ "obc-navigation",
+ "obc-reflex",
+ "obc-safety",
+ "obc-telemetry",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
