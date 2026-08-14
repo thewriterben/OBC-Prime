@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-13T22:57:42+00:00",
+  "generated": "2026-08-14T01:51:06+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -156,12 +156,12 @@
       "bytes": 19751
     },
     "crates/obc-safety/Cargo.toml": {
-      "sha256": "95a2edc570d20739b360385719c213834a22dd880a6854094a0aaf0303df736f",
-      "bytes": 1852
+      "sha256": "4bd666f55f75fac687d1633878d12c731a818ebef15a03b766cc10ea6a46cda6",
+      "bytes": 2229
     },
     "crates/obc-safety/src/lib.rs": {
-      "sha256": "ebfd42ed486ecd152fff604055731180b46b20992fea57f8b809e161fa7f223e",
-      "bytes": 4477
+      "sha256": "7021b26cc0f4ccc58fa158aa9f3476c865802789921097413d5293910099135a",
+      "bytes": 4523
     },
     "crates/obc-safety/src/risk.rs": {
       "sha256": "10051bc2d2eb9843953e3fc1f08f2a638396607638c6a29573691d37c356f606",
@@ -214,6 +214,10 @@
     "crates/obc-safety/src/vault.rs": {
       "sha256": "e8ba80c1e9a9bfe3707271c898374af125cf82faddd82a015fec157d8093e5bc",
       "bytes": 12295
+    },
+    "crates/obc-safety/src/secret.rs": {
+      "sha256": "f9c3504922877027bc89683583948abcece66136bdf089909a7f22c7f1725ee6",
+      "bytes": 5421
     },
     "crates/obc-telemetry/Cargo.toml": {
       "sha256": "11c2d570fa08cdb1dca078f9d3cb02228aacadeed9d6fc2f269d0edfb9b0602c",

@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 157 artifacts).
+        also updates the generator app's mirrors (12 of the 158 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -319,6 +319,26 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-safety/src/vault.rs",
      "crates/obc-safety/src/vault.rs",
+     None),
+    # `SecretString` — a redact-in-Debug, redact-in-Display wrapper whose only
+    # escape hatch is a greppable `.expose()`. It lived in the core repo's
+    # `config::secret` until 2026-08-13 and moved here because it is secret
+    # *hygiene* rather than configuration, and this crate already owns the vault.
+    #
+    # It moved for a concrete reason rather than a tidy one. `ProviderConfig`
+    # holds an `Option<SecretString>`, and that struct needed to move into the
+    # providers module to break a dependency cycle — one struct defined in
+    # `config` while two of its own field types lived in `providers` and all ten
+    # provider files imported it back. Moving the struct without moving this
+    # type would have recreated the edge it was meant to remove.
+    #
+    # This entry exists because `check --upstream` demanded it. The file
+    # appeared in a tree this repository vendors whole, and the gate said so:
+    # "Nothing here is a copy of it and nothing here is checking it. Silence is
+    # the one option that is not available." Second live catch for that check;
+    # the first was obc-conscience's decision_log.
+    ("crates/obc-safety/src/secret.rs",
+     "crates/obc-safety/src/secret.rs",
      None),
 
     # ── Body telemetry ───────────────────────────────────────────────────────
