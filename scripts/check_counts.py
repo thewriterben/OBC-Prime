@@ -7,17 +7,35 @@ Three times in two days a count in this repository's own prose was wrong, and
 each time it was wrong the same way: stated as part of an *argument* rather than
 as data, so nobody updating "the numbers" thought to look at it.
 
-  a sync raised the substrate to twenty-one crates and updated the README from
-  632 tests to 653 — and missed `Cargo.toml` ("executes 473 tests of real agent
-  code", the six-crate era) and `demo/src/main.rs` ("'589 tests pass'").
+  On 2026-08-13 a sync raised the substrate to twenty-one crates and updated the
+  README from 632 tests to 653 — and missed `Cargo.toml` ("executes 473 tests of
+  real agent code", the six-crate era) and `demo/src/main.rs` ("'589 tests
+  pass'").
 
-  the commit that added a gate for *that* still left `parity/README.md` saying
-  the sync "copies all 43 artifacts here, updates the generator's 11 mirrors" —
-  157 and 12 — plus both figures in `sync_upstream.py`'s own docstring.
+  On 2026-08-13 the commit that added a gate for *that* still left
+  `parity/README.md` saying the sync "copies all 43 artifacts here, updates the
+  generator's 11 mirrors" — 157 and 12 — plus both figures in
+  `sync_upstream.py`'s own docstring.
+
+(Those two paragraphs carry dates because this script flags itself otherwise.
+That is not a workaround: a line quoting a number in order to correct it is a
+historical record, which is precisely what the date is for.)
 
 The first version of this script checked test counts in four named files. It
 could not have caught the second batch: wrong metric, wrong files. This one
 derives the numbers and the file set instead of being told them.
+
+One more thing it caught, about itself
+--------------------------------------
+It ran green every time before it was committed and went red immediately after.
+`our_files()` reads `git ls-files`, so while this script was untracked it was
+excluding *itself* from the scan. A gate that behaves differently either side of
+`git add` is a trap, and this one was carrying five of its own violations at the
+moment it was declared working.
+
+The fix is the dates above. The lesson is that "I ran it and it passed" and "it
+passes in CI" are different claims, and the gap between them is exactly one
+`git add`.
 
 What it checks
 --------------
@@ -116,15 +134,37 @@ def our_files() -> list[str]:
 
 
 def stale(rel: str) -> list[tuple[int, str, int, str]]:
+    """Counts stated on non-historical lines.
+
+    "Historical" is decided per *paragraph*, not per line. Prose wraps, and a
+    dated sentence puts its date on one line and its number on the next — which
+    cost two rounds of chasing before the rule was written this way. A
+    blank-line-delimited block carrying a date anywhere in it is a record.
+
+    The trade: a long block with one date in it can hide a live number. That is
+    the same trade the heading rule already makes, and it is the reason both
+    rules prefer small blocks. It is written here rather than discovered again.
+    """
     try:
         lines = (ROOT / rel).read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
         return []
+
+    # Pre-pass: which paragraph is each line in, and is that paragraph dated?
+    para_of, dated_para, para = [], {}, 0
+    for line in lines:
+        if not line.strip():
+            para += 1
+        para_of.append(para)
+        if DATE.search(line):
+            dated_para[para] = True
+
     hits, dated_section = [], False
-    for i, line in enumerate(lines, 1):
+    for idx, line in enumerate(lines):
+        i = idx + 1
         if HEADING.match(line):
             dated_section = bool(DATE.search(line))
-        if dated_section or DATE.search(line) or FOREIGN.search(line):
+        if dated_section or dated_para.get(para_of[idx]) or FOREIGN.search(line):
             continue
         for name, pat in PATTERNS:
             for m in pat.finditer(line):
