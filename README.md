@@ -15,14 +15,14 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-three crates of it now are. `obc-paths`,
+> repository** — but twenty-six crates of it now are. `obc-paths`,
 > `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
 > `obc-observability`, `obc-scheduler`, `obc-conscience`, `obc-approval`,
-> `obc-spine`, `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`,
-> `obc-movement`, `obc-navigation`, `obc-tool-api`, `obc-reflex`,
-> `obc-foresight`, `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission`
-> are here, vendored and hash-checked, and CI builds and tests them:
-> **751 tests**.
+> `obc-spine`, `obc-tools`, `obc-providers`, `obc-mcp`, `obc-position`,
+> `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`, `obc-navigation`,
+> `obc-tool-api`, `obc-reflex`, `obc-foresight`, `obc-learning`, `obc-fleet`,
+> `obc-audio` and `obc-mission` are here, vendored and hash-checked, and CI
+> builds and tests them: **987 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -56,6 +56,25 @@ the reflex layer keeps working when the brain is unreachable.
 > reflex actions, speech and fleet assignments onto it. `firmware/` has held
 > the node end of that conversation for weeks and this page could point at it;
 > the brain end was described and not shown. Both ends are here now.
+>
+> And, the same day, the layer the model actually touches: every built-in tool
+> — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser,
+> world memory, missions — each declaring its own risk class to the gate that
+> reads it; the model backends behind "bring your own model", with the ordered
+> fallback chain and the pinned registry that decide whether that promise holds
+> when a key is wrong; and Model Context Protocol in both directions, so
+> another agent can drive a robot *through* the Track 0 gate rather than around
+> it.
+>
+> **Where the line is.** Four crates that exist upstream are deliberately not
+> here: the agent loop, the self-improvement layer, the configuration that
+> composes every module's block, and the peripheral drivers. Everything this
+> repository vendors, it vendors because a document here makes a claim a reader
+> cannot check by reading it. Those four are not evidence for a claim — they
+> are most of the product, and vendoring them would make this "the agent, minus
+> the binary" rather than the substrate the documents rest on. The decision is
+> recorded in `scripts/sync_upstream.py`, and the drift gate fails if anything
+> else appears upstream unannounced: silence is the one option not available.
 >
 > CI runs them twice: once as a workspace, and once per crate with no siblings —
 > and that second pass runs both `cargo check` and `cargo test`, because a lib
@@ -193,7 +212,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 751 tests
+cargo test --workspace     # 987 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -212,11 +231,11 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "751 tests pass" and "you can see it refuse" are different
+That matters because "987 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
-Twenty-three pieces have moved, and how they were chosen changed twice. The
+Twenty-six pieces have moved, and how they were chosen changed three times. The
 first eighteen were chosen by measuring what was separable — and two of those
 were not chosen at all, `obc-foresight` and `obc-learning`, which fell out of the
 crate before them. The next three were not separable when that day started: they
@@ -236,7 +255,22 @@ one that moved released a module that then became a crate — `obc-movement`,
 `obc-reflex`, `obc-fleet`, `obc-audio`, all four above it in this table. The
 spine did not get smaller. It stopped pointing and started being pointed at.
 
-Each carries the tests it had upstream. The counts below are the 747 unit tests
+The last three — `obc-tools`, `obc-providers`, `obc-mcp` — were chosen under a
+third rule again, and it is the one that also decided what *stopped*. By the
+time they were extractable upstream, nothing was blocked by anything: every
+module left had zero blocking edges, so "what can come out" had no answer left
+to give. What remained was "what should be public", and the test this page has
+always applied — does a document here make a claim a reader cannot check by
+reading it? The tool contract had no implementations behind it. "Bring your own
+model" had no failover chain to run. `docs/CONSCIENCE.md` described gating an
+ingress that was not here. Those three close those three gaps.
+
+The agent loop, the self-improvement layer, the root configuration and the
+peripheral drivers fail the same test and are deliberately not vendored, which
+is recorded in `scripts/sync_upstream.py` rather than left as an absence. They
+are not evidence for a claim; they are most of the product.
+
+Each carries the tests it had upstream. The counts below are the 983 unit tests
 plus the 4 doctests; until 2026-08-02 this line said "370 tests" and counted
 only the unit tests, which was the sort of quiet exclusion this page otherwise
 objects to.
@@ -288,6 +322,9 @@ CI now does both.
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
 | `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
 | `obc-spine` | the wire: an MQTT backbone between brain and nodes, a serial LoRa gateway and a LoRa mesh with a relay, the supervisor that decides a node is lost and escalates, a P2P transport over TCP and UDP, and the four sinks that put movement commands, reflex actions, speech and fleet assignments onto it. The host end of the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies and `firmware/` already implemented | 63 |
+| `obc-tools` | every built-in tool the model can call — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser, world memory, missions, incidents, OTA — each declaring its own risk class, blast radius and output trust to the gate that reads them. `obc-tool-api` is the contract; this is what implements it, and the pair is what makes "the model may only call what the gate allows" checkable rather than stated | 170 |
+| `obc-providers` | Anthropic, OpenAI, OpenRouter, Ollama and any OpenAI-compatible endpoint behind one trait, with an ordered failover chain so a dead endpoint moves to the next rather than failing the turn, bounded retries, SSE streaming, and a registry that pins model names. The crate behind this page's "bring your own model" — the parts that decide whether the promise holds when a key is wrong | 22 |
+| `obc-mcp` | Model Context Protocol both ways: a client that dials stdio or HTTP and turns whatever it finds into callable tools, and a server that exposes this agent's own tools so something else can drive a robot **through** the Track 0 gate rather than around it. Depends on `obc-conscience` because a server is an ingress | 38 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
 | `obc-position` | where a node actually is: MAVLink-style geodetic telemetry and raw NMEA 0183 `GGA` sentences, projected through a site frame into the `NodeState` the fleet coordinates on | 16 |
