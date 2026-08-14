@@ -75,7 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 751 tests across twenty-three
+    # source that is never compiled is a listing. 987 tests across twenty-six
+    # crates as of 2026-08-14, when the tool layer, the model backends and MCP
+    # arrived — and when four other crates that exist upstream were recorded as
+    # deliberately not vendored. Both halves of that are decisions; the drift
+    # gate fails on anything upstream that is neither.
+    #
+    # 751 tests across twenty-three
     # crates as of 2026-08-14, when obc-spine arrived — 5100 lines, the largest
     # piece ever moved, and the host end of a conversation firmware/ has been
     # holding up alone. Its blocking-edge count went four to zero with none of

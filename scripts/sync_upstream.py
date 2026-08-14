@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 170 artifacts).
+        also updates the generator app's mirrors (12 of the 215 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -855,6 +855,195 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      "crates/obc-spine/src/speech.rs",
      None),
 
+
+    # ── Model Context Protocol, both directions ──────────────────────────────
+    # Vendored 2026-08-14, and the two directions are not the same claim.
+    #
+    # The client dials out -- stdio to a local server, HTTP to a remote one --
+    # and presents whatever it finds as tools the agent can call. That is how
+    # the system acquires capability nobody wrote into it.
+    #
+    # The server points the other way: it exposes this agent's own tools over
+    # MCP, so something else can drive a robot *through* the Track 0 gate rather
+    # than around it. That is why the crate depends on obc-conscience. An MCP
+    # server is an ingress, and reach and observation are gated on the way in as
+    # well as on the way out -- a claim `docs/CONSCIENCE.md` makes and, until
+    # this crate arrived, made about code that was not here.
+    ("crates/obc-mcp/Cargo.toml",
+     "crates/obc-mcp/Cargo.toml",
+     None),
+    ("crates/obc-mcp/src/client.rs",
+     "crates/obc-mcp/src/client.rs",
+     None),
+    ("crates/obc-mcp/src/lib.rs",
+     "crates/obc-mcp/src/lib.rs",
+     None),
+    ("crates/obc-mcp/src/server.rs",
+     "crates/obc-mcp/src/server.rs",
+     None),
+
+    # ── The model backends ───────────────────────────────────────────────────
+    # Vendored 2026-08-14. Anthropic, OpenAI, OpenRouter, Ollama and a generic
+    # OpenAI-compatible backend behind one trait, with an ordered failover chain
+    # so a dead endpoint moves to the next rather than failing the turn,
+    # bounded retries, SSE streaming, and a registry that pins model names.
+    #
+    # This page has said "bring your own model" since its first paragraph, and
+    # until now nothing here could be run to check it. The claim is not that a
+    # provider exists -- it is the fallback chain, the retry bound and the
+    # pinned registry, which are the parts that decide whether the promise holds
+    # when a key is wrong or an endpoint is down. Twenty-two tests assert them
+    # here.
+    #
+    # Upstream it was the first module in that tree to reach zero edges of any
+    # kind, and it got there without being touched: it was blocked by one edge
+    # into tools, and tools by one edge into the spine.
+    ("crates/obc-providers/Cargo.toml",
+     "crates/obc-providers/Cargo.toml",
+     None),
+    ("crates/obc-providers/src/anthropic.rs",
+     "crates/obc-providers/src/anthropic.rs",
+     None),
+    ("crates/obc-providers/src/compatible.rs",
+     "crates/obc-providers/src/compatible.rs",
+     None),
+    ("crates/obc-providers/src/failover.rs",
+     "crates/obc-providers/src/failover.rs",
+     None),
+    ("crates/obc-providers/src/lib.rs",
+     "crates/obc-providers/src/lib.rs",
+     None),
+    ("crates/obc-providers/src/model_registry.rs",
+     "crates/obc-providers/src/model_registry.rs",
+     None),
+    ("crates/obc-providers/src/ollama.rs",
+     "crates/obc-providers/src/ollama.rs",
+     None),
+    ("crates/obc-providers/src/openai.rs",
+     "crates/obc-providers/src/openai.rs",
+     None),
+    ("crates/obc-providers/src/openrouter.rs",
+     "crates/obc-providers/src/openrouter.rs",
+     None),
+    ("crates/obc-providers/src/retry.rs",
+     "crates/obc-providers/src/retry.rs",
+     None),
+    ("crates/obc-providers/src/streaming.rs",
+     "crates/obc-providers/src/streaming.rs",
+     None),
+
+    # ── The tool layer ───────────────────────────────────────────────────────
+    # Vendored 2026-08-14, the twenty-fourth crate here and the largest: 8880
+    # lines across twenty-nine files.
+    #
+    # `obc-tool-api` has been here since 2026-08-06 as the contract with no
+    # implementation -- the `Tool` trait, `ToolResult`, and the Track 0
+    # vocabulary a tool declares about itself. This is what implements it:
+    # movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser,
+    # world memory, missions, incidents, OTA and the rest, each declaring its
+    # own risk class to the gate that reads it.
+    #
+    # The pairing is the argument for vendoring it. A reader could already see
+    # `obc-safety` refuse a command, and could see the vocabulary a tool uses to
+    # describe itself, but not a single real tool declaring one. Both halves of
+    # "the model may only call what the gate allows" are checkable now.
+    #
+    # Upstream it was the largest module in the tree and the last thing standing
+    # between five other modules and extraction, and when it was measured rather
+    # than estimated it turned out to be the loosest: all sixty-three of its
+    # outward references pointed at crates that had already left, and none at a
+    # module still in the tree.
+    ("crates/obc-tools/Cargo.toml",
+     "crates/obc-tools/Cargo.toml",
+     None),
+    ("crates/obc-tools/src/builtin/aerial.rs",
+     "crates/obc-tools/src/builtin/aerial.rs",
+     None),
+    ("crates/obc-tools/src/builtin/audio.rs",
+     "crates/obc-tools/src/builtin/audio.rs",
+     None),
+    ("crates/obc-tools/src/builtin/audio_speech.rs",
+     "crates/obc-tools/src/builtin/audio_speech.rs",
+     None),
+    ("crates/obc-tools/src/builtin/audio_suite.rs",
+     "crates/obc-tools/src/builtin/audio_suite.rs",
+     None),
+    ("crates/obc-tools/src/builtin/browser.rs",
+     "crates/obc-tools/src/builtin/browser.rs",
+     None),
+    ("crates/obc-tools/src/builtin/comms.rs",
+     "crates/obc-tools/src/builtin/comms.rs",
+     None),
+    ("crates/obc-tools/src/builtin/file.rs",
+     "crates/obc-tools/src/builtin/file.rs",
+     None),
+    ("crates/obc-tools/src/builtin/fleet.rs",
+     "crates/obc-tools/src/builtin/fleet.rs",
+     None),
+    ("crates/obc-tools/src/builtin/foresight.rs",
+     "crates/obc-tools/src/builtin/foresight.rs",
+     None),
+    ("crates/obc-tools/src/builtin/gnss.rs",
+     "crates/obc-tools/src/builtin/gnss.rs",
+     None),
+    ("crates/obc-tools/src/builtin/http.rs",
+     "crates/obc-tools/src/builtin/http.rs",
+     None),
+    ("crates/obc-tools/src/builtin/incident.rs",
+     "crates/obc-tools/src/builtin/incident.rs",
+     None),
+    ("crates/obc-tools/src/builtin/learn.rs",
+     "crates/obc-tools/src/builtin/learn.rs",
+     None),
+    ("crates/obc-tools/src/builtin/memory.rs",
+     "crates/obc-tools/src/builtin/memory.rs",
+     None),
+    ("crates/obc-tools/src/builtin/mesh.rs",
+     "crates/obc-tools/src/builtin/mesh.rs",
+     None),
+    ("crates/obc-tools/src/builtin/mission.rs",
+     "crates/obc-tools/src/builtin/mission.rs",
+     None),
+    ("crates/obc-tools/src/builtin/mod.rs",
+     "crates/obc-tools/src/builtin/mod.rs",
+     None),
+    ("crates/obc-tools/src/builtin/movement.rs",
+     "crates/obc-tools/src/builtin/movement.rs",
+     None),
+    ("crates/obc-tools/src/builtin/navigation.rs",
+     "crates/obc-tools/src/builtin/navigation.rs",
+     None),
+    ("crates/obc-tools/src/builtin/ota.rs",
+     "crates/obc-tools/src/builtin/ota.rs",
+     None),
+    ("crates/obc-tools/src/builtin/power.rs",
+     "crates/obc-tools/src/builtin/power.rs",
+     None),
+    ("crates/obc-tools/src/builtin/sensing.rs",
+     "crates/obc-tools/src/builtin/sensing.rs",
+     None),
+    ("crates/obc-tools/src/builtin/shell.rs",
+     "crates/obc-tools/src/builtin/shell.rs",
+     None),
+    ("crates/obc-tools/src/builtin/site_anchor.rs",
+     "crates/obc-tools/src/builtin/site_anchor.rs",
+     None),
+    ("crates/obc-tools/src/builtin/siteplan.rs",
+     "crates/obc-tools/src/builtin/siteplan.rs",
+     None),
+    ("crates/obc-tools/src/builtin/vision.rs",
+     "crates/obc-tools/src/builtin/vision.rs",
+     None),
+    ("crates/obc-tools/src/builtin/world.rs",
+     "crates/obc-tools/src/builtin/world.rs",
+     None),
+    ("crates/obc-tools/src/credentials.rs",
+     "crates/obc-tools/src/credentials.rs",
+     None),
+    ("crates/obc-tools/src/lib.rs",
+     "crates/obc-tools/src/lib.rs",
+     None),
+
     # ── The agent watching itself ────────────────────────────────────────────
     # Vendored 2026-08-02, the sixth crate. `obc-telemetry` above is the agent
     # watching its *body*; this is the instrumentation of the software — spans,
@@ -1247,7 +1436,38 @@ def undeclared_vendored_files() -> list[str]:
 # undeclared_vendored_files answers "is everything present still declared".
 # Neither can answer "is everything upstream present at all". This can.
 UPSTREAM_TREES: dict[str, set[str]] = {
-    "crates": set(),
+    "crates": {
+        # ── Deliberately not vendored, 2026-08-14 ────────────────────────────
+        # An entry ending in `/` is a directory prefix. That is the only
+        # granularity at which this decision is real: "obc-agent is not
+        # vendored" is one decision about one crate, and spelling it as fifteen
+        # file paths would mean re-deciding it every time upstream adds a file
+        # -- noise, not signal, from a gate whose whole value is that its
+        # failures mean something.
+        #
+        # These four sit above a line drawn on purpose. Everything this
+        # repository vendors, it vendors because a document here makes a claim
+        # a reader cannot check by reading it: obc-safety backs SAFETY.md,
+        # obc-conscience backs CONSCIENCE.md, obc-spine is the host half of the
+        # frame authentication the firmware already implements. The tool layer
+        # and the model backends below join them on the same argument.
+        #
+        # These do not. The agent loop, the self-improvement layer, the
+        # configuration that composes every module's block, and the peripheral
+        # drivers are not evidence for a claim -- they are most of the product.
+        # Vendoring them would turn this repository from "the substrate the
+        # documents rest on" into "the agent, minus the binary", which is a
+        # different project with a different promise.
+        #
+        # Recorded rather than omitted, because the check that produced this
+        # list says so: add it to ARTIFACTS and sync, or record that it is
+        # deliberately not vendored. Silence is the one option not available,
+        # and a reader is owed the line and the reason for it.
+        "crates/obc-agent/",
+        "crates/obc-skill-forge/",
+        "crates/obc-config/",
+        "crates/obc-peripherals/",
+    },
 }
 
 
@@ -1277,8 +1497,12 @@ def undeclared_upstream_files(upstream: Path) -> list[str]:
                          f"({out.stderr.strip() or out.returncode})")
             continue
         for rel in sorted(line.strip() for line in out.stdout.splitlines()):
-            if rel and rel not in declared and rel not in skip:
-                found.append(rel)
+            if not rel or rel in declared:
+                continue
+            if rel in skip or any(s.endswith("/") and rel.startswith(s)
+                                  for s in skip):
+                continue
+            found.append(rel)
     return found
 
 
