@@ -21,10 +21,25 @@ main briefly disagreeing with the other. Generator-first makes that window a job
 that nothing re-triggers; here-first makes it a red main the moment the merge
 button is pressed.
 
-The reason this is a decision and not a note is that it cannot be fixed by making
-the job smarter. A gate that compares two repositories has to read *some* revision
-of the second one, and the only revision it can name without being told is the
-default branch. Choosing the merge order is the fix.
+**Correction, same day.** The first version of this entry said the job "cannot be
+fixed by making the job smarter", because a gate comparing two repositories has
+to read *some* revision of the second and the only one it can name unaided is the
+default branch. The second half is true; the conclusion was not. The job could
+check out a generator branch whose name matches this PR's head ref when one
+exists, and fall back to the default branch otherwise — an ordinary pattern, and
+a real fix.
+
+It is not taken, for a reason worth writing down rather than a reason to be
+proud of: it makes a green CI run depend on a branch-naming convention that
+nothing enforces. Name the generator branch differently and the job silently
+falls back to the default branch and passes — which is the failure mode this
+whole repository exists to avoid, moved one level up. Merge order is a rule a
+person follows; branch-name matching is a rule CI *appears* to follow.
+
+Revisit if a sync ever needs to prove a mirror before landing it. Until then the
+order is the fix, and the sentence above is left in with its correction rather
+than edited away, because an overstated claim in an append-only log is exactly
+the thing the next reader would take at face value.
 
 ### The transferable part
 
