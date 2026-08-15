@@ -75,7 +75,17 @@ jobs:
     runs-on: ubuntu-latest
     # The vendored artifacts this repository can execute rather than only hash.
     # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
-    # source that is never compiled is a listing. 1036 tests across twenty-seven
+    # source that is never compiled is a listing. 1038 tests across twenty-seven
+    # crates as of 2026-08-14, when the two new ones arrived without a new crate:
+    # upstream found `SecurityContext` and the MQTT spine holding *separate*
+    # `NodePairingManager`s built from the same config. The node table is an
+    # `Arc<Mutex<_>>` shared across clones and not across constructions, so the
+    # one reachable from the security context stayed empty and would have
+    # answered `is_trusted` with `false` for every node in the fleet. The two
+    # tests assert both halves — a clone shares the table, a second construction
+    # does not — so the same fix cannot be undone quietly.
+    #
+    # 1036 tests across twenty-seven
     # crates as of 2026-08-14, when obc-vision arrived and obc-channels and
     # obc-gateway were recorded as deliberately not vendored — the same test
     # applied to three crates on the same day, answered differently twice.
