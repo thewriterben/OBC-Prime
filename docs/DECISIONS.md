@@ -5,6 +5,39 @@ New entries go at the top.
 
 ---
 
+## 2026-08-14 — The mirror repository merges first, and the gate never said so
+
+A sync that touches one of the generator's mirrored artifacts needs two pull
+requests: the manifest and the vendored copy here, the rebuilt mirror there. The
+`peer` job checks out the generator's **default branch**, so from the moment this
+repository's PR opens until the generator's PR lands, the job reports:
+
+    x wasm/obc-planner/obc_planner_wasm_bg.wasm: generator mirror DRIFTED
+
+which is true, and points at the manifest, where nothing is wrong.
+
+**Decision: the generator PR lands first.** Both orders leave one repository's
+main briefly disagreeing with the other. Generator-first makes that window a job
+that nothing re-triggers; here-first makes it a red main the moment the merge
+button is pressed.
+
+The reason this is a decision and not a note is that it cannot be fixed by making
+the job smarter. A gate that compares two repositories has to read *some* revision
+of the second one, and the only revision it can name without being told is the
+default branch. Choosing the merge order is the fix.
+
+### The transferable part
+
+The failure message was accurate and misleading, which is the same shape as three
+other findings in this repository: the counts gate hiding a live number, the drift
+gate measuring the wrong revision, the reachability survey guarding half its
+inputs. A check that cannot distinguish "wrong" from "not yet" should say so in
+the failure text, because the reader has no other source. Both the workflow
+comment and the message itself now name merge order as the first thing to rule
+out.
+
+---
+
 ## 2026-08-13 — A crate owns its own configuration block, and that was the whole endgame
 
 Recorded here because this repository has been following the rule since its

@@ -1898,9 +1898,19 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
             if not mirror.exists():
                 problems.append(f"{local}: {name} mirror missing ({rel})")
             elif sha256(mirror) != digest:
+                # The hint is here because this message was true and pointed the
+                # wrong way. In CI the peer job checks out the peer's DEFAULT
+                # BRANCH, so a sync that touches a mirrored artifact fails here
+                # for the whole window between opening the two pull requests --
+                # the mirror is not stale, it is unmerged. Read as drift, that
+                # sends a reader into the manifest looking for a corruption that
+                # is not there.
                 problems.append(
                     f"{local}: {name} mirror DRIFTED ({rel})\n"
-                    f"      {name} {sha256(mirror)[:16]}  here {digest[:16]}")
+                    f"      {name} {sha256(mirror)[:16]}  here {digest[:16]}\n"
+                    f"      In CI this reads {name}'s default branch. If the matching\n"
+                    f"      mirror commit is still on an unmerged branch there, this is\n"
+                    f"      merge order and not drift: land that one first.")
 
     # ── WASM build inputs ───────────────────────────────────────────────────
     # A built artifact cannot drift from itself, so the artifact hashes above
