@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-14T22:37:49+00:00",
+  "generated": "2026-08-15T04:03:39+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -32,8 +32,8 @@
       "bytes": 556
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
-      "sha256": "ca08897bc8f235480aecab38601755109ce992927bb8cbcc129a7a1ab22542ed",
-      "bytes": 236392
+      "sha256": "40a1d25a979c02b8dbe5c09df0a8898ef7e3f037c709cec8d5ce45496189bd2a",
+      "bytes": 223997
     },
     "wasm/obc-planner/obc_planner_wasm.js": {
       "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
@@ -132,8 +132,8 @@
       "bytes": 109873
     },
     "crates/obc-planner/src/deployment/mod.rs": {
-      "sha256": "b0eff9a152c60d8788da0b9ce3250d92a18029152091c2ad8eedfca3f76f1a48",
-      "bytes": 712
+      "sha256": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
+      "bytes": 803
     },
     "crates/obc-planner/src/deployment/advisor.rs": {
       "sha256": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
@@ -899,7 +899,7 @@
     "toolchain": {
       "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
       "wasm-pack": "wasm-pack 0.15.0",
-      "wasm-bindgen": "0.2.126"
+      "wasm-bindgen": "0.2.127"
     },
     "sources": {
       "planner-wasm/Cargo.toml": "8a01fbafe7b27df24f987ac64ed6361522eac0dd00d55919c2c8d5e8d3d79cec",
@@ -911,7 +911,7 @@
       "crates/obc-planner/src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
       "crates/obc-planner/src/peripherals/mod.rs": "fe85608430e20762f324cbf2b4c076f69eb17d3a4d37d686d8fef67bdf079083",
       "crates/obc-planner/src/peripherals/registry.rs": "038d4ec6e3ae70d5db0ab533f710102d8fb6183a6a5baa7fa7038e3e7b31ab01",
-      "crates/obc-planner/src/deployment/mod.rs": "b0eff9a152c60d8788da0b9ce3250d92a18029152091c2ad8eedfca3f76f1a48",
+      "crates/obc-planner/src/deployment/mod.rs": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
       "crates/obc-planner/src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
       "crates/obc-planner/src/deployment/firmware_scaffold.rs": "a7812f69611101d330f0958bedd397bb6055cb14ac11de5a736578308965b8a6",
       "crates/obc-planner/src/deployment/inventory.rs": "57a75b58476822d86fa60763ebd2fdb1482274d7cc45405e710318be2d7c3f96",
