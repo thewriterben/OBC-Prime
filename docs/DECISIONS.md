@@ -29,17 +29,36 @@ check out a generator branch whose name matches this PR's head ref when one
 exists, and fall back to the default branch otherwise — an ordinary pattern, and
 a real fix.
 
-It is not taken, for a reason worth writing down rather than a reason to be
-proud of: it makes a green CI run depend on a branch-naming convention that
-nothing enforces. Name the generator branch differently and the job silently
-falls back to the default branch and passes — which is the failure mode this
-whole repository exists to avoid, moved one level up. Merge order is a rule a
-person follows; branch-name matching is a rule CI *appears* to follow.
+It was not taken at first, on the grounds that it makes a green CI run depend on
+a branch-naming convention nothing enforces: name the generator branch
+differently and the job falls back to the default branch.
 
-Revisit if a sync ever needs to prove a mirror before landing it. Until then the
-order is the fix, and the sentence above is left in with its correction rather
-than edited away, because an overstated claim in an append-only log is exactly
-the thing the next reader would take at face value.
+**Second correction, same day — that objection was also wrong, and the job now
+does the branch matching.** The fallback does not pass quietly, which was the
+whole force of the argument. If the names do not match, the job checks the
+default branch and reports drift, exactly as before. There is no path through
+branch matching that turns a real mismatch into a pass.
+
+What is true is a different hazard, and it needed a different guard. A PR that
+goes green on a peer *branch* invites merging this repository first, which is
+the single order that puts a red on `main`. So the second answer is scoped to
+`pull_request` only — the `push: main` run reads the default branch and nothing
+else, so main cannot go falsely green — and when the second answer is used, the
+job emits a warning and a step summary saying that main will be red until the
+generator PR lands. Green with a stated debt, rather than green.
+
+**The decision therefore stands unchanged: the generator PR lands first.** What
+changed is that the PR check no longer blocks on it, and that the requirement is
+now stated by the tooling in three places instead of living in whoever last hit
+it — the failure text, the job summary, and the peer revision line that `check`
+now prints alongside the upstream one.
+
+Both superseded sentences are left above with their corrections beneath rather
+than edited away. An append-only log that quietly fixes its own claims is not
+one, and the shape of the mistake is the useful part: twice I reached for a
+structural reason ("cannot be fixed", "would pass silently") when the actual
+reason was a preference for the simpler rule. The first is an argument the next
+reader cannot check; the second is one they can disagree with.
 
 ### The transferable part
 

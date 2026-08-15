@@ -328,31 +328,44 @@ jobs:
     # names a file and two hashes. Re-issue the PAT rather than debugging the
     # manifest.
     #
-    # ── Merge order, which this job silently requires ────────────────────────
-    # The checkout below takes the generator's DEFAULT BRANCH, not a branch
-    # matching this pull request. So any sync touching one of the 12 mirrored
-    # artifacts fails here from the moment the PR opens until the generator's
-    # own PR lands — the mirror is not stale, it is unmerged, and the message
-    # says DRIFTED either way.
+    # ── Merge order, which this job requires and used to require silently ────
+    # The first checkout below takes the generator's DEFAULT BRANCH. So any sync
+    # touching one of the 12 mirrored artifacts fails against it from the moment
+    # the PR opens until the generator's own PR lands — the mirror is not stale,
+    # it is unmerged, and the hash comparison reports DRIFTED either way. The
+    # `check` output now prints the peer revision it measured, which is the one
+    # line that tells those two apart.
     #
     # Land the generator PR first, then this one. Either order leaves one
     # repository's main red for a window; that order makes the window a manual
     # re-run of a job nothing triggers, instead of a red main on merge.
     #
-    # Re-running this job before that merge changes nothing — it reads the same
-    # default branch it read the first time. The green run comes from the other
-    # repository, not from here.
-    #
-    # Checking out a generator branch matching `github.head_ref` would remove
-    # the ordering, and is deliberately not done: it would make a pass depend on
-    # a branch-naming convention nothing enforces, and fall back to the default
-    # branch silently when the names differ. See docs/DECISIONS.md, 2026-08-14.
-    #
     # Written down 2026-08-14, the first time it cost anything: the failure
     # names a file and two hashes and nothing else, so working out that it was
     # merge order meant cloning the generator's main and reproducing it by hand.
     # A structural requirement that only exists in whoever last hit it is not a
-    # requirement, it is a trap with a survivor.
+    # requirement, it is a trap with a survivor. It then cost two more round
+    # trips on the same afternoon, one of them a merge of the wrong repository.
+    #
+    # ── Why the pull-request run is allowed a second answer ──────────────────
+    # On a pull request this job now also looks for a generator branch named
+    # the same as the PR's head ref, and if the mirrors match *that*, it passes
+    # with a warning instead of failing.
+    #
+    # I argued against this and was wrong about why. The objection was that it
+    # makes a green run depend on a branch-naming convention nothing enforces —
+    # true, and it does not matter, because the fallback fails loudly rather
+    # than passing quietly. Name the generator branch something else and the
+    # job checks the default branch and reports drift, which is where we came
+    # in. There is no silent pass on this path.
+    #
+    # The real hazard is different and is handled by the `if:` below: a PR that
+    # goes green on a peer *branch* invites merging this repository first,
+    # which is the one order that puts a red on main. So the second answer is
+    # available only on `pull_request` — `push: main` sees the default branch
+    # and nothing else — and when it is used, the job says in the summary that
+    # main will be red until the generator PR lands. Green with a stated debt,
+    # not green.
     steps:
       - uses: actions/checkout@v4
       - name: check out the generator (needs PEER_REPO_TOKEN; the repo is private)
@@ -361,10 +374,66 @@ jobs:
           repository: thewriterben/OBC-deployment-generator
           path: peer
           token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
+      # Optional, and its absence is not an error: most PRs here do not touch a
+      # mirrored artifact and need no generator branch at all.
+      - name: check out a generator branch matching this PR, if there is one
+        id: peer_branch
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/OBC-deployment-generator
+          ref: ${{ github.head_ref }}
+          path: peer-branch
+          token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python scripts/sync_upstream.py check --peer peer
+      - name: generator mirrors match
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BRANCH_FOUND: ${{ steps.peer_branch.outcome }}
+        run: |
+          set -uo pipefail
+          if python scripts/sync_upstream.py check --peer peer; then
+            exit 0
+          fi
+          if [ -z "${HEAD_REF:-}" ]; then
+            echo
+            echo "This run reads the generator's default branch and nothing else,"
+            echo "because it is not a pull request. If a mirror commit is sitting"
+            echo "on an unmerged branch over there, merge it — no re-run here can"
+            echo "clear this."
+            exit 1
+          fi
+          if [ "${BRANCH_FOUND:-}" != "success" ]; then
+            echo
+            echo "The generator's default branch does not carry these mirrors, and"
+            echo "it has no branch named '${HEAD_REF}' either. Either the mirror"
+            echo "commit was never pushed, or it is on a differently named branch"
+            echo "— in which case land it and re-run."
+            exit 1
+          fi
+          echo
+          echo "::group::retrying against the generator branch '${HEAD_REF}'"
+          if ! python scripts/sync_upstream.py check --peer peer-branch; then
+            echo "::endgroup::"
+            echo "The generator branch does not carry matching mirrors either, so"
+            echo "this is drift and not merge order. Re-run sync with --peer."
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "::warning title=Merge the generator PR first::Mirrors match the generator branch '${HEAD_REF}' but not its default branch. This repository's main will be RED between merging here and merging there."
+          {
+            echo "### Mirrors: matched on a branch, not on main"
+            echo
+            echo "The 12 generator mirrors match \`${HEAD_REF}\` in"
+            echo "OBC-deployment-generator, and do **not** match its default branch."
+            echo
+            echo "**Merge the generator PR before this one.** Merging here first"
+            echo "puts a red on this repository's \`main\`, which the \`push\` run of"
+            echo "this job will show and no re-run here can clear."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   accelerapp:
     name: accelerapp mirrors match

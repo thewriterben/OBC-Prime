@@ -1528,8 +1528,12 @@ UPSTREAM_TREES: dict[str, set[str]] = {
 }
 
 
-def upstream_revision(upstream: Path) -> str:
-    """Describe the upstream checkout's current revision, for the log line.
+def checkout_revision(repo: Path) -> str:
+    """Describe a checkout's current revision, for the log line.
+
+    Written for the upstream checkout and used for peers too, because they fail
+    the same way: the answer depends entirely on which revision was measured,
+    and nothing in a hash comparison says which that was.
 
     Best-effort by design: this is context for a number, not a check, so a
     repository without git or without a branch name still gets a usable answer
@@ -1537,7 +1541,7 @@ def upstream_revision(upstream: Path) -> str:
     """
     def git(*args: str) -> str:
         try:
-            out = subprocess.run(["git", "-C", str(upstream), *args],
+            out = subprocess.run(["git", "-C", str(repo), *args],
                                  capture_output=True, text=True, timeout=30)
         except (OSError, subprocess.SubprocessError):
             return ""
@@ -1545,10 +1549,10 @@ def upstream_revision(upstream: Path) -> str:
 
     head = git("rev-parse", "--short", "HEAD")
     if not head:
-        return f"{upstream} (not a git checkout, or git unavailable)"
+        return f"{repo} (not a git checkout, or git unavailable)"
     branch = git("rev-parse", "--abbrev-ref", "HEAD") or "detached"
     dirty = " +uncommitted" if git("status", "--porcelain") else ""
-    return f"{upstream} @ {branch} {head}{dirty}"
+    return f"{repo} @ {branch} {head}{dirty}"
 
 
 def undeclared_upstream_files(upstream: Path) -> list[str]:
@@ -1963,7 +1967,7 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
         # pre-sync check against a working branch is often exactly what you
         # want. It makes the count interpretable, which is the difference
         # between a number and a measurement.
-        print(f"upstream: {upstream_revision(upstream)}")
+        print(f"upstream: {checkout_revision(upstream)}")
         for rel in undeclared_upstream_files(upstream):
             problems.append(
                 f"{rel}: exists upstream in a tree this repository vendors whole,\n"
@@ -1971,6 +1975,15 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
                 f"      and nothing here is checking it. Add it to ARTIFACTS and sync,\n"
                 f"      or record in UPSTREAM_TREES that it is deliberately not\n"
                 f"      vendored. Silence is the one option that is not available.")
+
+    # And which peer revision, for the same reason and a sharper one.
+    #
+    # In CI the peer job reads the generator's default branch, so a mirror that
+    # is merely *unmerged* reports byte-for-byte the same as a mirror that is
+    # wrong. This line is the only thing in the output that separates them, and
+    # without it the failure has been misread three times, twice by its author.
+    for name, root in sorted((peers or {}).items()):
+        print(f"{name}: {checkout_revision(root)}")
 
     for rel in undeclared_vendored_files():
         problems.append(
