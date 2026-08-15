@@ -5,6 +5,54 @@ New entries go at the top.
 
 ---
 
+## 2026-08-14 — The mirror repository merges first, and the gate never said so
+
+A sync that touches one of the generator's mirrored artifacts needs two pull
+requests: the manifest and the vendored copy here, the rebuilt mirror there. The
+`peer` job checks out the generator's **default branch**, so from the moment this
+repository's PR opens until the generator's PR lands, the job reports:
+
+    x wasm/obc-planner/obc_planner_wasm_bg.wasm: generator mirror DRIFTED
+
+which is true, and points at the manifest, where nothing is wrong.
+
+**Decision: the generator PR lands first.** Both orders leave one repository's
+main briefly disagreeing with the other. Generator-first makes that window a job
+that nothing re-triggers; here-first makes it a red main the moment the merge
+button is pressed.
+
+**Correction, same day.** The first version of this entry said the job "cannot be
+fixed by making the job smarter", because a gate comparing two repositories has
+to read *some* revision of the second and the only one it can name unaided is the
+default branch. The second half is true; the conclusion was not. The job could
+check out a generator branch whose name matches this PR's head ref when one
+exists, and fall back to the default branch otherwise — an ordinary pattern, and
+a real fix.
+
+It is not taken, for a reason worth writing down rather than a reason to be
+proud of: it makes a green CI run depend on a branch-naming convention that
+nothing enforces. Name the generator branch differently and the job silently
+falls back to the default branch and passes — which is the failure mode this
+whole repository exists to avoid, moved one level up. Merge order is a rule a
+person follows; branch-name matching is a rule CI *appears* to follow.
+
+Revisit if a sync ever needs to prove a mirror before landing it. Until then the
+order is the fix, and the sentence above is left in with its correction rather
+than edited away, because an overstated claim in an append-only log is exactly
+the thing the next reader would take at face value.
+
+### The transferable part
+
+The failure message was accurate and misleading, which is the same shape as three
+other findings in this repository: the counts gate hiding a live number, the drift
+gate measuring the wrong revision, the reachability survey guarding half its
+inputs. A check that cannot distinguish "wrong" from "not yet" should say so in
+the failure text, because the reader has no other source. Both the workflow
+comment and the message itself now name merge order as the first thing to rule
+out.
+
+---
+
 ## 2026-08-13 — A crate owns its own configuration block, and that was the whole endgame
 
 Recorded here because this repository has been following the rule since its

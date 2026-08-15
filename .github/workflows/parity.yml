@@ -327,6 +327,32 @@ jobs:
     # "Repository not found", which reads like drift and is not — a drift failure
     # names a file and two hashes. Re-issue the PAT rather than debugging the
     # manifest.
+    #
+    # ── Merge order, which this job silently requires ────────────────────────
+    # The checkout below takes the generator's DEFAULT BRANCH, not a branch
+    # matching this pull request. So any sync touching one of the 12 mirrored
+    # artifacts fails here from the moment the PR opens until the generator's
+    # own PR lands — the mirror is not stale, it is unmerged, and the message
+    # says DRIFTED either way.
+    #
+    # Land the generator PR first, then this one. Either order leaves one
+    # repository's main red for a window; that order makes the window a manual
+    # re-run of a job nothing triggers, instead of a red main on merge.
+    #
+    # Re-running this job before that merge changes nothing — it reads the same
+    # default branch it read the first time. The green run comes from the other
+    # repository, not from here.
+    #
+    # Checking out a generator branch matching `github.head_ref` would remove
+    # the ordering, and is deliberately not done: it would make a pass depend on
+    # a branch-naming convention nothing enforces, and fall back to the default
+    # branch silently when the names differ. See docs/DECISIONS.md, 2026-08-14.
+    #
+    # Written down 2026-08-14, the first time it cost anything: the failure
+    # names a file and two hashes and nothing else, so working out that it was
+    # merge order meant cloning the generator's main and reproducing it by hand.
+    # A structural requirement that only exists in whoever last hit it is not a
+    # requirement, it is a trap with a survivor.
     steps:
       - uses: actions/checkout@v4
       - name: check out the generator (needs PEER_REPO_TOKEN; the repo is private)
