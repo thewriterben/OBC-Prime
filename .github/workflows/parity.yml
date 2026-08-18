@@ -511,6 +511,27 @@ jobs:
     #     than copying one: if the vendored bundle does not match a fresh build of
     #     upstream's current sources, that is precisely the staleness we are here
     #     to catch.
+    #
+    # ── Merge order, and why this job now says so ────────────────────────────
+    # The first checkout below takes the core agent's DEFAULT BRANCH, so a sync
+    # made from an unmerged upstream branch fails here from the moment the PR
+    # opens until the upstream PR lands. The vendored copy is not drifted; it is
+    # ahead. The hash comparison reports the same thing either way.
+    #
+    # The sibling `peer` job learned this on 2026-08-14 and got a second answer:
+    # look for a peer branch named like the PR's head ref, and pass with a
+    # warning if the mirrors match *that*. This job has the identical failure
+    # mode, the identical two-hashes-and-nothing-else error, and did not get the
+    # fix — the lesson was written down next to one of the two jobs it applies
+    # to. Found on 2026-08-18 by hitting it: an upstream declaration fix could
+    # not be vendored here without a red run nothing explained.
+    #
+    # Merge order is the mirror image of the peer job's. Land the UPSTREAM PR
+    # first, then this one — upstream is the source, so its main is what a fresh
+    # `check --upstream` reads. The same hazard applies: a PR that goes green on
+    # an upstream *branch* invites merging here first, which is the one order
+    # that puts a red on this repository's main. Hence `pull_request` only, and
+    # a summary that states the debt.
     steps:
       - uses: actions/checkout@v4
       - name: check out the core agent (public; no token needed)
@@ -519,8 +540,89 @@ jobs:
           repository: thewriterben/Oh-Ben-Claw
           path: core
           token: ${{ secrets.CORE_REPO_TOKEN || github.token }}
+      # Optional, and its absence is not an error: most PRs here touch no
+      # vendored file and need no upstream branch at all.
+      - name: check out a core-agent branch matching this PR, if there is one
+        id: core_branch
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Oh-Ben-Claw
+          ref: ${{ github.head_ref }}
+          path: core-branch
+          token: ${{ secrets.CORE_REPO_TOKEN || github.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: vendored artifacts match the core agent
-        run: python scripts/sync_upstream.py check --upstream core
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BRANCH_FOUND: ${{ steps.core_branch.outcome }}
+        run: |
+          set -uo pipefail
+          if python scripts/sync_upstream.py check --upstream core; then
+            exit 0
+          fi
+          if [ -z "${HEAD_REF:-}" ]; then
+            echo
+            echo "This run reads the core agent's default branch and nothing"
+            echo "else, because it is not a pull request. If the vendored change"
+            echo "is sitting on an unmerged branch upstream, merge it there — no"
+            echo "re-run here can clear this."
+            exit 1
+          fi
+          if [ "${BRANCH_FOUND:-}" != "success" ]; then
+            echo
+            echo "The core agent's default branch does not carry these files, and"
+            echo "it has no branch named '${HEAD_REF}' either. Either the upstream"
+            echo "commit was never pushed, or it is on a differently named branch"
+            echo "— in which case land it and re-run."
+            exit 1
+          fi
+          echo
+          echo "::group::retrying against the core-agent branch '${HEAD_REF}'"
+          if ! python scripts/sync_upstream.py check --upstream core-branch; then
+            echo "::endgroup::"
+            echo "The core-agent branch does not match either, so this is drift"
+            echo "and not merge order. Re-run sync against upstream."
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "::warning title=Merge the upstream PR first::Vendored files match the core-agent branch '${HEAD_REF}' but not its default branch. This repository's main will be RED between merging here and merging there."
+          {
+            echo "### Vendored files: matched on a branch, not on upstream main"
+            echo
+            echo "The vendored artifacts match \`${HEAD_REF}\` in Oh-Ben-Claw, and"
+            echo "do **not** match its default branch."
+            echo
+            echo "**Merge the upstream PR before this one.** Merging here first"
+            echo "puts a red on this repository's \`main\`, which the \`push\` run of"
+            echo "this job will show and no re-run here can clear."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Every tool declares what it can do to the world ───────────────────────
+  # Cheap, Python-only, and separate so a failure names itself rather than
+  # arriving inside a twenty-minute Rust job.
+  #
+  # `Tool::risk_class` defaults to `RiskClass::safe()` and its doc comment says
+  # tools that touch the real world MUST override it. Nothing enforced that. The
+  # gate that acts on the answer — `track0_authorize` — is upstream in
+  # `obc-agent` and is not vendored here, so a tool that under-declares itself
+  # in this repository is wrong somewhere this repository does not build. That
+  # is the worst shape a defect can have, and the reason the check is on the
+  # declaration rather than the caller.
+  #
+  # Added 2026-08-18 with the fix for `MqttNodeTool`, `P2pNodeTool` and
+  # `McpRemoteTool`, all three of which were taking the default — so every tool
+  # announced by a peripheral node, a P2P peer or a remote MCP server reached
+  # the gate declared non-physical, and the gate returned at its first line.
+  declarations:
+    name: every tool that actuates declares that it does
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_physical_tools.py

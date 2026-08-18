@@ -293,8 +293,26 @@ objects to.
 `obc-tool-api`.** It is 175 lines and no implementation: the `Tool` trait, the
 result type, and the Track 0 vocabulary — risk class, blast radius, rollout
 stage, output trust — that a tool declares about itself. `obc-safety` is the
-other half, the gate that reads `risk_class()` and decides. Between them you can
-write a tool and watch it be refused without any of the agent being present.
+other half: it defines `RiskClass`, the deterministic limit table, and the trust
+gate that reads a risk class and decides.
+
+> **Corrected 2026-08-18.** This paragraph used to end "Between them you can
+> write a tool and watch it be refused without any of the agent being present."
+> The join it describes is not in this repository. What reads a *tool's*
+> `risk_class()` and turns it into a decision is `track0_authorize` in
+> `obc-agent`, one of the six crates deliberately left upstream. Here, every
+> call to `ApprovalManager::decide` is inside `obc-approval`'s own test module,
+> and `SafetyGate::check` takes a tool *name*, not a risk class.
+>
+> So both halves are here and the wire between them is not, which is a
+> different and weaker claim than the one that was written. You can write a
+> tool, read its declaration, and drive the gate and the approval manager
+> directly — `cargo run -p obc-demo -- gate` does exactly that. You cannot watch
+> a tool be refused *because of what it declared* without the agent.
+>
+> `scripts/check_physical_tools.py` and the `declarations` CI job exist because
+> of the same gap seen from the other side: a tool that under-declares itself
+> here is wrong where it is used, in a repository this one does not build.
 
 It is also the first crate here extracted for a reason other than being
 separable. Upstream's tool module is 9052 lines and sits in several of the
@@ -336,9 +354,9 @@ CI now does both.
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
 | `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
 | `obc-spine` | the wire: an MQTT backbone between brain and nodes, a serial LoRa gateway and a LoRa mesh with a relay, the supervisor that decides a node is lost and escalates, a P2P transport over TCP and UDP, and the four sinks that put movement commands, reflex actions, speech and fleet assignments onto it. The host end of the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies and `firmware/` already implemented | 63 |
-| `obc-tools` | every built-in tool the model can call — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser, world memory, missions, incidents, OTA — each declaring its own risk class, blast radius and output trust to the gate that reads them. `obc-tool-api` is the contract; this is what implements it, and the pair is what makes "the model may only call what the gate allows" checkable rather than stated | 170 |
+| `obc-tools` | every built-in tool the model can call — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser, world memory, missions, incidents, OTA — each declaring its own risk class, blast radius and output trust. `obc-tool-api` is the contract; this is what implements it. What the pair makes checkable is the *declaration* — `scripts/check_physical_tools.py` fails the build on a tool that actuates and does not say so. "The model may only call what the gate allows" needs `track0_authorize`, which is upstream | 170 |
 | `obc-providers` | Anthropic, OpenAI, OpenRouter, Ollama and any OpenAI-compatible endpoint behind one trait, with an ordered failover chain so a dead endpoint moves to the next rather than failing the turn, bounded retries, SSE streaming, and a registry that pins model names. The crate behind this page's "bring your own model" — the parts that decide whether the promise holds when a key is wrong | 22 |
-| `obc-mcp` | Model Context Protocol both ways: a client that dials stdio or HTTP and turns whatever it finds into callable tools, and a server that exposes this agent's own tools so something else can drive a robot **through** the Track 0 gate rather than around it. Depends on `obc-conscience` because a server is an ingress | 38 |
+| `obc-mcp` | Model Context Protocol both ways: a client that dials stdio or HTTP and turns whatever it finds into callable tools, and a server that exposes this agent's own tools so something else can drive a robot **through** the Track 0 gate rather than around it. Depends on `obc-conscience` because a server is an ingress. The client half was the other way around until 2026-08-18: `McpRemoteTool` declared `output_trust` and not `risk_class`, so what came back was tainted correctly and what went out took the non-physical default and skipped the gate entirely | 38 |
 | `obc-vision` | the camera pipeline: ClawCam detections ingested into world memory as facts with provenance, projected through the site frame into the coordinates the navigation stack shares, evaluated against rules that can fire an actuation. The pipeline [docs/CONSCIENCE.md](docs/CONSCIENCE.md) is *about* — `clawcam_ingest` names the decision log directly, because what the agent may observe is gated **before** the frame reaches memory | 49 |
 | `obc-telemetry` | body telemetry: battery, links and sensor streams classified into world-memory facts, each deriving a mode a reflex watches — `power.mode`, `net.mode`, `sensor.{quantity}` — plus `NodeState`, the heartbeat every other layer reads | 23 |
 | `obc-observability` | the agent watching *itself* rather than its body: structured spans, a bounded span ring buffer, and the in-memory counters the gateway's metrics endpoint serves | 18 + 1 doc |
