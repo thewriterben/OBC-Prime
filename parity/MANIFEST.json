@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-18T21:54:42+00:00",
+  "generated": "2026-08-18T23:06:49+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -432,8 +432,8 @@
       "bytes": 5310
     },
     "crates/obc-spine/src/lib.rs": {
-      "sha256": "1db1d0f3a11e6ffa15376b6a30efbda77472307bb87bfbcfc0c3716a9c6b10f4",
-      "bytes": 38034
+      "sha256": "1e2a13461c241824bdefbd9171943389e234ce99e508f092a477986f99cdf39d",
+      "bytes": 39465
     },
     "crates/obc-spine/src/action.rs": {
       "sha256": "4a1d63f023e0de5149bbf1e3c643551172db8e8ec7211eba9d03fba73a11815a",
@@ -460,8 +460,8 @@
       "bytes": 55896
     },
     "crates/obc-spine/src/p2p.rs": {
-      "sha256": "7c3a03be9a87035308bb26587cbdab4c87ea05e22d84bd059f382e920f8163c9",
-      "bytes": 28656
+      "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
+      "bytes": 29025
     },
     "crates/obc-spine/src/speech.rs": {
       "sha256": "11d98219da711f768c20ab9a689d2144b67b53d54481ea2dd2c901af24a4c59d",
