@@ -506,11 +506,32 @@ jobs:
     #     and the difference was one question.
     #   * The WASM bundle. `planner-wasm/pkg/` is gitignored upstream, so a plain
     #     checkout has no bundle and all five wasm artifacts fail as "upstream
-    #     source missing". Hence the wasm-pack build step below — it reproduces
-    #     the bundle from the checked-out sources, which is also a stronger check
-    #     than copying one: if the vendored bundle does not match a fresh build of
-    #     upstream's current sources, that is precisely the staleness we are here
-    #     to catch.
+    #     source missing". The first answer was a wasm-pack build step here, on
+    #     the reasoning that reproducing the bundle from the checked-out sources
+    #     is a stronger check than copying one.
+    #
+    #     **That step does not exist and has not since 2026-07-30.** It was
+    #     removed the same day it was written, by `0f7d454` — "upstream cannot
+    #     see build output, and a rebuild cannot stand in for it" — because
+    #     wasm-pack output is not byte-reproducible across toolchains, so a
+    #     fresh build differs from the vendored one for reasons that have
+    #     nothing to do with drift. What replaced it is `UNCOMPARABLE_UPSTREAM`
+    #     in sync_upstream.py: the five wasm artifacts and the two firmware
+    #     locks are declared uncomparable, and the skips are printed on every
+    #     run, because a check that quietly declines to check is worse than one
+    #     that fails.
+    #
+    #     The bundle is still covered, twice and better: the `behaviour` job
+    #     runs it against the vendored goldens — output rather than bytes, which
+    #     is what would actually catch a wrong planner — and `wasm_build` hashes
+    #     the *sources* it was compiled from, which are ordinary tracked files.
+    #     That second one is what found the six-week-old bundle to begin with.
+    #
+    #     Corrected 2026-08-18. The paragraph above described the removed step
+    #     as the solution for nineteen days, and asserted a reason the script
+    #     directly refutes — so a reader of this file learned the opposite of
+    #     what was decided. Kept rather than deleted: the wrong answer is why
+    #     the right one is shaped this way.
     #
     # ── Merge order, and why this job now says so ────────────────────────────
     # The first checkout below takes the core agent's DEFAULT BRANCH, so a sync

@@ -40,6 +40,17 @@ to match. A tool whose name is decided by a remote peer over a UDP broadcast is
 exactly the tool a reviewer cannot classify by reading, so the declaration is
 the only place the answer can be.
 
+3. Every defaulted method on `trait Tool` must be forwarded by the blanket
+   `impl Tool for Arc<dyn Tool>` in the same file.
+
+The agent's registry stores `Arc<dyn Tool>` and hands the provider
+`Box::new(Arc::clone(&tool))` per call, so every declaration above is read
+*through* that blanket impl. A method it forgets to forward does not fail to
+compile; it silently returns the trait default -- the same `RiskClass::safe()`
+this file exists to prevent, reintroduced one indirection away from where
+anyone would look. All nine are forwarded today. Nothing but this kept them
+that way, and the agent that reads them is not in this repository.
+
 Limits, stated
 --------------
 Rule 1 is name-based, deliberately: the name is the part a reviewer reads, and a
@@ -92,6 +103,40 @@ ACTUATES = (
 
 def actuates(name: str) -> bool:
     return any(test(name) for test in ACTUATES)
+
+
+TRAIT_RE = re.compile(r"pub trait Tool:[^{]*\{")
+ARC_IMPL_RE = re.compile(r"impl Tool for std::sync::Arc<dyn Tool>\s*\{")
+FN_RE = re.compile(r"\bfn (\w+)\(&self")
+
+
+def _brace_body(text: str, start: int) -> str:
+    """The `{...}` body beginning at the brace on/after `start`."""
+    depth, i = 0, text.index("{", start)
+    while i < len(text):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    return text[text.index("{", start) + 1:i]
+
+
+def forwarding_gaps(api: Path) -> list[str] | None:
+    """Trait methods the `Arc<dyn Tool>` blanket impl does not forward.
+
+    `None` if the two blocks could not be located at all -- a structural change
+    to obc-tool-api that this check must report rather than pass through.
+    """
+    text = api.read_text(encoding="utf-8", errors="replace")
+    t, a = TRAIT_RE.search(text), ARC_IMPL_RE.search(text)
+    if not t or not a:
+        return None
+    declared = set(FN_RE.findall(_brace_body(text, t.start())))
+    forwarded = set(FN_RE.findall(_brace_body(text, a.start())))
+    return sorted(declared - forwarded)
 
 
 def impl_blocks(text: str):
@@ -148,14 +193,30 @@ def main() -> int:
               f"not the tree", file=sys.stderr)
         return 2
 
+    api = ROOT / "crates" / "obc-tool-api" / "src" / "lib.rs"
+    gaps = forwarding_gaps(api) if api.is_file() else []
+    if gaps is None:
+        print("!! could not locate `pub trait Tool` and the `Arc<dyn Tool>` "
+              "blanket impl in\n   obc-tool-api — the check is wrong, or the "
+              "contract moved", file=sys.stderr)
+        return 2
+
     print(f"{impls} tool implementation(s) scanned "
           f"({dynamic} name themselves at runtime)")
 
-    problems = len(undeclared) + len(unphysical) + len(unjudgeable)
+    problems = len(undeclared) + len(unphysical) + len(unjudgeable) + len(gaps)
     if not problems:
         print("ok: every tool that says it actuates declares itself physical, "
-              "and every\n    tool that cannot say declares something")
+              "every tool\n    that cannot say declares something, and "
+              "`Arc<dyn Tool>` forwards all of it")
         return 0
+
+    if gaps:
+        print("\n── Declared on `Tool`, not forwarded by `Arc<dyn Tool>` ──")
+        for fn in gaps:
+            print(f"  {fn}()")
+            print(f"{'':<4}the registry stores `Arc<dyn Tool>`, so this reads "
+                  f"the trait default\n{'':<4}for every tool, and compiles")
 
     if undeclared or unphysical:
         print("\n── Actuates by name, and the gate will not see it ──")
@@ -173,9 +234,12 @@ def main() -> int:
             print(f"{'':<24}no literal name and no risk_class: this tool's risk "
                   f"is\n{'':<24}decided by whoever announced it")
 
-    print(f"\n{problems} tool(s). Upstream's `track0_authorize` returns before "
-          f"the SafetyGate\ncheck and before the audit record when `physical` is "
-          f"false, so these calls\nreach the hardware ungated and unlogged.")
+    print(f"\n{problems} problem(s). Upstream's `track0_authorize` returns "
+          f"before the SafetyGate\ncheck and before the audit record when "
+          f"`physical` is false, so a tool that\nreads as safe — because it "
+          f"said so, or because nothing carried what it said —\nreaches the "
+          f"hardware ungated and unlogged, in a repository this one does not "
+          f"build.")
     return 1
 
 
