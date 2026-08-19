@@ -1,0 +1,51 @@
+docs: the core is acyclic, and this repo can finally say so
+
+No code changed. `check --upstream` reports 158 artifacts identical --
+the whole endgame happened in modules this repository does not vendor, so
+there is nothing to sync. Only the narrative was out of date.
+
+The README carried a paragraph headed "What this repository is
+deliberately not printing: a cycle count", written yesterday because
+upstream's script had been reporting zero when the real figure was
+sixteen. The instrument is fixed, the count is zero for real, and
+declining to say so would now be its own kind of stale.
+
+So the paragraph becomes the number plus the reason it was withheld:
+
+  upstream cycles   25 -> 0
+  spine             0 blocking edges, 5100 lines
+  approval          0 blocking edges, 1348 lines
+  tools             behind spine alone
+
+Kept the withholding on the page rather than replacing it with the good
+news. A reader who sees "zero" is entitled to know that the same number
+was wrong a day earlier, why, and where the correction lives.
+
+What it means here rather than upstream: the pieces still to arrive are
+no longer waiting on each other. spine and approval can be vendored
+whenever they are wanted, and tools follows spine.
+
+docs/DECISIONS.md gets the rule this repository has been following since
+its third crate without ever writing it down -- a module's config struct
+lives with the module, and the root Config composes it. obc-planner owns
+DeploymentConfig, obc-conscience owns ConscienceConfig, obc-cost owns
+CostConfig. Upstream's last seven cycles were the four places that rule
+had not been applied, and moving each block to the module that reads it
+took sixteen cycles to zero with no interfaces designed and no logic
+changed.
+
+That entry matters here specifically: the reason every crate in this
+repository builds and tests with no siblings is that rule, applied by
+accident at first and then on purpose. A crate that reaches into a
+central config module for its own settings cannot stand alone. The
+substrate job would catch it -- but only after someone had already
+written it that way.
+
+It also carries the correction, because it is the better argument:
+upstream put AutonomyConfig in `agent` first, the cycle count stopped at
+two instead of zero, and `approval` -- the module that turns a level into
+an ApprovalManager -- was one module further on. Rule right, noun wrong,
+caught in minutes. Not measuring to prove you were right; measuring so
+that being wrong is cheap.
+
+Gates: check --upstream 158, doc-links, counts.

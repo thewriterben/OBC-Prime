@@ -1,0 +1,129 @@
+# sync: obc-fleet, obc-audio, obc-mission — and a gate for the thing this PR kept getting wrong
+
+Brings the vendored substrate up to date with upstream, then fixes three rounds
+of stale counts that the sync itself missed, then adds a gate so the next one
+can't.
+
+| | before | after |
+|---|---:|---:|
+| crates | 18 | **21** |
+| artifacts | 150 | **157** |
+| tests | 632 | **653** (649 unit + 4 doc) |
+
+## The three crates
+
+They landed upstream today and none of them was here, so this page was claiming
+eighteen crates against a tree that had twenty-one. That's the failure this
+repository has spent months documenting in its own history — `CONSCIENCE.md`
+shipped four days before its code, `SAFETY.md` and `MEMORY-2026-07.md` before
+theirs, the README's Navigation/SLAM row describing code that lived elsewhere.
+Same shape; this time it was the code that got ahead.
+
+They were also chosen differently from every crate above them. The first
+eighteen left because they were found to be *separable*. These weren't separable
+this morning — they came out of upstream attacking the dependency cycles
+directly, and each was released by turning one edge around:
+
+| crate | what was holding it | what moved |
+|---|---|---|
+| `obc-fleet` | a 60-line MQTT bridge inside the coordinator | the bridge, to the spine |
+| `obc-audio` | two `SpeechSink` impls, one holding a spine client, one a TTS tool | both impls, to the spine and the tool layer |
+| `obc-mission` | `obc-audio` | nothing — it came free |
+
+`obc-fleet` is the one worth reading twice. The bridge it carried — heartbeat
+ingress, assignment topic and payload — was a *second* implementation of an
+integration the spine was already doing from its own side for the LoRa
+transport. Two ends, one integration, only one of them the transport. That's
+less comfortable than a misplaced file, because both halves looked reasonable
+where they sat.
+
+The sync also moved a fourth thing nobody asked for, which is the drift gate
+working: `obc-reflex` gained 84 lines and one test (28 → 29). `Severity` and
+`DIGEST_PREFIX` moved into it upstream from the agent's notify module, because
+the escalation vocabulary was living inside the escalation *delivery* and
+`spine` had to name `agent` to classify one.
+
+## Three misses, and the gate that ends them
+
+The sync commit updated the README from 632 to 653 and missed two other files
+saying the same thing. The commit fixing *that* added a gate too narrow to catch
+four more. The commit fixing *that* shipped a gate that failed on itself.
+
+| round | what was stale | why it was missed |
+|---|---|---|
+| 1 | `Cargo.toml` said 473 tests; `demo/src/main.rs` said 589 | both written as *arguments* ("executes N tests of real agent code"), not as data |
+| 2 | `parity/README.md` said 43 artifacts / 11 mirrors; same figures in `sync_upstream.py`'s docstring | gate checked the wrong metric in a hand-written list of four files |
+| 3 | the gate's own docstring carried five violations | `our_files()` reads `git ls-files` — while untracked, it excluded itself |
+
+`scripts/check_counts.py` now derives everything instead of being told:
+
+- **tests** from harness output
+- **artifacts** from `len(sync_upstream.ARTIFACTS)`
+- **mirrors** from ARTIFACTS entries carrying a `generator` peer
+- **files** from `git ls-files`, minus whatever ARTIFACTS says is vendored
+
+The generator-mirror count had been wrong since `firmware-templates` added a
+twelfth mirror — before any of today's work.
+
+### The exclusions were harder than the checks
+
+First run: sixteen hits, twelve of them noise. A gate that cries wolf is a gate
+someone turns off, so a false positive isn't the smaller failure here.
+
+- **The append-only logs** (`PLAN.md`, `DECISIONS.md`, `MIGRATION.md`) — their
+  numbers are historical by construction. `PLAN.md` annotates itself
+  (`> 2026-08-02: 96 artifacts, not 10`); "fixing" that destroys what the file
+  exists to hold.
+- **The generator's npm test count**, one line from this workspace's cargo count
+  in the same file. Both correct; one foreign.
+- **`"1,417 tests"` read as 417** — a regex with no digit boundary.
+- **Dated narrative** in CI comments about past incidents.
+
+"Historical" is decided per *paragraph*, not per line — prose wraps, and a dated
+sentence puts its date on one line and its number on the next. That cost two
+rounds before the rule was written this way.
+
+### Verified by sabotage
+
+All three metrics set wrong in turn, each caught with file, line and both
+numbers, each restored — plus a fourth case planting a live claim inside
+`check_counts.py` itself, next to the dated paragraphs, to prove the paragraph
+rule doesn't swallow the file it's written in. Run with the script **tracked**,
+which is the condition that produced round 3.
+
+## Deliberately not claimed here
+
+- **A cycle count.** Upstream's moved a long way, and then upstream found the
+  script producing it had been treating the config module as already-extracted —
+  an optional regex group matching `pub use config::Config;` — which made every
+  edge *into* config invisible and every count low. Written up in upstream's
+  `docs/ENDGAME.md`. A number this repo can't re-run is a number it shouldn't
+  print.
+- **That the core is acyclic.** It isn't. Sixteen cycles remain, all through
+  `config`.
+
+## Gates
+
+```
+check --upstream    157 artifacts identical across manifest, upstream, wasm build inputs
+workspace           653 passed, 0 failed
+crates-alone        22/22 (cargo check -p AND cargo test -p --all-targets)
+clippy              -D warnings, clean
+fmt                 clean
+doc-links           43/43 resolve
+counts              tests=653, artifacts=157, mirrors=12 — every stated count current
+```
+
+`docs/DECISIONS.md` gets a new entry rather than an edited count: the
+turn-the-edge move is at **eight** occurrences, three of which weren't production
+code at all (two test modules and a doc comment). Three is a run of luck; eight
+is a shape.
+
+## Commits
+
+```
+e8db6c1  the gate passed until it was committed, then failed on itself
+71d8ac7  the gate was too narrow, and there were four more stale counts
+196a5a9  the sync that fixed a stale count missed two more of them
+f2ddf09  sync: obc-fleet, obc-audio, obc-mission -- and this repo was three crates stale
+```
