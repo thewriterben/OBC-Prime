@@ -8,7 +8,7 @@
 # Run this body from its own directory:
 #
 #     cd bodies/benchtop
-#     OBC_CONFIG=config.toml obc start        # PowerShell: $env:OBC_CONFIG="config.toml"
+#     OBC_CONFIG=config.toml oh-ben-claw start   # PowerShell: $env:OBC_CONFIG="config.toml"
 #
 # UNLIKE TRAILWATCH, THIS BODY NEEDS HARDWARE. It has no seeded database,
 # because a benchtop deployment's whole point is the live path — a fabricated

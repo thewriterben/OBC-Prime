@@ -19,7 +19,7 @@ measured. So here is the honest split:
 
 | | Status |
 |---|---|
-| `config.toml` parses, and the agent starts from it | **verified** — `OBC_CONFIG=config.toml obc doctor` reports 0 errors, 2 reflex rules loaded |
+| `config.toml` parses, and the agent starts from it | **verified** — `OBC_CONFIG=config.toml oh-ben-claw doctor` reports 0 errors, 2 reflex rules loaded |
 | The `[deployment]` block matches the Benchtop inventory in the generator | **verified** — emitted by the planner, not hand-written |
 | Board and accessory names resolve in the registry, zero capability gaps | **verified** — `tests/reference-bodies.test.ts` in the generator |
 | A BME280 on a real FireBeetle 2 produces `sensor.humidity` and fires the reflex | **not verified** — needs the hardware |
@@ -44,7 +44,7 @@ issue: it is the gap between a template that parses and a template that works.
 cd bodies/benchtop
 export ANTHROPIC_API_KEY=sk-ant-...     # or OPENAI_API_KEY / OPENROUTER_API_KEY
 export OBC_CONFIG=config.toml           # PowerShell: $env:OBC_CONFIG="config.toml"
-obc start
+oh-ben-claw start
 ```
 
 There is **one line to edit first**: `path` under the serial board, which must

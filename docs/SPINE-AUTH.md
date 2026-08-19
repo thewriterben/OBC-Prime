@@ -43,11 +43,13 @@ primitive and the persistent storage a replay counter needs are new work. The
 one piece of good news: ESP32-S3 has hardware SHA acceleration, so the cost is
 silicon rather than cycles.
 
+
 **The host half already exists and is unwired.** `NodePairingManager` implements
 HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
 `pair_node` has no callers, `is_trusted` has none, and `require_pairing = true`
 is validated and enforces nothing (see `ROADMAP.md`, Phase 3). Roughly half the
 host-side work is written; none of it runs, and it has no counterpart on a node.
+
 
 ---
 
@@ -111,12 +113,49 @@ Append a truncated HMAC-SHA256 to every frame:
   survive reboot, so it lives in NVS, written every N (say 64) and advanced by N
   on boot to bound flash wear while never going backwards. The receiver rejects
   any counter at or below the highest seen for that source.
+
 - The MAC covers `src ‖ ctr ‖ payload`, and deliberately **not** `ttl`, which
   relays decrement in flight.
 
 Cost: 12 bytes of the 240-byte budget, payload down to 224. Worth measuring
 against real traffic before committing — if the common tool call is near the
 limit today, this design forces fragmentation, and that is a different project.
+
+> **Measured 2026-08-01** — `tests/spine_payload_budget.rs` in the core repo. Not
+> a radio capture: the host builds every one of these payloads, so the
+> distribution is a property of the code, and the census runs as a standing test
+> rather than sitting here as a number that quietly stops being true.
+>
+> | | bytes | spare of 240 | spare of 228 |
+> |---|---:|---:|---:|
+> | `gpio_write` / `sensor_read` / `capabilities` | 100–121 | 119–140 | 107–128 |
+> | `reflex_tick`, four quantities | 183 | 57 | 45 |
+> | fleet heartbeat / assignment | 59–82 | 158–181 | 146–169 |
+> | `set_limits`, one allowed pin | 228 | 12 | **0** |
+> | `set_limits`, two allowed pins | 230 | 10 | **−2** |
+> | `set_reflex_rules`, one rule | 344 | **−104** | −116 |
+>
+> **The tag fits.** Everything that carries actuation, telemetry or coordination
+> keeps 45–169 bytes of headroom, so §3.2 stands as written and steps 2–4 are
+> not invalidated.
+>
+> **The tag is not free**, and the thing it costs is not a tool call. Pushing a
+> deterministic limit table — `set_limits`, the Track 0 configuration — lands on
+> exactly 228 bytes with one allowed pin and 230 with two. The command that
+> configures the safety gate is the command the safety tag would break.
+>
+> **The margin already exists in the frame.** `mesh_command` spends **36 bytes on
+> a UUIDv4 correlation id**, three times the whole tag, on a link where the id
+> need only be unique among a handful of in-flight requests. Shortening it frees
+> 34; the tag needs 12. So step 4 should carry the correlation-id change with it,
+> and then authentication costs less than nothing.
+>
+> **`set_reflex_rules` was already broken**, at 344 bytes — 104 over the frame we
+> have, before any authentication. The node's line framer discards an over-length
+> line whole, so it never arrived, and the host reported `sent: true`. Now
+> refused host-side (`NodeCommand::fits_one_frame`). That one is not an auth
+> question: pushing a rule set over LoRa needs fragmentation or a different
+> transport either way.
 
 ### 3.3 MQTT and P2P
 
@@ -195,17 +234,105 @@ one problem this design cannot solve on its own.
 
 ## 6. Suggested order
 
-1. **Measure the payload distribution** on the bench mesh. If typical frames sit
-   near 240 bytes, everything above needs rethinking before it is built.
-2. **Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
-   vector in `firmware_spine_framing.rs`. No wire change yet.
+1. ~~**Measure the payload distribution** on the bench mesh. If typical frames sit
+   near 240 bytes, everything above needs rethinking before it is built.~~
+   **Done 2026-08-01** — see the box in §3.2. Steps 2–4 stand; the tag fits
+   everything that carries actuation, telemetry or coordination. Two additions
+   to the plan came out of it: **step 4 must also shorten the correlation id**
+   (36 bytes of UUID, against a 12-byte tag — otherwise `set_limits` becomes
+   collateral), and `set_reflex_rules` needs fragmentation or another transport
+   regardless of authentication, since it never fitted.
+
+   It was measured from the code rather than from the air, which was not the
+   plan and is better than the plan: the host builds every payload, so the
+   census is a test that fails when a shape changes rather than a figure in a
+   document that does not.
+2. ~~**Node-side HMAC-SHA256 with hardware SHA**, verified against a host-side test
+   vector in `firmware_spine_framing.rs`. No wire change yet.~~ **Done
+   2026-08-01.** `crates/obc-safety/src/spine_tag.rs` is canonical and vendored
+   here; `firmware/heltec-lora-linktest/src/auth.rs` is the node's mirror, also
+   vendored here; the core repo's `tests/spine_auth_vectors.rs` compiles both and
+   fails if they disagree. `cargo test -p obc-safety` runs the host half in this
+   repository, so the document above and the arithmetic it specifies are finally
+   in the same place.
+
+   Two deviations from the line as written, both deliberate:
+
+   - **Portable `sha2`, not the ESP32-S3's hardware SHA.** The silicon is the
+     right destination and an optimisation; a portable implementation compiles
+     on the machine writing it, so this could be tested immediately rather than
+     at the next bench session. Swapping in mbedtls later has a known answer to
+     check against, which is a better position than the reverse.
+   - **A separate `auth.rs`, not `spine.rs`.** Step 2 says *no wire change yet*
+     and `spine.rs` is the wire. Nothing calls `auth` — no frame carries a tag,
+     no receiver checks one.
+
+   The verification is three layers, and only the third is independent:
+   agreement between the two implementations (which two copies of one mistake
+   would also pass), frozen vectors (a regression pin generated from this
+   implementation, so an error would be frozen with it), and **RFC 4231 §4.2 +
+   RFC 5869 §A.1** — constants published years ago, which is what makes the
+   first two mean anything.
 3. **NVS counter**, with the wear-bounded advance-on-boot scheme, and a test that
-   a reboot never reissues a counter.
+   a reboot never reissues a counter. **Designed 2026-08-01, deliberately
+   unbuilt: [`SPINE-REPLAY.md`](SPINE-REPLAY.md).** It is the first step here
+   whose central claim — a counter that never goes backwards across a power cut
+   — is a statement about flash, so it cannot be checked without a board.
+   Writing it and marking it done on a compile is the kind of claim this project
+   keeps catching itself making.
+
+   Two things the design changed about the sketch in §3.2 above:
+
+   - **"Reject any counter at or below the highest seen" is wrong for this
+     mesh.** Flood relay delivers duplicates by design — `spine.rs` carries a
+     de-duplication ring because of it — and re-orders frames across paths.
+     Strict monotonicity drops all of that as an attack. It needs an IPsec-style
+     sliding window (RFC 4303 §3.4.3), which is pure logic and *is* testable on
+     the host today, unlike the rest of step 3.
+   - **The receiver's persistence rounds the opposite way from the sender's.**
+     The sender persists a ceiling above its position, so a crash skips
+     counters. A receiver that persists below its true high-water mark accepts
+     replays of everything in between, so it must persist a ceiling too and lose
+     a bounded number of legitimate frames after a restart instead. Getting that
+     direction backwards is the classic form of this bug.
+
+   `SPINE-REPLAY.md` §6 is a bench procedure, so the person with the boards does
+   not have to re-derive what "it works" means.
 4. **Wire format v2** behind a config key that defaults to strict, with the old
    format rejected rather than tolerated.
-5. **Wire the host half** — `NodePairingManager` gets its callers, and
-   `require_pairing` starts meaning something.
+5. ~~**Wire the host half** — `NodePairingManager` gets its callers, and
+   `require_pairing` starts meaning something.~~ **Done 2026-08-01, for MQTT and
+   P2P.** All three bullets of §3.4 except the LoRa frame, which is step 4:
+
+   - **`require_pairing` refuses unpaired announcements.** It had been validated
+     at boot and gated nothing — any node that could publish on the topic got
+     its tools registered. Gated now on both transports, and on P2P especially,
+     where discovery is a UDP broadcast with no broker and no handshake.
+   - **Inbound tool results are verified.** The non-obvious direction: a result
+     does not actuate, it lands in world memory, and reflexes act on world
+     memory without waking the model.
+   - **Outbound tool calls are signed**, and on P2P *verified*, because both
+     ends of a P2P call are the agent rather than firmware. That half is a round
+     trip today rather than a promise about step 4.
+
+   Two things the work established that this document did not say:
+
+   - **The sender's counter has a host-side answer that is not NVS: the clock.**
+     Seeding each counter at the current Unix second means a restart cannot go
+     backwards unless the clock does, which is exactly the guarantee flash is
+     needed for on a node that has no clock at boot. See
+     [`SPINE-REPLAY.md`](SPINE-REPLAY.md) §2 for what the node still needs.
+   - **`ToolCallRequest` carried no sender identity at all.** The frame said
+     what to do and never said who was asking, so a P2P receiver could not have
+     verified anything even in principle. `from` now selects the key; the tag is
+     what makes the claim mean something.
+
+   `[security] require_frame_auth`, default off, deriving per-node keys from the
+   existing `pairing_secret`. Off by default because the moment it is on, a node
+   that has not been upgraded goes silent — the migration window §4 asks for.
 6. **Re-sync firmware into OBC-Prime** and update `SAFETY.md` §4.3 from "no
    authentication story" to what it then is, including what it still is not.
 
-Step 1 is a morning and could invalidate steps 2–4. Do it first.
+Step 1 was a morning and did not invalidate steps 2–4. It was still the right
+thing to do first: it changed step 4, and it found a command that had never
+worked.

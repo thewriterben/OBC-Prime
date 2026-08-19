@@ -1,0 +1,28 @@
+[package]
+name = "obc-demo"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Runs the vendored Open Body Control crates so the claims on this page can be watched rather than read."
+
+# This crate is written HERE. It is not vendored, and that distinction is the
+# reason it sits in `demo/` rather than under `crates/`.
+#
+# `crates/` is mirrored whole from upstream: every tracked file there must be
+# declared in scripts/sync_upstream.py, `sync` overwrites it, and
+# `check --upstream` fails on anything present-but-undeclared or
+# upstream-but-unvendored. A hand-written file in that tree would be reported as
+# drift by the first check and silently overwritten by the next sync. Both
+# behaviours are correct; the file just does not belong there.
+#
+# Everything under demo/ is this repository's own, like scripts/, docs/ and
+# parity/verify_wasm.cjs. It has no upstream counterpart and nothing syncs it.
+[dependencies]
+anyhow = "1.0"
+obc-conscience = { path = "../crates/obc-conscience" }
+obc-memory = { path = "../crates/obc-memory" }
+obc-movement = { path = "../crates/obc-movement" }
+obc-navigation = { path = "../crates/obc-navigation" }
+obc-safety = { path = "../crates/obc-safety" }
+tokio = { version = "1.42", default-features = false, features = ["rt", "rt-multi-thread", "macros"] }

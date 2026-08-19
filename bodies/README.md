@@ -1,5 +1,12 @@
 # Reference Bodies
 
+> **The binary is `oh-ben-claw`, not `obc`.** `PLAN.md` §1 chose `obc` as the CLI
+> name — "already in muscle memory and in every doc" — and the rename was never
+> made, so both body READMEs told you to run a command that does not exist.
+> Corrected 2026-08-02, by running them. Alias it if you want the short form:
+> `alias obc=oh-ben-claw`. Executing the rename is a one-line decision nobody has
+> taken; until then the docs name what ships.
+
 A Reference Body is a complete, runnable deployment: config, firmware, and —
 where possible — a seeded database so **it runs before any hardware arrives**.
 

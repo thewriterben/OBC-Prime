@@ -2,6 +2,21 @@
 
 Written 2026-07-28, from a survey of all four repos plus the running system.
 
+> **Status re-measured 2026-08-02.** This file is two things at once: a dated
+> survey, which is allowed to be a snapshot, and a live to-do list in §7, which
+> is not — the README sends a newcomer here for "what is landing and in what
+> order". The second half had drifted five days and in the more corrosive
+> direction: **seven items listed as open or gating were already done** — the
+> release gates on keys-in-config, cloud-first defaults and licence/CONTRIBUTING;
+> the `SOUL.md` decision, which appeared twice and had been settled by deleting
+> it; and two of the three things said to block publishing the generator. Work
+> that looks larger than it is buries the work that is genuinely left.
+>
+> Everything below marked done or open on this date was re-derived from a
+> `git archive HEAD` of the repo it concerns, not from reading. Where a number
+> is given, it is that measurement. The dated survey text is left standing with
+> corrections attached, rather than rewritten to look like it was right.
+
 ---
 
 ## 1. The name
@@ -31,6 +46,19 @@ ClawHub — but doesn't explain itself to a newcomer).
 Whatever you pick, keep `obc` as the CLI binary, the config dir and the crate
 name. Those are already in muscle memory and in every doc.
 
+> **Not taken, and the docs now say the opposite (2026-08-02).** The binary is
+> `oh-ben-claw` (`default-run` in the core `Cargo.toml`), the config dir is
+> `~/.oh-ben-claw/`, and the crate is `oh-ben-claw`. Nothing was ever renamed to
+> `obc`. The reference bodies here *did* say `obc start` until PR #15, which
+> changed them — to `oh-ben-claw start`, because that is the binary that exists,
+> and a quickstart naming a binary a reader cannot run is the more urgent
+> problem. So the recommendation was reversed in practice, in this repo, by a
+> merged change that did not know it was reversing anything.
+>
+> The decision is still live: rename the binary to `obc` and this paragraph is
+> right again, or drop the paragraph. What is not tenable is a plan file
+> recommending a name the rest of the repo has already argued against.
+
 ---
 
 ## 2. What you actually have (four repos, honestly assessed)
@@ -42,6 +70,15 @@ name. Those are already in muscle memory and in every doc.
 | **Accelerapp** | 99% AI-generated IoT monolith; the headline CLI is broken. 1% is a real, recent, well-tested OBC bridge. | Take `hardware/registry.py` + `firmware/obc_templates.py`. Leave the rest. |
 | **ClawCam** | Working perception source over MCP, with a seeded demo DB. | **The proof.** See §4. |
 
+> **"24 tools" is a survey number and does not agree with the core repo.** That
+> README says "one tool out of seventy-six"; a Trailwatch run logs
+> `tool_count=22` for a body with the browser and ClawHub disabled. The count is
+> config-dependent, so all three can be true of different things — but a
+> 2026-08-02 attempt to derive a single figure from the registry found 40 tool
+> `name()` literals and could not account for the rest, so **no number here is
+> re-measured**. Left as written rather than replaced with a figure nobody
+> checked.
+
 ### The crown jewel nobody has named yet
 
 The deployment generator's `tests/planner-parity.test.ts` enforces
@@ -49,6 +86,15 @@ The deployment generator's `tests/planner-parity.test.ts` enforces
 Rust planner, the WASM build, and the TypeScript port. I hash-verified that its
 `registry.json`, all four golden fixtures and the planner WASM are identical to
 Oh-Ben-Claw's.
+
+> **Corrected 2026-08-01.** "Three independent implementations" is two
+> implementations in three executables: the WASM build is compiled from the Rust
+> planner's own sources. The claim is still the strong one — a hand-written
+> TypeScript port held byte-identical to the Rust that deploys is the hard part —
+> but the two legs fail differently and should be named separately. The port can
+> disagree on *logic*; the build can disagree on *age*, and did, for six weeks.
+> See `parity/README.md`, corrected 2026-07-29, and `docs/DECISIONS.md`,
+> *A hash gate cannot see a stale build*.
 
 That parity harness is the most valuable engineering artifact across all four
 repos, and it's currently an undocumented implementation detail of a private
@@ -121,6 +167,33 @@ So the first cut is **~3.5% of the tree**, not the amputation "clean repo"
 suggests. That is a much easier decision than it looked, and it means the public
 core can be close to the working core rather than a diverged fork.
 
+> **Re-measured 2026-08-02 — the cut mostly happened, and what is left changed
+> character.** Against `git archive HEAD` of the core repo:
+>
+> | module | then | now |
+> |---|---|---|
+> | `dashboard` | 798 LOC, island | **deleted** in 489aecc |
+> | `rag` | 367 LOC, island | **deleted** in 489aecc |
+> | `satcom` | 336 LOC, island | **deleted** in 489aecc |
+> | `hooks` | 279 LOC, island | **deleted** in 489aecc |
+> | `memory/personality.rs` | island | **deleted**; `SOUL.md` is gone and `PersonalityStore` has zero non-comment references |
+> | `bin` | 72 LOC, island | present, and correctly zero-referenced — they are binaries |
+> | `a2a` | 868 LOC, island | present at 871 LOC, **one** external reference: `tests/evals.rs` |
+>
+> So ~2,720 becomes ~940, and only `a2a` is a decision. It also stopped being
+> the kind of thing this table was counting. "Island" here meant *dead code* —
+> nothing outside its directory names it. `a2a` is not dead: it has 18 unit
+> tests and wire-shape conformance goldens that pass, and they are testing the
+> right things. It is **unreachable production code** — nothing constructs
+> `A2AServer` outside tests, `A2AClient` is constructed nowhere at all, no route
+> serves the agent card, `config.a2a` has zero reads, and `A2AServer::execute`
+> is a documented stub. The core README now carries that measurement in full.
+>
+> A reference count cannot tell those two apart, which is worth writing down
+> next to a table built from reference counts. The method note below says a
+> proxy for deadness is "where the judgement starts rather than ends"; this is
+> the case where it started somewhere quite different from where it ended.
+
 > **Method note.** A first pass at this flagged *nine* islands including
 > `gateway` — the module that binds the HTTP API. The pattern missed grouped
 > imports (`use oh_ben_claw::{…}`), which is how most modules are pulled in.
@@ -144,6 +217,28 @@ core can be close to the working core rather than a diverged fork.
 
 Explicitly *not* gating: the half-built phases. They can ship as-is provided the
 docs do not claim they work.
+
+> **Re-measured 2026-08-02.** Three of the five are closed, one differently from
+> how it was framed here.
+>
+> 1. **Keys out of config — done, by a different route.** This asked for
+>    env-var-and-secret-store-first with the inline field discouraged. What
+>    landed instead: `ProviderConfig.api_key` is
+>    `Option<secret::SecretString>`, a type that will not print itself. The
+>    inline field still exists; it can no longer leak into a log or a pasted
+>    debug dump, which was the actual worry behind "a public config template is
+>    the file people paste into issues".
+> 2. **Cloud-first defaults — done.** `default_provider_name()` returns
+>    `"openai"`. A fresh install with one env var is the documented path and
+>    Ollama is opt-in, which is the inverse of where this started.
+> 3. **Cut the islands + `personality.rs` — done except `a2a`.** Four modules
+>    and the personality store are deleted; see the table above. `a2a` is the
+>    one left and is now a documented decision rather than a pending cut.
+> 4. **A licence and a CONTRIBUTING — done.** Both are in the core repo, and
+>    `CONTRIBUTING.md` here opens with which repo a change belongs in.
+> 5. **No single-user assumptions — not re-measured.** Genuinely open, and the
+>    only one of the five that is. Saying so is better than leaving it in a list
+>    where four neighbours are silently finished.
 
 ---
 
@@ -221,10 +316,14 @@ shell", verified against a service-manager-style start):
 
 **Still open:**
 
-3. **`SOUL.md` / `USER.md` are dead code.** `memory/personality.rs` implements
+3. ~~**`SOUL.md` / `USER.md` are dead code.** `memory/personality.rs` implements
    and documents them; nothing calls it. Either wire it into `build_context()`
    or delete it — shipping documented features that do nothing is worse than
-   not having them.
+   not having them.~~ **Closed — deleted**, in 489aecc, "delete what was never
+   wired". `src/memory/personality.rs` and `SOUL.md` are both gone from the
+   core repo and `PersonalityStore` has zero non-comment references. Recorded
+   2026-08-02; it had been listed open here for two days after the delete, and
+   also listed open a second time in §7.6 below.
 5. **Tool argument names are inconsistent** — `vision_analyze` takes `source`,
    `audio_transcribe` takes `path`, `file` takes `action`+`path`. Local models
    get this wrong, and then *confabulate rather than report the failure*
@@ -232,6 +331,12 @@ shell", verified against a service-manager-style start):
    around downstream by naming the exact call shape in the prompt; the
    inconsistency itself is untouched and worth normalising before external
    users write tools against it.
+
+   > Still open on 2026-08-02. `vision_analyze` does declare `source`, and
+   > `shell` declares `command` — but the 2026-08-02 pass could not extract the
+   > schemas for `audio_transcribe` or `file`, which are declared in a different
+   > shape, so this is carried forward *unverified* rather than confirmed. An
+   > item nobody managed to re-measure should say so.
 
 ---
 
@@ -244,6 +349,11 @@ shell", verified against a service-manager-style start):
    and was itself verified by deliberately corrupting a file and watching it
    fail. `core/` is not vendored — the agent is still private, and the README
    says so rather than implying otherwise.
+
+   > 2026-08-02: **96** artifacts, not 10, and `crates/` *is* vendored now — six
+   > crates, 391 tests running here in CI. The sentence "the agent is still
+   > private" is still true of the agent loop and no longer true of the
+   > substrate.
 3. ~~Package **Trailwatch** as the first Reference Body, seeded DB included.~~
    **Done**, and the quickstart is real: it ships `serve.py`, a stdlib MCP
    server over the seeded database, so it has no dependency on the private
@@ -251,20 +361,54 @@ shell", verified against a service-manager-style start):
    live data dir moved aside.
 4. ~~Wire Trailwatch into the deployment generator as a template.~~ **Done.**
    De-Manusing the generator (OAuth, package name, license) is **still open**.
-5. Lift Accelerapp's two good modules into `firmware/`. **Open.**
-6. Decide on `SOUL.md`: wire it or cut it. **Open.**
+
+   > 2026-08-02: two of those three are done. `package.json` is named
+   > `obc-deployment-generator` and there is a `LICENSE`. What remains is the
+   > OAuth binding — `constants/oauth.ts`, `lib/_core/manus-runtime.ts`,
+   > `app/oauth/callback.tsx`, `drizzle/schema.ts` and three others still carry
+   > it, and `PUBLISHING.md` documents the choice: the login gates nothing, so
+   > removing accounts costs ~800 lines and no feature. That is the one
+   > remaining decision, and it is a decision rather than a task.
+5. Lift Accelerapp's two good modules into `firmware/`. **Open** — confirmed
+   2026-08-02: no `registry.py` or `obc_templates.py` anywhere in this repo.
+6. ~~Decide on `SOUL.md`: wire it or cut it.~~ **Closed — cut.** See §6 blocker
+   3. This was the same item as blocker 3 and both said "open"; the delete had
+   already happened upstream.
+7. **Migrate the agent piecewise.** Six crates are here as of 2026-08-02 —
+   `obc-paths`, `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
+   `obc-observability` — chosen by `scripts/extractability.py` in the core repo
+   rather than by hand. `scheduler` (684 LOC, 16 tests) is the last module with
+   zero blocking edges; after it, every remaining candidate needs an edge turned
+   around first, the way `obc-safety`'s `RiskClass` edge was.
 
 Also still open, in rough order of how much they'd embarrass a visitor:
 
-- **The generator is still private and still Manus-bound.** Its OAuth is hard-
-  wired to a sandbox portal, `package.json` is named `"app-template"`, and there
-  is no licence. It cannot be published as-is, which means the onboarding story
-  the README leans on isn't reachable yet.
-- **CI only checks the manifest.** The `--upstream` job is written but commented
+- **The generator is still private, and one thing still binds it to Manus.**
+  ~~Its OAuth is hard-wired to a sandbox portal, `package.json` is named
+  `"app-template"`, and there is no licence.~~ The package name and the licence
+  are fixed; the OAuth binding is not. It cannot be published as-is, which means
+  the onboarding story the README leans on isn't reachable yet — and the block
+  is now a single decision (`PUBLISHING.md`, option 1: remove accounts, ~800
+  lines, no feature lost) rather than three tasks.
+- ~~**CI only checks the manifest.** The `--upstream` job is written but commented
   out, because the core repo isn't readable from CI. Drift against the core
-  agent is therefore *not* caught today — only hand-edits are.
-- **`bodies/benchtop` has no runtime half**, only a generator inventory.
-- **The operate token is stored in plaintext AsyncStorage** in the generator's
+  agent is therefore *not* caught today — only hand-edits are.~~ **Closed
+  2026-07-30.** Six jobs run now: `manifest`, `behaviour` (executes the WASM
+  against the goldens), `substrate` (builds and tests the vendored crates),
+  `peer`, `accelerapp` and `upstream`. The premise was wrong on the part that
+  had kept the job commented out for weeks — the core repo is public, so
+  `github.token` reads it and no secret was ever needed. Nobody had asked.
+  **Seven** jobs as of 2026-08-02: `doclinks` was added after `docs/SAFETY.md`
+  was found linking to a `SECURITY.md` this repo does not have.
+- **`bodies/benchtop` has no runtime half**, only a generator inventory. Still
+  true on 2026-08-02: `bodies/benchtop/` contains exactly `README.md` and
+  `config.toml`, against Trailwatch's four files including a seeded database and
+  a perception server. This is now the oldest genuinely-open item on the page.
+- ~~**The operate token is stored in plaintext AsyncStorage** in the generator's
   fleet console, though `expo-secure-store` is already a dependency and is
   already used for the session token. That token authorises remote tool
-  execution.
+  execution.~~ **Fixed.** `lib/_core/operate-token.ts` uses `SecureStore`, and
+  reading migrates any plaintext copy and then deletes it — a move that left the
+  old file in place would have fixed nothing. Web is memory-only and the UI says
+  so, because `SecureStore` has no web implementation and `localStorage` would
+  be the same plaintext plus XSS reach. Verified 2026-08-02.

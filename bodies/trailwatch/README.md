@@ -20,27 +20,33 @@ edit, nothing to install.
 ```bash
 cd bodies/trailwatch
 export OBC_CONFIG=config.toml      # PowerShell: $env:OBC_CONFIG="config.toml"
-obc start
+oh-ben-claw start
 ```
 
-Run it **from this directory** — the paths in `config.toml` are relative to the
-working directory, and the agent also needs somewhere writable to work.
+Run it **from this directory** — `serve.py` and `clawcam_gateway.db` are named
+relatively in `config.toml`. The agent's own databases do *not* land here; they
+go to the OS application-data directory, or to `OBC_DATA_DIR` if you set it.
 
-Within a second of startup you should see:
+Within about a second of startup you should see, in this order (the reflex
+controller ticks at 1s, so the last two land just after the rest):
 
 ```
 Loaded config from "config.toml" (explicit)
 ClawCam MCP bridge connected (actuation + poll)
-ClawCam detections folded into world memory count=50
-reflex: escalate to System 2 reason="person detected (verified) on a camera"
-System 2: waking the slow reasoner
 Gateway listening url=http://127.0.0.1:8090
+ClawCam detections folded into world memory count=50
+reflex: escalate to System 2 (dry-run) reason="person detected (verified) on a camera"
+System 2: waking the slow reasoner reason=person detected (verified) on a camera
 ```
 
-Those middle lines are the point. A camera saw a person, a reflex fired without
-waking the language model, and only then did it escalate — with a triage
+Those last three lines are the point. A camera saw a person, a reflex fired
+without waking the language model, and only then did it escalate — with a triage
 playbook attached. That's the System 1 / System 2 split, running on your
 machine, with nothing plugged in.
+
+`(dry-run)` is not a warning. It is the reflex sink saying the spine has no node
+attached, which is the whole premise of this body — the reflex fired and decided,
+and had nowhere to send a command. Attach hardware and the tag goes away.
 
 Exactly two escalations should appear: the verified person, and a
 calibration-drift warning (the seeded model is deliberately miscalibrated —
@@ -51,8 +57,10 @@ If you also see a stream of "a mesh node is presumed lost", that is **not** this
 body — it means the agent's world memory already holds a
 `mesh.escalated_count >= 1` from some earlier deployment on the same machine.
 The rule is doing its job; the fact is stale. Clear that entity, or start with a
-fresh data directory. On a clean install this body produces no mesh escalations
-at all, because a missing entity never satisfies the condition.
+fresh data directory — `OBC_DATA_DIR=$(mktemp -d) oh-ben-claw start`, or on
+PowerShell `$env:OBC_DATA_DIR="$env:TEMP\tw"`. On a clean install this body
+produces no mesh escalations at all, because a missing entity never satisfies
+the condition.
 
 ## What's in the body
 

@@ -93,6 +93,20 @@ drive an actuator outside the limits the node itself holds.** The host is not in
 the trusted computing base for bounds enforcement. Compromising the agent gets
 you the agent; it does not get you the actuator.
 
+Both halves of that sentence are now in this repository and can be run against
+each other. `obc-safety` brought the gate on 2026-08-01; `obc-movement` brought
+the caller on 2026-08-08. The order inside `MovementController` is gate →
+remember → dispatch: the limit check runs first and returns early, so a refused
+command never reaches a sink *and* is never written to world memory as a
+commanded state. Until then this page described a check whose only caller lived
+in a repository you could not read. It was true; you had to take it on faith.
+`cargo test -p obc-movement` is the version you do not.
+
+Worth naming the gap that remains: a refusal leaves no trace here. The
+`MovementError::Safety` goes back to the caller, and whether it reaches the
+tamper-evident audit chain depends on that caller, which is still upstream. The
+gate refuses; this crate does not record that it refused.
+
 The published safety literature for LLM-driven robots converges on a two-tier
 architecture — an untrusted planner plus a trusted non-LLM enforcer. RoboGuard
 ([arXiv:2503.07885](https://arxiv.org/abs/2503.07885), RA-L Feb 2026) compiles
@@ -213,6 +227,11 @@ the model is down, wedged, or wrong, safing rules still fire.
 Escalation to the slow reasoner is rate-capped and novelty-gated, so a noisy
 sensor cannot drive unbounded model invocations.
 
+Each escalation carries a triage directive naming the playbook that expands it.
+Those three playbooks are in [`playbooks/`](playbooks/README.md) — vendored from
+the core repo from 2026-08-02, because the reference bodies were already citing
+them by path and the path resolved to nothing here.
+
 ---
 
 ## 3. How to turn it on
@@ -305,17 +324,7 @@ Stated because a safety document that only lists strengths is marketing.
   this: the published state of the art either checks physics with hard maths or
   checks meaning with another language model, and the second is not a verifier.
 - **Uncovered tools.** See §2.1. No rule means no gate.
-- **The spine.** The `p2p` and MQTT transports have no authentication story. The
-  realistic robot compromise in 2026 is not an adversarial patch, it is
-  CVE-2026-27509/27510 — unauthenticated DDS publish on Unitree Go2 giving root
-  RCE with physical actuation, persistent across reboot, patched 24 Feb 2026.
-  **Treat the spine network as trusted, and make sure that is actually true.**
-  A design for closing this is in [SPINE-AUTH.md](SPINE-AUTH.md) — per-message
-  HMAC with a replay counter, sized against the 240-byte LoRa frame budget. It is
-  a design and not an implementation, and this section changes when that changes.
-  Note also that MQTT is cleartext by construction: `spine.tls = true` is a hard
-  error because MQTT-over-TLS is not implemented, which is deliberate and is not
-  the same as being encrypted.
+
 - **Perception content in the planning path.** Taint tracking guards tool
   *arguments*. Text recovered from an image by `vision_analyze` still reaches the
   reasoner as prose. Nothing currently strips or sandboxes OCR'd instructions.
@@ -363,8 +372,17 @@ gap is unfilled by any published standard.
 
 ## 6. Reporting a vulnerability
 
-See [SECURITY.md](../SECURITY.md). Please do not open a public issue for anything
-that would let someone actuate hardware they do not own.
+See the security policy in the upstream repo,
+[Oh-Ben-Claw/SECURITY.md](https://github.com/thewriterben/Oh-Ben-Claw/blob/main/SECURITY.md)
+— the agent it covers is the one that actuates hardware, and it is developed
+there. Please do not open a public issue for anything that would let someone
+actuate hardware they do not own.
+
+> This said `[SECURITY.md](../SECURITY.md)` until 2026-08-02. There is no
+> `SECURITY.md` in this repository; the link was written against the upstream
+> tree and pointed at nothing here from the day the file arrived. Found by
+> resolving every relative link in a `git archive` export rather than reading
+> them.
 
 ---
 

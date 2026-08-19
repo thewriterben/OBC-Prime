@@ -31,6 +31,30 @@ jobs:
       - name: check
         run: python scripts/sync_upstream.py check
 
+  doclinks:
+    name: relative links in our own prose resolve
+    runs-on: ubuntu-latest
+    # Added 2026-08-02 after `docs/SAFETY.md` §6 was found pointing at
+    # `../SECURITY.md`, a file this repository does not have and never had. A
+    # dead relative link renders exactly like a live one, so nothing short of
+    # resolving them finds this — and the front page of a public repo is the
+    # part where a broken link costs the most.
+    #
+    # Checks the commit, via `git archive`, not the checkout: an untracked local
+    # file must not be able to satisfy a link a fresh clone cannot follow.
+    # Vendored prose is skipped from `sync_upstream.ARTIFACTS` — its paths mean
+    # the upstream tree, and editing it here is what the manifest gate exists to
+    # prevent. No network: absolute URLs are not fetched.
+    #
+    # `fetch-depth: 0` is not needed; `git archive HEAD` works on a shallow
+    # checkout because it only needs the one commit.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_doc_links.py
+
   behaviour:
     name: vendored wasm behaves as the goldens say
     runs-on: ubuntu-latest
@@ -49,64 +73,577 @@ jobs:
   substrate:
     name: the vendored agent crates build and pass their tests
     runs-on: ubuntu-latest
-    # The first vendored artifacts this repository can execute rather than only
-    # hash. registry/, parity/ and wasm/ are data and a build; crates/ is source,
-    # and source that is never compiled is a listing. 103 tests plus 3 doctests,
-    # verified against a standalone workspace before this job was written.
+    # The vendored artifacts this repository can execute rather than only hash.
+    # registry/, parity/ and wasm/ are data and a build; crates/ is source, and
+    # source that is never compiled is a listing. 1038 tests across twenty-seven
+    # crates as of 2026-08-14, when the two new ones arrived without a new crate:
+    # upstream found `SecurityContext` and the MQTT spine holding *separate*
+    # `NodePairingManager`s built from the same config. The node table is an
+    # `Arc<Mutex<_>>` shared across clones and not across constructions, so the
+    # one reachable from the security context stayed empty and would have
+    # answered `is_trusted` with `false` for every node in the fleet. The two
+    # tests assert both halves — a clone shares the table, a second construction
+    # does not — so the same fix cannot be undone quietly.
+    #
+    # 1036 tests across twenty-seven
+    # crates as of 2026-08-14, when obc-vision arrived and obc-channels and
+    # obc-gateway were recorded as deliberately not vendored — the same test
+    # applied to three crates on the same day, answered differently twice.
+    #
+    # 987 tests across twenty-six
+    # crates as of 2026-08-14, when the tool layer, the model backends and MCP
+    # arrived — and when four other crates that exist upstream were recorded as
+    # deliberately not vendored. Both halves of that are decisions; the drift
+    # gate fails on anything upstream that is neither.
+    #
+    # 751 tests across twenty-three
+    # crates as of 2026-08-14, when obc-spine arrived — 5100 lines, the largest
+    # piece ever moved, and the host end of a conversation firmware/ has been
+    # holding up alone. Its blocking-edge count went four to zero with none of
+    # its own code changing; four implementations moved to it instead.
+    #
+    # 688 tests across twenty-two
+    # crates as of 2026-08-14, when obc-approval arrived — the human-in-the-loop
+    # gate, and the first extraction made after the cycle count reached zero.
+    # With nothing left to unblock, the question went back to being what should
+    # be public rather than what could come out: "a person confirms risky
+    # actions" is not a claim a reader can check by reading it.
+    #
+    # 653 tests across twenty-one
+    # crates as of 2026-08-13, when obc-fleet, obc-audio and obc-mission
+    # arrived — the first three chosen by attacking dependency cycles rather
+    # than by finding something already separable. A bridge moved to the
+    # transport, two sinks moved to what they depend on, and a mission runner
+    # came free behind them.
+    #
+    # obc-mission is also why this job's second half exists, read backwards:
+    # `cargo check -p obc-mission` was green while `cargo test -p --all-targets`
+    # failed on four #[tokio::test] attributes a check never builds. obc-tunnel
+    # went through on features, obc-a2a on a dev-dependency hiding a real one,
+    # and this one on a real build hiding a missing dev one.
+    # 632 across eighteen the same day, when obc-foresight and obc-learning arrived —
+    # Track 1 and the layer that authors its own rules. Neither was chosen:
+    # learning was blocked by foresight, foresight by reflex, and reflex by one
+    # action sink holding an Arc<SpineClient>. 2455 lines came out from behind
+    # one field across three commits, and these two moved no logic at all.
+    #
+    # obc-learning is also the crates-alone argument in miniature: it needs
+    # `anyhow`, which appears in no `use` line anywhere in it — both call sites
+    # write `anyhow::Result<…>` inline in a return type, which no import survey
+    # can see and `cargo check -p` found in seconds.
+    # 617 across sixteen on 2026-08-12, when obc-reflex arrived — System 1 itself, the
+    # rule engine the README has claimed since its first paragraph and could
+    # not show. It was listed at thirteen blocking edges on 2026-08-01 and left
+    # with one: an action sink holding an `Arc<SpineClient>`, moved upstream to
+    # the spine to implement the crate's own trait from the other side. Third
+    # time that manoeuvre has been the answer; see docs/DECISIONS.md.
+    # 589 across fifteen earlier the same day, when obc-tool-api arrived — 175 lines, no tests
+    # of its own and none needed: it is the `Tool` contract with no
+    # implementation, and everything that implements it is tested elsewhere.
+    # The count is unchanged because a trait definition does not add assertions;
+    # what it adds is somewhere to write against. 589 across fourteen from
+    # 2026-08-08, when obc-navigation arrived — 3714 lines that
+    # needed no refactoring at all, because the one edge holding it had been
+    # turned two commits earlier. 534 across thirteen the same day, when
+    # obc-movement arrived — the caller the Track
+    # 0 limit table exists to bound, so "every command is checked before it
+    # actuates" is now two vendored crates that can be run against each other
+    # rather than one crate and a sentence. 520 earlier the same day, when
+    # obc-a2a arrived — held back until it had an entry
+    # point, because an unreachable protocol server reads as a feature in a
+    # public repository. 497 across eleven earlier the same day, when
+    # obc-conscience gained the decision log it had been documenting and could
+    # not write — a move into a crate, not a new one.
+    # 495 the same day, when obc-cost and obc-tunnel arrived — the pair that
+    # showed a workspace build cannot tell you what one crate needs, and put the
+    # per-crate step below next to this one. 473 across nine from 2026-08-06,
+    # when obc-position arrived — the first pair extracted by
+    # *changing* the dependency graph rather than waiting for it: one 25-line
+    # struct moved out of the fleet coordinator and two modules came free. 452
+    # across eight before it, when obc-scheduler and obc-conscience landed — the
+    # second of those being the code behind docs/CONSCIENCE.md, which had been
+    # on public main for two days describing a gate this repository could not
+    # run. 391 across six before that, and 370 across five from 2026-08-01, when
+    # obc-safety brought Track 0 here and obc-telemetry brought the
+    # battery/link/sensor suites — between them the safety layer
+    # docs/SAFETY.md describes and the host half of the reflex claim the README
+    # makes, neither of which this repository could run before.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
+      # And once more with each crate alone, which is not the same test.
+      #
+      # `--workspace` unifies Cargo features across every member, so a crate can
+      # use a feature of a shared dependency that it never declared as long as
+      # anything else in the graph declares it. obc-tunnel arrived here doing
+      # exactly that, twice. The workspace build above caught one of the two:
+      # `rt-multi-thread`, missing where tailscale.rs calls `Runtime::new()`.
+      #
+      # It did not catch the other. `tokio::sync::Mutex` needs the `sync`
+      # feature, no crate in this workspace declares it, and it arrives anyway
+      # through hyper-util several levels down another dependency's tree. A
+      # build with eleven crates in it cannot tell you what one crate needs.
+      #
+      # That is worth being precise about, because this repository's argument
+      # for itself is that it *runs* the vendored crates instead of only hashing
+      # them. True, and not sufficient: running them together is a weaker claim
+      # than running each one. This step makes the stronger claim.
+      #
+      # `check` and `test`, and they are not redundant. Building a lib as a test
+      # target links its [dev-dependencies] into it, so a dependency the library
+      # genuinely needs can be declared dev-only and pass its own tests. obc-a2a
+      # arrived upstream that way on 2026-08-08 — `A2AClient` uses reqwest,
+      # reqwest was declared dev-only:
+      #
+      #     cargo test  -p obc-a2a --all-targets  -> 0
+      #     cargo check -p obc-a2a                -> 101   E0433 reqwest
+      #
+      # Upstream's equivalent job ran only the first command and passed it. This
+      # one had the same hole, from the same author, on the same day. Two
+      # separate repositories are not two separate checks when one was copied
+      # from the other.
+      - name: each vendored crate builds and tests with no siblings
+        run: |
+          set -euo pipefail
+          crates=$(cargo metadata --no-deps --format-version 1 | python3 -c \
+            'import json,sys; [print(p["name"]) for p in json.load(sys.stdin)["packages"]]' \
+            | tr -d '\r' | sort)
+          if [ -z "$crates" ]; then
+            echo "no crates found -- the discovery query is wrong, not the workspace"
+            exit 1
+          fi
+          echo "$crates" | tr '\n' ' '; echo
+          failed=""
+          for c in $crates; do
+            echo "::group::$c"
+            if cargo check -p "$c" && cargo test -p "$c" --all-targets; then
+              echo "$c ok"
+            else
+              failed="$failed $c"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "crates that do not stand alone:$failed"
+            exit 1
+          fi
+
+      # Every count this repository states about itself matches what was just
+      # measured: tests from the harness, artifacts and generator mirrors from
+      # sync_upstream.ARTIFACTS.
+      #
+      # Added 2026-08-13, and then immediately widened. The first version
+      # checked test counts in four named files, because the miss that prompted
+      # it was two stale test counts. It could not have caught what came next:
+      # on 2026-08-13 `parity/README.md` told a reader the sync "copies all 43
+      # artifacts here, updates the generator's 11 mirrors" (2026-08-13) — 157
+      # and 12 — and repeated both figures in sync_upstream.py's own docstring.
+      # Wrong metric, wrong files. This version derives the numbers and the
+      # file set instead.
+      #
+      # (Those two lines carry a date because this gate flagged them on the run
+      # that added it. Quoting a number you have just corrected is the one case
+      # where the escape hatch is the right answer rather than a dodge.)
+      #
+      # It also skips more than it checks, on purpose: vendored prose (belongs
+      # upstream), the append-only logs (PLAN.md, DECISIONS.md, MIGRATION.md —
+      # their numbers are old by construction), dated lines, and the
+      # generator's own npm counts. Twelve of the first sixteen hits were noise,
+      # and a gate that cries wolf is a gate someone turns off.
+      - name: every stated count is current
+        run: python3 scripts/check_counts.py
+
+  # ── The demos still run ───────────────────────────────────────────────────
+  # demo/ is the only Rust here written rather than vendored, and its whole
+  # purpose is that a stranger can watch a claim hold instead of reading that it
+  # does. A demo that stopped running would be worse than no demo: it is cited
+  # in the README as evidence.
+  #
+  # Running them, rather than only compiling them, is the point. Every one of
+  # these exercises a vendored crate through its real API — the gate is
+  # obc_safety::SafetyGate, the planner is obc_navigation::planning::plan — so a
+  # vendored crate whose behaviour changed under this repository's feet fails
+  # here even when it still type-checks.
+  demos:
+    name: the demos still run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p obc-demo -- gate
+      - run: cargo run -p obc-demo -- plan
+      - run: cargo run -p obc-demo -- conscience
+      # No subcommand prints usage and exits 0; an unknown one exits 2. Checked
+      # because "the binary runs" and "the binary does the right thing when
+      # misused" are different claims.
+      - run: cargo run -p obc-demo
+      - name: an unknown demo exits non-zero
+        run: |
+          if cargo run -p obc-demo -- nonsense; then
+            echo "expected a non-zero exit for an unknown demo"
+            exit 1
+          fi
+
+  # ── The vendored crates carry no known-vulnerable dependency ──────────────
+  # Added 2026-08-14 with obc-spine, and the timing is the argument.
+  #
+  # This repository has vendored and *run* the substrate for weeks, with a
+  # committed Cargo.lock, and had never once checked that lock against the
+  # advisory database. "We run what we document" was true about the tests and
+  # not about the dependencies.
+  #
+  # obc-spine is the crate that made the gap concrete. Upstream's audit went red
+  # on its extraction — not from anything new, but because the crate's manifest
+  # took rumqttc's default features where the workspace root had turned them off
+  # under a comment naming four RUSTSEC advisories in rustls-webpki. Cargo
+  # unifies features across a workspace, so one manifest asking for defaults
+  # re-enabled a vulnerable certificate stack everywhere, for MQTT-over-TLS that
+  # is never wired. Build, clippy, fmt and the whole suite stayed green.
+  #
+  # Here the manifest is vendored and hash-checked, so a repeat cannot arrive by
+  # drift — but it can arrive by an advisory published tomorrow against a crate
+  # already in the lock, which no upstream sync would announce.
+  #
+  # It did, on 2026-08-18, four days after this job was added. RUSTSEC-2026-0258
+  # (h2 unbounded empty DATA frames, published 2026-08-17) landed against
+  # `h2 0.4.15`, which was already in this repository's committed lock and
+  # arrives through hyper/reqwest. Nothing changed here; the world did. Every
+  # other gate stayed green, including the drift gate — the vendored copy still
+  # matched upstream exactly, because upstream was equally affected and equally
+  # unaware.
+  #
+  # Upstream could not have caught it either, and not because it is less careful:
+  # its root `Cargo.lock` is gitignored, so its CI resolves fresh on every run and
+  # would have quietly picked up the fixed version without ever reporting a
+  # vulnerability. Committing a lock is what makes the exposure visible, and this
+  # job is what makes it loud. Both halves are the point.
+  audit:
+    name: no known-vulnerable dependency in the vendored substrate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - run: cargo audit
 
   peer:
     name: generator mirrors match
     runs-on: ubuntu-latest
-    # Covers the 11 artifacts the generator also carries (registry, fixtures,
-    # wasm); the 32 firmware files have no peer copy.
+    # Covers the generator's 12 mirrors (registry, firmware templates, fixtures,
+    # wasm); the 33 firmware files have no peer copy.
     #
-    # Corrected 2026-07-30: an earlier version of this job asserted "the
-    # generator is public and needs no token". PLAN.md says the opposite, and
-    # nothing had checked. The token expression below works either way — for a
-    # public repo `github.token` suffices; for a private one, set a PAT as the
-    # PEER_REPO_TOKEN secret. If the repo is private and the secret is unset,
-    # this job fails on checkout with a clear 404 rather than a confusing drift
-    # report, which is the right failure.
+    # **The generator repository is private.** Settled 2026-07-30 by running this
+    # job, not by reading anything: it failed on the peer checkout, and setting
+    # PEER_REPO_TOKEN turned all four jobs green. An earlier version of this job
+    # asserted "the generator is public and needs no token" with nothing having
+    # checked; the correction below is a measurement.
+    #
+    # `github.token` is scoped to THIS repository and can read another one only
+    # if that repository is public — so the `||` fallback exists for symmetry and
+    # will not work here. PEER_REPO_TOKEN is a fine-grained PAT with
+    # `Contents: read` on thewriterben/OBC-deployment-generator and nothing else.
+    #
+    # It has an expiry. When it lapses this job fails on checkout with
+    # "Repository not found", which reads like drift and is not — a drift failure
+    # names a file and two hashes. Re-issue the PAT rather than debugging the
+    # manifest.
+    #
+    # ── Merge order, which this job requires and used to require silently ────
+    # The first checkout below takes the generator's DEFAULT BRANCH. So any sync
+    # touching one of the 12 mirrored artifacts fails against it from the moment
+    # the PR opens until the generator's own PR lands — the mirror is not stale,
+    # it is unmerged, and the hash comparison reports DRIFTED either way. The
+    # `check` output now prints the peer revision it measured, which is the one
+    # line that tells those two apart.
+    #
+    # Land the generator PR first, then this one. Either order leaves one
+    # repository's main red for a window; that order makes the window a manual
+    # re-run of a job nothing triggers, instead of a red main on merge.
+    #
+    # Written down 2026-08-14, the first time it cost anything: the failure
+    # names a file and two hashes and nothing else, so working out that it was
+    # merge order meant cloning the generator's main and reproducing it by hand.
+    # A structural requirement that only exists in whoever last hit it is not a
+    # requirement, it is a trap with a survivor. It then cost two more round
+    # trips on the same afternoon, one of them a merge of the wrong repository.
+    #
+    # ── Why the pull-request run is allowed a second answer ──────────────────
+    # On a pull request this job now also looks for a generator branch named
+    # the same as the PR's head ref, and if the mirrors match *that*, it passes
+    # with a warning instead of failing.
+    #
+    # I argued against this and was wrong about why. The objection was that it
+    # makes a green run depend on a branch-naming convention nothing enforces —
+    # true, and it does not matter, because the fallback fails loudly rather
+    # than passing quietly. Name the generator branch something else and the
+    # job checks the default branch and reports drift, which is where we came
+    # in. There is no silent pass on this path.
+    #
+    # The real hazard is different and is handled by the `if:` below: a PR that
+    # goes green on a peer *branch* invites merging this repository first,
+    # which is the one order that puts a red on main. So the second answer is
+    # available only on `pull_request` — `push: main` sees the default branch
+    # and nothing else — and when it is used, the job says in the summary that
+    # main will be red until the generator PR lands. Green with a stated debt,
+    # not green.
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: check out the generator (needs PEER_REPO_TOKEN; the repo is private)
+        uses: actions/checkout@v4
         with:
           repository: thewriterben/OBC-deployment-generator
           path: peer
           token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
+      # Optional, and its absence is not an error: most PRs here do not touch a
+      # mirrored artifact and need no generator branch at all.
+      - name: check out a generator branch matching this PR, if there is one
+        id: peer_branch
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/OBC-deployment-generator
+          ref: ${{ github.head_ref }}
+          path: peer-branch
+          token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python scripts/sync_upstream.py check --peer peer
+      - name: generator mirrors match
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BRANCH_FOUND: ${{ steps.peer_branch.outcome }}
+        run: |
+          set -uo pipefail
+          if python scripts/sync_upstream.py check --peer peer; then
+            exit 0
+          fi
+          if [ -z "${HEAD_REF:-}" ]; then
+            echo
+            echo "This run reads the generator's default branch and nothing else,"
+            echo "because it is not a pull request. If a mirror commit is sitting"
+            echo "on an unmerged branch over there, merge it — no re-run here can"
+            echo "clear this."
+            exit 1
+          fi
+          if [ "${BRANCH_FOUND:-}" != "success" ]; then
+            echo
+            echo "The generator's default branch does not carry these mirrors, and"
+            echo "it has no branch named '${HEAD_REF}' either. Either the mirror"
+            echo "commit was never pushed, or it is on a differently named branch"
+            echo "— in which case land it and re-run."
+            exit 1
+          fi
+          echo
+          echo "::group::retrying against the generator branch '${HEAD_REF}'"
+          if ! python scripts/sync_upstream.py check --peer peer-branch; then
+            echo "::endgroup::"
+            echo "The generator branch does not carry matching mirrors either, so"
+            echo "this is drift and not merge order. Re-run sync with --peer."
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "::warning title=Merge the generator PR first::Mirrors match the generator branch '${HEAD_REF}' but not its default branch. This repository's main will be RED between merging here and merging there."
+          {
+            echo "### Mirrors: matched on a branch, not on main"
+            echo
+            echo "The 12 generator mirrors match \`${HEAD_REF}\` in"
+            echo "OBC-deployment-generator, and do **not** match its default branch."
+            echo
+            echo "**Merge the generator PR before this one.** Merging here first"
+            echo "puts a red on this repository's \`main\`, which the \`push\` run of"
+            echo "this job will show and no re-run here can clear."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  # Enable once the core agent repo is reachable from CI.
+  accelerapp:
+    name: accelerapp mirrors match
+    runs-on: ubuntu-latest
+    # Accelerapp carries copies of registry.json and templates.json, and has
+    # since Ecosystem Integration I1/I6. Nothing hashed them. They happened to
+    # match the canonical files exactly -- by luck, which is not a property you
+    # can rely on twice.
+    #
+    # No token: the repository is public. Established by running `ls-remote` with
+    # credentials disabled, which the deployment generator correctly fails, so
+    # the test distinguishes rather than merely succeeding.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Accelerapp
+          path: accelerapp
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/sync_upstream.py check --peer accelerapp=accelerapp
+
+  upstream:
+    name: vendored artifacts match the core agent
+    runs-on: ubuntu-latest
+    # The check this repository most needed and least had. Without it, `check`
+    # compares every vendored file to its own recorded hash and passes — which a
+    # file deleted upstream passes trivially, and a bundle built from stale
+    # sources passes by construction. Both happened. `crates/obc-memory/src/image.rs`
+    # sat here for two commits after upstream deleted it, compiling into the
+    # `substrate` job, with every gate green; and the WASM bundle was six weeks
+    # stale on 2026-07-29 while all 43 artifacts reported identical.
+    #
+    # Enabled 2026-07-30, once the two things blocking it were actually solved
+    # rather than noted:
+    #
+    #   * Repo access — which turned out not to be a blocker at all. The core
+    #     agent repository is public, so `github.token` can read it and no
+    #     secret is required. The CORE_REPO_TOKEN fallback below stays for the
+    #     day that changes; it is inert while the repo is public.
+    #
+    #     Worth saying plainly, because this job sat commented out for weeks
+    #     partly on the belief that access was the hard part. Nobody had asked.
+    #     The sibling `peer` job needed a real PAT and this one needed nothing,
+    #     and the difference was one question.
+    #   * The WASM bundle. `planner-wasm/pkg/` is gitignored upstream, so a plain
+    #     checkout has no bundle and all five wasm artifacts fail as "upstream
+    #     source missing". The first answer was a wasm-pack build step here, on
+    #     the reasoning that reproducing the bundle from the checked-out sources
+    #     is a stronger check than copying one.
+    #
+    #     **That step does not exist and has not since 2026-07-30.** It was
+    #     removed the same day it was written, by `0f7d454` — "upstream cannot
+    #     see build output, and a rebuild cannot stand in for it" — because
+    #     wasm-pack output is not byte-reproducible across toolchains, so a
+    #     fresh build differs from the vendored one for reasons that have
+    #     nothing to do with drift. What replaced it is `UNCOMPARABLE_UPSTREAM`
+    #     in sync_upstream.py: the five wasm artifacts and the two firmware
+    #     locks are declared uncomparable, and the skips are printed on every
+    #     run, because a check that quietly declines to check is worse than one
+    #     that fails.
+    #
+    #     The bundle is still covered, twice and better: the `behaviour` job
+    #     runs it against the vendored goldens — output rather than bytes, which
+    #     is what would actually catch a wrong planner — and `wasm_build` hashes
+    #     the *sources* it was compiled from, which are ordinary tracked files.
+    #     That second one is what found the six-week-old bundle to begin with.
+    #
+    #     Corrected 2026-08-18. The paragraph above described the removed step
+    #     as the solution for nineteen days, and asserted a reason the script
+    #     directly refutes — so a reader of this file learned the opposite of
+    #     what was decided. Kept rather than deleted: the wrong answer is why
+    #     the right one is shaped this way.
+    #
+    # ── Merge order, and why this job now says so ────────────────────────────
+    # The first checkout below takes the core agent's DEFAULT BRANCH, so a sync
+    # made from an unmerged upstream branch fails here from the moment the PR
+    # opens until the upstream PR lands. The vendored copy is not drifted; it is
+    # ahead. The hash comparison reports the same thing either way.
+    #
+    # The sibling `peer` job learned this on 2026-08-14 and got a second answer:
+    # look for a peer branch named like the PR's head ref, and pass with a
+    # warning if the mirrors match *that*. This job has the identical failure
+    # mode, the identical two-hashes-and-nothing-else error, and did not get the
+    # fix — the lesson was written down next to one of the two jobs it applies
+    # to. Found on 2026-08-18 by hitting it: an upstream declaration fix could
+    # not be vendored here without a red run nothing explained.
+    #
+    # Merge order is the mirror image of the peer job's. Land the UPSTREAM PR
+    # first, then this one — upstream is the source, so its main is what a fresh
+    # `check --upstream` reads. The same hazard applies: a PR that goes green on
+    # an upstream *branch* invites merging here first, which is the one order
+    # that puts a red on this repository's main. Hence `pull_request` only, and
+    # a summary that states the debt.
+    steps:
+      - uses: actions/checkout@v4
+      - name: check out the core agent (public; no token needed)
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Oh-Ben-Claw
+          path: core
+          token: ${{ secrets.CORE_REPO_TOKEN || github.token }}
+      # Optional, and its absence is not an error: most PRs here touch no
+      # vendored file and need no upstream branch at all.
+      - name: check out a core-agent branch matching this PR, if there is one
+        id: core_branch
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: thewriterben/Oh-Ben-Claw
+          ref: ${{ github.head_ref }}
+          path: core-branch
+          token: ${{ secrets.CORE_REPO_TOKEN || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: vendored artifacts match the core agent
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BRANCH_FOUND: ${{ steps.core_branch.outcome }}
+        run: |
+          set -uo pipefail
+          if python scripts/sync_upstream.py check --upstream core; then
+            exit 0
+          fi
+          if [ -z "${HEAD_REF:-}" ]; then
+            echo
+            echo "This run reads the core agent's default branch and nothing"
+            echo "else, because it is not a pull request. If the vendored change"
+            echo "is sitting on an unmerged branch upstream, merge it there — no"
+            echo "re-run here can clear this."
+            exit 1
+          fi
+          if [ "${BRANCH_FOUND:-}" != "success" ]; then
+            echo
+            echo "The core agent's default branch does not carry these files, and"
+            echo "it has no branch named '${HEAD_REF}' either. Either the upstream"
+            echo "commit was never pushed, or it is on a differently named branch"
+            echo "— in which case land it and re-run."
+            exit 1
+          fi
+          echo
+          echo "::group::retrying against the core-agent branch '${HEAD_REF}'"
+          if ! python scripts/sync_upstream.py check --upstream core-branch; then
+            echo "::endgroup::"
+            echo "The core-agent branch does not match either, so this is drift"
+            echo "and not merge order. Re-run sync against upstream."
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "::warning title=Merge the upstream PR first::Vendored files match the core-agent branch '${HEAD_REF}' but not its default branch. This repository's main will be RED between merging here and merging there."
+          {
+            echo "### Vendored files: matched on a branch, not on upstream main"
+            echo
+            echo "The vendored artifacts match \`${HEAD_REF}\` in Oh-Ben-Claw, and"
+            echo "do **not** match its default branch."
+            echo
+            echo "**Merge the upstream PR before this one.** Merging here first"
+            echo "puts a red on this repository's \`main\`, which the \`push\` run of"
+            echo "this job will show and no re-run here can clear."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Every tool declares what it can do to the world ───────────────────────
+  # Cheap, Python-only, and separate so a failure names itself rather than
+  # arriving inside a twenty-minute Rust job.
   #
-  # Two things block this, not one. The access token is the known blocker. The
-  # other: `planner-wasm/pkg/` is gitignored upstream (`pkg/.gitignore` is `*`),
-  # so a plain checkout of the core repo has no WASM bundle and all five wasm
-  # artifacts fail as "upstream source missing". This job therefore needs a
-  # wasm-pack build step before the check, not just repo access.
+  # `Tool::risk_class` defaults to `RiskClass::safe()` and its doc comment says
+  # tools that touch the real world MUST override it. Nothing enforced that. The
+  # gate that acts on the answer — `track0_authorize` — is upstream in
+  # `obc-agent` and is not vendored here, so a tool that under-declares itself
+  # in this repository is wrong somewhere this repository does not build. That
+  # is the worst shape a defect can have, and the reason the check is on the
+  # declaration rather than the caller.
   #
-  # upstream:
-  #   name: vendored artifacts match the core agent
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         repository: OWNER/CORE_REPO
-  #         path: core
-  #         token: SECRET_CORE_REPO_TOKEN
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.12'
-  #     - uses: jetli/wasm-pack-action@v0
-  #     - run: wasm-pack build planner-wasm --target nodejs
-  #       working-directory: core
-  #     - run: python scripts/sync_upstream.py check --upstream core
+  # Added 2026-08-18 with the fix for `MqttNodeTool`, `P2pNodeTool` and
+  # `McpRemoteTool`, all three of which were taking the default — so every tool
+  # announced by a peripheral node, a P2P peer or a remote MCP server reached
+  # the gate declared non-physical, and the gate returned at its first line.
+  declarations:
+    name: every tool that actuates declares that it does
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_physical_tools.py

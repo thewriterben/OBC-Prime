@@ -5,6 +5,399 @@ New entries go at the top.
 
 ---
 
+## 2026-08-14 — The mirror repository merges first, and the gate never said so
+
+A sync that touches one of the generator's mirrored artifacts needs two pull
+requests: the manifest and the vendored copy here, the rebuilt mirror there. The
+`peer` job checks out the generator's **default branch**, so from the moment this
+repository's PR opens until the generator's PR lands, the job reports:
+
+    x wasm/obc-planner/obc_planner_wasm_bg.wasm: generator mirror DRIFTED
+
+which is true, and points at the manifest, where nothing is wrong.
+
+**Decision: the generator PR lands first.** Both orders leave one repository's
+main briefly disagreeing with the other. Generator-first makes that window a job
+that nothing re-triggers; here-first makes it a red main the moment the merge
+button is pressed.
+
+**Correction, same day.** The first version of this entry said the job "cannot be
+fixed by making the job smarter", because a gate comparing two repositories has
+to read *some* revision of the second and the only one it can name unaided is the
+default branch. The second half is true; the conclusion was not. The job could
+check out a generator branch whose name matches this PR's head ref when one
+exists, and fall back to the default branch otherwise — an ordinary pattern, and
+a real fix.
+
+It was not taken at first, on the grounds that it makes a green CI run depend on
+a branch-naming convention nothing enforces: name the generator branch
+differently and the job falls back to the default branch.
+
+**Second correction, same day — that objection was also wrong, and the job now
+does the branch matching.** The fallback does not pass quietly, which was the
+whole force of the argument. If the names do not match, the job checks the
+default branch and reports drift, exactly as before. There is no path through
+branch matching that turns a real mismatch into a pass.
+
+What is true is a different hazard, and it needed a different guard. A PR that
+goes green on a peer *branch* invites merging this repository first, which is
+the single order that puts a red on `main`. So the second answer is scoped to
+`pull_request` only — the `push: main` run reads the default branch and nothing
+else, so main cannot go falsely green — and when the second answer is used, the
+job emits a warning and a step summary saying that main will be red until the
+generator PR lands. Green with a stated debt, rather than green.
+
+**The decision therefore stands unchanged: the generator PR lands first.** What
+changed is that the PR check no longer blocks on it, and that the requirement is
+now stated by the tooling in three places instead of living in whoever last hit
+it — the failure text, the job summary, and the peer revision line that `check`
+now prints alongside the upstream one.
+
+Both superseded sentences are left above with their corrections beneath rather
+than edited away. An append-only log that quietly fixes its own claims is not
+one, and the shape of the mistake is the useful part: twice I reached for a
+structural reason ("cannot be fixed", "would pass silently") when the actual
+reason was a preference for the simpler rule. The first is an argument the next
+reader cannot check; the second is one they can disagree with.
+
+### The transferable part
+
+The failure message was accurate and misleading, which is the same shape as three
+other findings in this repository: the counts gate hiding a live number, the drift
+gate measuring the wrong revision, the reachability survey guarding half its
+inputs. A check that cannot distinguish "wrong" from "not yet" should say so in
+the failure text, because the reader has no other source. Both the workflow
+comment and the message itself now name merge order as the first thing to rule
+out.
+
+---
+
+## 2026-08-13 — A crate owns its own configuration block, and that was the whole endgame
+
+Recorded here because this repository has been following the rule since its
+third crate without ever writing it down, and upstream's last seven dependency
+cycles turned out to be the four places it had not been applied.
+
+**The rule.** A module's configuration struct lives with the module. The root
+`Config` composes it. `obc-planner` owns `DeploymentConfig`, `obc-conscience`
+owns `ConscienceConfig`, `obc-cost` owns `CostConfig`, `obc-tunnel` owns its
+own — every crate vendored here already works this way, which is why none of
+them needed the root config module to exist in order to compile alone.
+
+**What it cost to have four exceptions.** `ProviderConfig` was defined in the
+root config module while two of its own field types lived in `providers`, and
+all ten provider files imported the struct back. One struct, split across two
+modules, pointing both ways — three cycles. `SpineConfig` and
+`MeshSupervisorConfig` were four references and the entire dependency of a
+5100-line module on anything else in the tree — four more cycles.
+`AutonomyConfig` was two.
+
+Moving each one to the module that reads it took the core from sixteen cycles
+to zero. No interfaces were designed and no logic changed.
+
+**Why it matters to a reader of this repository specifically.** The reason every
+crate here can be built and tested with no siblings is this rule, applied by
+accident at first and then on purpose. A crate that reaches into a central
+config module for its own settings cannot stand alone, and the `substrate` job
+would catch it — but only after someone had already written it that way. The
+rule is the thing that stops it being written.
+
+**One correction worth keeping**, because it is the argument for measuring
+rather than reasoning. Upstream put `AutonomyLevel` and `AutonomyConfig` in
+`agent` first, since the agent reads them. The cycle count stopped at two
+instead of zero. Autonomy *level* is the approval policy — how much a human has
+to confirm — and `approval` is the module that turns it into an
+`ApprovalManager`. One module further, and the count went to zero.
+
+The rule was right and the noun was wrong, and the instrument said so within
+minutes. That is the more useful half of "measure rather than judge": not
+measuring to prove you were right, but measuring so that being wrong is cheap.
+
+---
+
+## 2026-08-13 — At eight occurrences it is a rule, not a knack
+
+An entry below, written yesterday, called turning an edge "the answer three
+times now" and listed three. It is eight. Recording that as its own entry rather
+than editing the count, because the number *is* the argument: three times is a
+run of luck, eight times is a shape the codebase reliably produces.
+
+| what left | what was in the way | what moved |
+|---|---|---|
+| `obc-movement` | `Arc<SpineClient>` in an actuator sink | the sink, to the spine |
+| `obc-a2a` | nothing referenced it | an executor, written next to the agent |
+| `obc-reflex` | `Arc<SpineClient>` in an action sink | the sink, to the spine |
+| `tools -> agent` | two `use` lines in a `#[cfg(test)]` module | the tests, to `tests/` |
+| `spine -> agent` | `Severity`, `DIGEST_PREFIX` in the notify module | the vocabulary, to `obc-reflex` |
+| `agent <-> skill_forge` | `impl ReplayExecutor for Agent`, next to the trait | the impl, next to the type |
+| `obc-fleet` | a 60-line MQTT bridge in the coordinator | the bridge, to the spine |
+| `obc-audio` | two `SpeechSink` impls with dependencies | both impls, to the spine and the tool layer |
+
+The shape: **a trait declared next to its caller, implemented next to its
+caller, for a type that lives somewhere else.** Rust permits the implementation
+in either place as long as one of them owns the trait, so the compiler never
+objects. Only the dependency graph does, and only if something is looking.
+
+Three of the eight were not production code at all — two test modules and a doc
+comment. That is the least intuitive part and worth stating plainly: a `use`
+line inside `#[cfg(test)]` and a rustdoc link are both dependency edges, and a
+graph built from text cannot tell either one from a call in a hot loop.
+
+`obc-fleet` is a genuinely different animal, and it is why this is a new entry
+rather than `s/three/eight/`. The others were each one thing in the wrong place.
+That one was the *same integration implemented from both ends* — the coordinator
+bridging itself onto MQTT, while the spine was already bridging LoRa into the
+coordinator from its own side. Both halves looked reasonable where they sat.
+Neither is a mistake anyone made; it is what happens when two modules are each
+maintained by someone who reasonably believes the integration is theirs.
+
+The actionable consequence: **when a two-module cycle resists the "one misplaced
+item" reading, look for a duplicated responsibility before looking for a design
+problem.** It was faster to find than either.
+
+---
+
+## 2026-08-13 — Two crates arrived that nobody decided to move
+
+`obc-foresight` (677 lines) and `obc-learning` (454) are here, and this entry
+exists mostly to record that neither was a decision. They are the first
+arrivals in this repository that were not selected — by reading imports, by
+`extractability.py`, or by anyone weighing what the public repo most needed.
+They fell out.
+
+The chain, smallest thing last: `learning` was blocked by `foresight`,
+`foresight` was blocked by `reflex`, and `reflex` was blocked by a single action
+sink holding an `Arc<SpineClient>` — one field, one constructor parameter, two
+topic constants. Turning that one edge released **2455 lines across three
+crates** in three commits, and the two here moved no logic whatsoever: eight
+paths spelled `crate::memory::world::` became `obc_memory::`, names that had
+been a crate since 2026-07-30 and were still being read through the agent's
+re-export table.
+
+The entry below this one already argued that a blocking-edge count says nothing
+about what an edge costs to turn. This is the same claim from the other end:
+**turning one cheap edge can release work you were not planning to do.** The
+useful consequence is scheduling, not philosophy — after any edge-turning
+commit, re-run the survey before deciding what is next, because the answer may
+have changed underneath the plan. Upstream's `docs/ENDGAME.md` predicted these
+two specifically and was right about them, and wrong in the same paragraph
+about which back-edges the move would break. Both halves are recorded there.
+
+One thing here is a decision rather than a consequence: **the approval gate did
+not come with `obc-learning`.** `tests/learning_approval_gate.rs` asserts that a
+mined rule is inert until approved, and it does so against a real
+`ForesightEngine` rather than a mock. Vendoring the crate without it would have
+put a rule-synthesis engine in a public repository with its central safety
+property untested here. Keeping it upstream is the honest option of the two
+available — the alternative was a weaker local restatement — and it is why this
+crate's row in the README says 4 tests rather than a number that flatters it.
+
+---
+
+## 2026-08-12 — Turn the edge; do not wait in the queue
+
+`obc-reflex` is here, and the entry below it — dated 2026-08-01 — says the
+reflex engine "is in the core crate's `agent/` behind thirteen blocking edges
+and cannot move yet." That was true when written. What made it stop being true
+is worth a decision record, because it changes how the queue is read.
+
+The extraction queue is produced by upstream's `scripts/extractability.py`,
+which ranks each module by how many outward edges point at something still in
+the core tree. Read naively it is a work order: take the zeroes, wait on the
+rest. Three times now the useful move has been the opposite — pick the edge
+rather than the module, and reverse it:
+
+| what left | what was blocking it | what moved |
+|---|---|---|
+| `obc-movement` | `Arc<SpineClient>` in one actuator sink | the sink, to the spine — 39 lines |
+| `obc-a2a` | nothing; nothing referenced it either | an executor, written next to the agent |
+| `obc-reflex` | `Arc<SpineClient>` in one action sink | the sink, to the spine |
+
+The shape is the same each time: **the trait stays where the abstraction is, the
+implementation goes where the dependency is.** The crate declares `ActionSink`
+or `ActuatorSink` or `TaskExecutor`; the thing that needs the spine, or the
+agent, implements it from the other side and stays behind. The dependency
+arrow reverses without either side changing what it does.
+
+The cost of not knowing this: `obc-navigation` is 3714 lines and was blocked by
+`obc-movement`, which was blocked by 39 lines. Read as a queue, that is a large
+job waiting on a medium job waiting on a small one. Read as edges, it is one
+`Arc<SpineClient>` field holding back 4416 lines — `wc -l` across both crates'
+`src/` as vendored here — and it took an afternoon.
+`obc-reflex` at thirteen edges and `obc-navigation` at one looked like very
+different problems and were not.
+
+What the instrument cannot tell you, stated so nobody mistakes the ranking for
+the answer: **a count of blocking edges says nothing about how expensive each
+edge is to turn.** Thirteen small edges is a smaller job than one that runs
+through a cycle. Upstream's `scripts/core_endgame.py` was written for the
+second half of that sentence — what remains in the core is cyclic rather than
+merely dense, and no ordering of extractions solves a cycle.
+
+One other thing this entry records, because it is the same failure this
+repository keeps documenting in its own code: **eleven crates arrived between
+the entry below and this one, and none of them got an entry here.** The
+narrative went into `scripts/sync_upstream.py` comments, the `substrate` job's
+comment block and the README instead — all three of which are read more often
+than this file, which is most of why it happened. The log was not wrong; it
+just quietly stopped being the place the reasoning lived. It is not
+back-filled here — inventing eleven contemporaneous records after the fact
+would be worse than the gap — but the gap is now on the page rather than
+implied by a date.
+
+---
+
+## 2026-08-01 — The next piece is chosen by a script now, and this is the first one
+
+`obc-telemetry` — `power`, `comms`, `sensing`, 1,015 lines, 18 tests — is the
+fourth crate vendored here and the first that nobody picked by reading imports.
+
+The core repo now has `scripts/extractability.py`: per module, the outward
+edges, split into *blocking* (points at something still in that tree) and *free*
+(points at a crate that has already left, which a new crate can simply depend
+on). It is the mirror of the existing `curation_survey.py`, and the two ask
+opposite questions — who references this, versus what does this reference. Only
+the second one predicts whether a piece can move. The three suites were among
+six modules with zero blocking edges.
+
+Two things about that script are worth carrying over here, because this
+repository is downstream of its judgement:
+
+- **Its first version was wrong, in the direction that would have cost a week.**
+  Counting only `use crate::…` declarations, it reported `config` — 3,430 lines,
+  58 dependents — as having no outward edges. It has six; its struct fields are
+  typed with inline paths like `pub server: crate::mcp::McpServerConfig` that no
+  `use` line records. That is the same failure the sibling script was corrected
+  for in July, which is why the two now share one parser.
+- **The verdict was then confirmed by a compiler**, before anything moved:
+  `src/comms/mod.rs` compiled in a scratch crate whose entire universe was
+  `obc-memory`, serde and anyhow. A survey saying "no blocking edges" and a
+  compiler agreeing are different claims, and only the second is load-bearing.
+  The extraction that followed needed no call-site changes at all.
+
+Why these three and not `scheduler`, `a2a` or `observability`, which were
+equally movable: the queue says what *can* move, not what *should*. The README
+says the reflex layer keeps working when the brain is unreachable, on ten
+separate lines, and backed it only with vendored firmware. The three suites are
+the host side of that — each turns a raw reading into a world-memory fact plus a
+coarse mode (`power.mode`, `net.mode`, `sensor.{quantity}` and a quality flag),
+and the mode is what a reflex rule watches, since a rule cannot reason about
+millivolts.
+
+Stated plainly rather than left to be found: this backs half the sentence. The
+reflex *engine* is in the core crate's `agent/` behind thirteen blocking edges
+and cannot move yet. A claim half-backed and labelled as such is worth more than
+one wholly unbacked and unlabelled, but it is not the same as done.
+
+---
+
+## 2026-08-01 — Track 0 comes here third, because the safety claim was the one a reader could not check
+
+`obc-safety` is the third crate vendored from the core agent, after `obc-memory`
+and `obc-planner`. The order was not chosen by importance — on importance this
+one goes first. It was chosen by separability, which is the only thing that makes
+a piece movable, and Track 0 did not become separable until upstream fixed a
+dependency that pointed the wrong way.
+
+Three of its files — `audit.rs`, `taint.rs`, `trust.rs` — imported `RiskClass`
+and `BlastRadius` from `crate::tools`, so the safety layer depended on the
+largest and least self-contained module in the tree. Those four types are the
+*contract* the tool layer is checked against, not tool machinery. Upstream moved
+them down into `obc-safety::risk` and had `tools::traits` re-export them, which
+left the crate with no outward edges and made this vendoring a copy rather than a
+negotiation. Extraction is usually blocked by exactly one edge pointing the wrong
+way, and the fix is usually to move the contract down rather than the consumer up.
+
+What this changes for a reader: `README.md` and `docs/SAFETY.md` claim that
+actuator bounds are enforced below the host, that every physical action and every
+refusal lands in a hash-chained Ed25519-signed record, and that a privileged call
+whose arguments echo untrusted content is refused. Until today all three claims
+were documented here and implemented somewhere else. `cargo test -p obc-safety`
+now runs 65 tests of that code in this repository, in CI, on every push. The
+document arriving before its code is the wrong order, and this is the third and
+last of the three where that had happened.
+
+Not fixed by this, and worth stating in the same breath: node **pairing** is
+vendored here as `pairing.rs` and is inert upstream — `pair_node` and `is_trusted`
+have no callers, so the spine is still unauthenticated (see `docs/SPINE-AUTH.md`
+and `docs/MIGRATION.md` §2.4). Vendoring the code does not wire it. What it does
+is put the primitive and its 386 tested lines where the design document that
+depends on them already lives.
+
+---
+
+## 2026-08-01 — `sync` skips what `check` already skips
+
+`sync` refused to run at all against a clean upstream checkout. Seven artifacts —
+five wasm build outputs and two firmware `Cargo.lock`s — are gitignored upstream,
+so they are simply absent from a fresh clone, and `do_sync` aborted on the first
+missing source. `check --upstream` had known about exactly these seven since
+2026-07-30, by name and with a reason each; `sync` did not. The same knowledge,
+encoded in one command and not its sibling.
+
+It surfaced the way these things do: vendoring `obc-safety` — twelve files with
+nothing to do with WASM — was blocked by a WASM bundle that was never going to be
+there.
+
+`sync` now skips them and **carries their manifest entries forward**, which is
+the part that had to be right. The manifest is rebuilt from what a run copied, so
+skipping without carrying would have silently dropped seven artifacts from the
+gate — turning "cannot sync" into "no longer checked", which is strictly worse
+than the abort it replaces. The recorded hash wins over re-hashing the file on
+disk, so a hand-edited vendored copy still fails `check` instead of being
+laundered into the manifest by the next sync. Skips print on every run, like
+`check`'s do.
+
+---
+
+## 2026-07-30 — The peer check keeps a credential, because the alternative is trusting a mirror
+
+The `peer` job checks the 11 artifacts the deployment generator mirrors. It went
+red on PR #2 and stayed red, and the interesting part is how long it took to stop
+looking for drift.
+
+Everything measurable said the mirrors were identical: 56 artifacts passing
+locally; passing against `git archive main` of the generator, which is
+byte-for-byte what `actions/checkout` produces; no CR anywhere; the same hash for
+`registry.json` across the OBC-Prime worktree, the generator worktree, and the
+generator's committed blob; the 13 crate artifacts correctly carrying no peer
+path. Every one of those checks was about the comparison. The failure was
+upstream of the comparison — the checkout — and no amount of hashing reaches it.
+
+**The generator repository is private.** That is now measured rather than
+asserted: the job failed on the peer checkout, a fine-grained PAT with
+`Contents: read` went in as `PEER_REPO_TOKEN`, and all four jobs went green. An
+earlier version of this workflow asserted the opposite — "the generator is public
+and needs no token" — with nothing having checked, and `PLAN.md` saying otherwise
+in the same tree.
+
+The decision was whether to keep the job at all. The case for deleting it is real:
+when it was written the generator had no CI, and it does now — `ci.yml` runs the
+same four planner-parity tests against the same goldens, including the widened
+`wasm-planner.test.ts` that compares the whole config instead of asserting it
+contains `[peripherals]`. So this leg is no longer the only guard, and it is a
+guard that needs a credential with an expiry to function.
+
+Kept anyway. The generator's own CI proves its planner agrees with the goldens
+*it has*; this job proves the goldens it has are the ones this repository
+published. Those are different claims, and the second one is the entire point of a
+mirror. A vendored copy nobody compares is a copy that has already forked and has
+not been told.
+
+The cost is honest and written into the workflow: when the PAT expires this job
+fails on checkout with "Repository not found", which reads exactly like drift and
+is not. A drift failure names a file and two hashes. That sentence is in
+`parity.yml` so the next person spends a minute rather than an afternoon.
+
+### The transferable part
+
+When a check that compares two things fails, the reflex is to interrogate the two
+things. The comparison was never reached. Read the log before reproducing the
+comparison — one line of it would have replaced an hour of hashing, and the hour
+of hashing produced only evidence that everything it could see was fine.
+
+---
+
 ## 2026-07-30 — Hashes prove identity; only execution proves correctness
 
 The stale-build entry below fixed the *detection* of a bundle built from old

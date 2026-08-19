@@ -21,7 +21,39 @@ bodies/*/config.local.toml
 bodies/*/*.db-wal
 bodies/*/*.db-shm
 
+# The two rules above never matched the files they were written for. The agent
+# names its own SQLite databases after `[agent] name` with no extension, so a
+# body called "trailwatch" produces `trailwatch`, `trailwatch-wal` and
+# `trailwatch-shm` — not `*.db-wal`. bodies/trailwatch/ shipped all three (an
+# empty scheduler database, 57 KB) from cce8731 on 2026-07-27 until 2026-08-02,
+# ignored by a pattern that looked like it covered them. A current build writes
+# to the OS data directory instead, so the bare database file cannot come back
+# from a normal run; the sidecars are matched here anyway.
+bodies/*/*-wal
+bodies/*/*-shm
+
 .DS_Store
 Thumbs.db
 *.log
 .env
+
+# Commit messages written to a file and passed with `git commit -F`. Untracked
+# and unignored is how scratch files get swept into a commit here — which
+# happened upstream on 2026-08-01 with a `git add -A`.
+#
+# It then happened *here* on 2026-08-12, because the rule named one filename
+# and the message was written to `_msg.txt`. The ignore was not wrong; it was
+# too specific to survive a different agent picking a different name. Glob.
+_commitmsg*.txt
+_msg*.txt
+# Scratch scripts for measuring what goes in a commit message — counting tests,
+# counting call sites. They exist so the numbers in the README are measured
+# rather than remembered, and none of them should outlive the commit.
+_*.py
+
+# Scratch landing area. The Cowork device bridge cannot unlink files, so an
+# agent working in this repo moves things here instead of deleting them. Twice
+# now that has ended with scratch files committed by accident, because they show
+# up as pending changes and get swept into a commit. Ignoring the directory
+# removes the temptation rather than relying on nobody clicking it.
+_to_delete/
