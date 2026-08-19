@@ -635,6 +635,59 @@ impl Tool for MqttNodeTool {
         self.spec.parameters.clone()
     }
 
+    /// Physical unless a node says otherwise — and no node can say otherwise yet.
+    ///
+    /// `NodeToolSpec` carries `name`, `description` and `parameters`. There is
+    /// no risk field, so the host cannot know whether `gpio_write` on a remote
+    /// node drives an LED or a door strike. Until 2026-08-18 this impl simply
+    /// omitted `risk_class`, taking the trait default — `RiskClass::safe()`,
+    /// non-physical — for every tool any peripheral node has ever announced.
+    ///
+    /// What that cost is specific. `track0_authorize` opens with
+    /// `if !risk.physical { return Ok(()); }`, so for node tools it skipped both
+    /// of the things it exists to do: the `SafetyGate` limit check on
+    /// `(node_id, tool, pin, value)`, and the tamper-evident audit record. The
+    /// function extracts `pin` and `value` from the arguments — it was written
+    /// for exactly these calls, and never saw one.
+    ///
+    /// Reversible with a low blast radius, deliberately. That is enough to route
+    /// the call through the gate and into the audit chain without forcing a
+    /// prompt on every sensor read: `requires_per_call_approval` is
+    /// `physical && (!reversible || High)`. Claiming High here would be the
+    /// honest-looking choice that trains an operator to approve everything.
+    ///
+    /// The real fix is a risk field on the announcement, so a node declares what
+    /// its own tools do and the absence of a declaration still lands here. That
+    /// is a protocol and firmware change; this is the host half, and it is the
+    /// half that was silently wrong.
+    fn risk_class(&self) -> obc_tool_api::RiskClass {
+        obc_tool_api::RiskClass::physical(true, obc_tool_api::BlastRadius::Low)
+    }
+
+    /// External, because this output was produced on the other side of a broker.
+    ///
+    /// `Tool::output_trust` carries the same "MUST override" doc comment as
+    /// `risk_class` and had the same amount of enforcement behind it: none. This
+    /// impl left it at `Trusted`, so a node's reply — whatever a device on the
+    /// MQTT bus chose to send back — entered the conversation with the standing
+    /// of something this host measured itself.
+    ///
+    /// It is not that. `docs/SPINE-AUTH.md` exists because a frame on this bus
+    /// can be forged or replayed, and `NodePairingManager::is_trusted` exists
+    /// because a node can be unknown. Content that arrives over a wire is
+    /// relayed content, and taint tracking is the layer that says so.
+    ///
+    /// The consequence is real and worth stating: successful output now enters
+    /// the run's `TaintPool`, so a later *privileged* call (physical,
+    /// irreversible, or with a non-`None` blast radius) whose arguments echo it
+    /// is checked. Under the default `taint_mode = "warn"` that logs and counts;
+    /// under `"enforce"` it refuses unless the operator granted the tool. A
+    /// sensor reading relayed through here is not the same thing as a driver
+    /// reading the sensor, and the difference is what this declares.
+    fn output_trust(&self) -> obc_tool_api::OutputTrust {
+        obc_tool_api::OutputTrust::External
+    }
+
     async fn execute(&self, args: Value) -> Result<ToolResult> {
         let result = self
             .spine

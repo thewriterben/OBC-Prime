@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-15T17:24:02+00:00",
+  "generated": "2026-08-18T23:06:49+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -204,8 +204,8 @@
       "bytes": 16835
     },
     "crates/obc-safety/src/policy.rs": {
-      "sha256": "49fb83f1da96cec44227a915320579a2e772df605d5412fa4f5e9de468b2964d",
-      "bytes": 12487
+      "sha256": "552b8e7dc8bd2ca0003d1a1eca22f1a77597b9b3502d300aef96bf87a9afd203",
+      "bytes": 12919
     },
     "crates/obc-safety/src/redteam.rs": {
       "sha256": "34afc371ff3d0a38614d5c115def6356a79b9e82c5742d3ad046f79416e1f362",
@@ -432,8 +432,8 @@
       "bytes": 5310
     },
     "crates/obc-spine/src/lib.rs": {
-      "sha256": "cbf805a2eaaaf9ec70e6c55528623b679c2b399f50e44eb7b7a3bce93e489830",
-      "bytes": 36281
+      "sha256": "1e2a13461c241824bdefbd9171943389e234ce99e508f092a477986f99cdf39d",
+      "bytes": 39465
     },
     "crates/obc-spine/src/action.rs": {
       "sha256": "4a1d63f023e0de5149bbf1e3c643551172db8e8ec7211eba9d03fba73a11815a",
@@ -460,8 +460,8 @@
       "bytes": 55896
     },
     "crates/obc-spine/src/p2p.rs": {
-      "sha256": "c29c1c74bc5e83a453cc619a217334779d6ccc2d828e0c6e125acc3d39705a64",
-      "bytes": 28101
+      "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
+      "bytes": 29025
     },
     "crates/obc-spine/src/speech.rs": {
       "sha256": "11d98219da711f768c20ab9a689d2144b67b53d54481ea2dd2c901af24a4c59d",
@@ -476,8 +476,8 @@
       "bytes": 26877
     },
     "crates/obc-mcp/src/lib.rs": {
-      "sha256": "88efda603f0cfec5a0a021476314c316adc898655e8bd768f9a23c11fd586528",
-      "bytes": 26515
+      "sha256": "7271dfbf13c25b60f3db325d398781535263d263751569312c9b5a4338df0b97",
+      "bytes": 28167
     },
     "crates/obc-mcp/src/server.rs": {
       "sha256": "e2d8491ab715757ee02e3a1228a6b875cc084fd953652b214ae2372bf0085fd8",
