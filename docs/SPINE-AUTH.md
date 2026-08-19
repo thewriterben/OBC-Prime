@@ -43,16 +43,6 @@ primitive and the persistent storage a replay counter needs are new work. The
 one piece of good news: ESP32-S3 has hardware SHA acceleration, so the cost is
 silicon rather than cycles.
 
-> **Half of that is fixed, 2026-08-01.** The bridge firmware
-> (`firmware/heltec-lora-linktest`) now carries `hmac`/`sha2`/`hkdf` and
-> `src/auth.rs`, so the primitive exists on the node side and is checked against
-> the host's. NVS is still untouched — the replay counter in step 3 remains
-> entirely new work, and it is the half that cannot be tested without a board,
-> since "a counter that survives reboot" is a claim about flash.
->
-> `firmware/obc-esp32-s3` is also still untouched: the sentence above was written
-> about the compute node and the work so far has been on the bridge. Two
-> firmwares, and only one of them can currently compute a tag.
 
 **The host half already exists and is unwired.** `NodePairingManager` implements
 HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
@@ -60,15 +50,6 @@ HMAC-SHA256 tokens with a five-minute replay window and quarantine status.
 is validated and enforces nothing (see `ROADMAP.md`, Phase 3). Roughly half the
 host-side work is written; none of it runs, and it has no counterpart on a node.
 
-> **Wired 2026-08-01** (§6 step 5). `pair_node` has callers on both transports,
-> `require_pairing` refuses, and per-message tags cover inbound results and
-> outbound calls. The counterpart on a node now exists too, for the bridge
-> firmware — `auth.rs`, cross-verified against the host's copy.
->
-> What is still true in this section: the **LoRa frame itself carries no tag**,
-> and the compute-node firmware cannot compute one. This paragraph described a
-> host-side gap that is closed; the transport-side gap in the table above is
-> not.
 
 ---
 
@@ -132,9 +113,7 @@ Append a truncated HMAC-SHA256 to every frame:
   survive reboot, so it lives in NVS, written every N (say 64) and advanced by N
   on boot to bound flash wear while never going backwards. The receiver rejects
   any counter at or below the highest seen for that source.
-  *(Superseded 2026-08-01 — that last sentence is wrong for a flood-relay mesh,
-  which delivers duplicates and re-orderings as normal traffic. It needs a
-  sliding window; see [`SPINE-REPLAY.md`](SPINE-REPLAY.md) §3.)*
+
 - The MAC covers `src ‖ ctr ‖ payload`, and deliberately **not** `ttl`, which
   relays decrement in flight.
 
