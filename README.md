@@ -22,7 +22,7 @@ the reflex layer keeps working when the brain is unreachable.
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
 > `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
-> and hash-checked, and CI builds and tests them: **1038 tests**.
+> and hash-checked, and CI builds and tests them: **1043 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1038 tests
+cargo test --workspace     # 1043 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -238,7 +238,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1038 tests pass" and "you can see it refuse" are different
+That matters because "1043 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
@@ -348,7 +348,7 @@ CI now does both.
 
 | crate | what it is | tests |
 |---|---|---:|
-| `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md) | 83 + 2 doc |
+| `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md). Every timestamp this crate returned was the time you *asked* rather than the time the row was written until 2026-08-18: SQLite's `datetime('now')` has no offset, `DateTime<Utc>`'s `FromStr` requires one, and both call sites fell back to `Utc::now()` on the parse error — a fallback that yields a plausible value looks like data | 88 + 2 doc |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 104 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
