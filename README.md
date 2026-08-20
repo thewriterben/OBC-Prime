@@ -22,7 +22,7 @@ the reflex layer keeps working when the brain is unreachable.
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
 > `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
-> and hash-checked, and CI builds and tests them: **1047 tests**.
+> and hash-checked, and CI builds and tests them: **1052 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1047 tests
+cargo test --workspace     # 1052 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -239,7 +239,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1047 tests pass" and "you can see it refuse" are different
+That matters because "1052 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
@@ -354,7 +354,7 @@ CI now does both.
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
 | `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 110 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
-| `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
+| `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 35 |
 | `obc-spine` | the wire: an MQTT backbone between brain and nodes, a serial LoRa gateway and a LoRa mesh with a relay, the supervisor that decides a node is lost and escalates, a P2P transport over TCP and UDP, and the four sinks that put movement commands, reflex actions, speech and fleet assignments onto it. The host end of the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies and `firmware/` already implemented | 63 |
 | `obc-tools` | every built-in tool the model can call — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser, world memory, missions, incidents, OTA — each declaring its own risk class, blast radius and output trust. `obc-tool-api` is the contract; this is what implements it. What the pair makes checkable is the *declaration* — `scripts/check_physical_tools.py` fails the build on a tool that actuates and does not say so. "The model may only call what the gate allows" needs `track0_authorize`, which is upstream | 170 |
 | `obc-providers` | Anthropic, OpenAI, OpenRouter, Ollama and any OpenAI-compatible endpoint behind one trait, with an ordered failover chain so a dead endpoint moves to the next rather than failing the turn, bounded retries, SSE streaming, and a registry that pins model names. The crate behind this page's "bring your own model" — the parts that decide whether the promise holds when a key is wrong | 22 |
