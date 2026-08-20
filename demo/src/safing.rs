@@ -61,8 +61,10 @@ pub fn run() -> Result<()> {
         println!("  {}", f.rule_id);
         if let obc_reflex::Action::Escalate { reason, .. } = &f.action {
             println!("      escalation carries: {}", first_sentence(reason));
-            println!("      full text is {} characters the model reads verbatim",
-                     reason.len());
+            println!(
+                "      full text is {} characters the model reads verbatim",
+                reason.len()
+            );
         }
     }
     if fired.is_empty() {
@@ -91,10 +93,15 @@ pub fn run() -> Result<()> {
             let here = file.exists();
             let doc = std::fs::read_to_string(&file).unwrap_or_default();
             let resolves = anchor.as_deref().is_none_or(|a| has_heading(&doc, a));
-            let frag = anchor.as_deref().map(|a| format!("#{a}")).unwrap_or_default();
+            let frag = anchor
+                .as_deref()
+                .map(|a| format!("#{a}"))
+                .unwrap_or_default();
             println!(
                 "  {path}{frag}\n      file here: {here}   anchor resolves: {}",
-                anchor.as_deref().map_or("n/a".into(), |_| resolves.to_string())
+                anchor
+                    .as_deref()
+                    .map_or("n/a".into(), |_| resolves.to_string())
             );
             if !here {
                 anyhow::bail!("an escalation sends a reader to {path}, which is not here");
