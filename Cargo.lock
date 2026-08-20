@@ -2182,6 +2182,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "obc-approval",
  "obc-conscience",
  "obc-memory",
  "obc-movement",

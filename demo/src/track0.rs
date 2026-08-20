@@ -96,5 +96,61 @@ pub fn run() -> Result<()> {
          That is why `scripts/check_physical_tools.py` fails the build on a tool\n\
          whose name says it actuates and whose declaration does not."
     );
+
+    approval_leg();
     Ok(())
+}
+
+/// The second half: what a *person* has to confirm, for the same call.
+///
+/// `track0_authorize` answers "may this actuate" from a limit table.
+/// `approval_authorize` answers "must someone say yes first" from the autonomy
+/// level and the tool's risk class. Both moved out of `obc-agent` — the gate on
+/// 2026-08-19, this one on 2026-08-20 — so this repository can now run the whole
+/// sentence rather than the first clause.
+fn approval_leg() {
+    use obc_approval::{approval_authorize, ApprovalManager, AutonomyConfig, AutonomyLevel};
+
+    println!("\n── and whether a person has to confirm it ──\n");
+
+    for (label, level, auto_approve) in [
+        ("full        ", AutonomyLevel::Full, vec![]),
+        ("supervised  ", AutonomyLevel::Supervised, vec![]),
+        (
+            "supervised +",
+            AutonomyLevel::Supervised,
+            vec!["gpio_write".to_string()],
+        ),
+    ] {
+        let granted = !auto_approve.is_empty();
+        // Non-interactive: an autonomous loop cannot ask, so "needs approval"
+        // arrives as a refusal with a reason rather than a prompt.
+        let mgr = ApprovalManager::for_non_interactive(&AutonomyConfig {
+            level,
+            auto_approve,
+            always_ask: vec![],
+        });
+        let outcome = approval_authorize(
+            Some(&mgr),
+            "gpio_write",
+            "bench-001",
+            RiskClass::physical(true, BlastRadius::Low),
+        );
+        let verdict = match &outcome {
+            Ok(()) => "PROCEEDS".to_string(),
+            Err(reason) => format!("REFUSED — {reason}"),
+        };
+        let note = if granted {
+            " (auto_approve = gpio_write)"
+        } else {
+            ""
+        };
+        println!("  autonomy {label}{note}\n      {verdict}\n");
+    }
+
+    println!(
+        "The refusal says which of the two it is. A policy denial and a missing\n\
+         grant call for different operator actions, and in an autonomous loop the\n\
+         string is the only thing carrying that difference."
+    );
 }

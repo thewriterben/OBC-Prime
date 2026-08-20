@@ -21,6 +21,7 @@ description = "Runs the vendored Open Body Control crates so the claims on this 
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+obc-approval = { path = "../crates/obc-approval" }
 obc-conscience = { path = "../crates/obc-conscience" }
 obc-memory = { path = "../crates/obc-memory" }
 obc-movement = { path = "../crates/obc-movement" }
