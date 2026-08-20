@@ -276,6 +276,11 @@ jobs:
       - run: cargo run -p obc-demo -- gate
       - run: cargo run -p obc-demo -- plan
       - run: cargo run -p obc-demo -- conscience
+      # The join, runnable here since 2026-08-19: `track0_authorize` moved
+      # from obc-agent (not vendored here) into obc-safety, so a tool's own
+      # declaration deciding whether the gate sees it is now demonstrable
+      # in this repository rather than asserted by it.
+      - run: cargo run -p obc-demo -- track0
       # No subcommand prints usage and exits 0; an unknown one exits 2. Checked
       # because "the binary runs" and "the binary does the right thing when
       # misused" are different claims.

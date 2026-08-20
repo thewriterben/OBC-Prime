@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 222 artifacts).
+        also updates the generator app's mirrors (12 of the 223 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -301,6 +301,19 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-safety/src/audit_sign.rs",
      "crates/obc-safety/src/audit_sign.rs",
+     None),
+    # The join, vendored 2026-08-19. `track0_authorize` reads a tool's declared
+    # RiskClass, consults the SafetyGate, writes the audit record and refuses.
+    # It lived in obc-agent -- which is deliberately not vendored -- so this
+    # repository held both halves of Track 0 and no wire between them, and said
+    # so in its own README. Upstream moved it to the crate that owns the gate;
+    # it needed no new dependency in either direction.
+    #
+    # This entry exists because the drift gate demanded it. The file arrived in
+    # a tree vendored whole, and `check` refused to pass with it undeclared:
+    # "silence is the one option that is not available".
+    ("crates/obc-safety/src/authorize.rs",
+     "crates/obc-safety/src/authorize.rs",
      None),
     ("crates/obc-safety/src/taint.rs",
      "crates/obc-safety/src/taint.rs",
