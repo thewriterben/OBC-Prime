@@ -22,7 +22,7 @@ the reflex layer keeps working when the brain is unreachable.
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
 > `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
-> and hash-checked, and CI builds and tests them: **1043 tests**.
+> and hash-checked, and CI builds and tests them: **1047 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1043 tests
+cargo test --workspace     # 1047 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -229,6 +229,7 @@ And three things you can watch instead of read:
 cargo run -p obc-demo -- gate        # Track 0 refusing an out-of-range command
 cargo run -p obc-demo -- plan        # A* with and without a robot radius
 cargo run -p obc-demo -- conscience  # the perception gate failing closed
+cargo run -p obc-demo -- track0      # the same call gated or not, decided by the tool's own risk_class
 ```
 
 `demo/` is the first host binary in this repository and the only Rust here that
@@ -238,7 +239,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1043 tests pass" and "you can see it refuse" are different
+That matters because "1047 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
@@ -296,23 +297,24 @@ stage, output trust — that a tool declares about itself. `obc-safety` is the
 other half: it defines `RiskClass`, the deterministic limit table, and the trust
 gate that reads a risk class and decides.
 
-> **Corrected 2026-08-18.** This paragraph used to end "Between them you can
-> write a tool and watch it be refused without any of the agent being present."
-> The join it describes is not in this repository. What reads a *tool's*
-> `risk_class()` and turns it into a decision is `track0_authorize` in
-> `obc-agent`, one of the six crates deliberately left upstream. Here, every
-> call to `ApprovalManager::decide` is inside `obc-approval`'s own test module,
-> and `SafetyGate::check` takes a tool *name*, not a risk class.
+> **Corrected 2026-08-18, and closed 2026-08-19.** This paragraph used to end
+> "Between them you can write a tool and watch it be refused without any of the
+> agent being present." That was false when written: what reads a *tool's*
+> `risk_class()` and turns it into a decision was `track0_authorize` in
+> `obc-agent`, one of the six crates deliberately left upstream, so both halves
+> were here and the wire between them was not.
 >
-> So both halves are here and the wire between them is not, which is a
-> different and weaker claim than the one that was written. You can write a
-> tool, read its declaration, and drive the gate and the approval manager
-> directly — `cargo run -p obc-demo -- gate` does exactly that. You cannot watch
-> a tool be refused *because of what it declared* without the agent.
+> Upstream moved that function into `obc-safety` on 2026-08-19 — it only ever
+> touched `SafetyGate`, `ActionAuditor`, `Decision` and `RiskClass`, all four
+> defined there, so it needed no new dependency in either direction. The
+> sentence is true now, and `cargo run -p obc-demo -- track0` is it running:
+> two real `Tool` impls, one gate, the same out-of-range pin, and the only
+> difference between refused and allowed is what each tool declares about
+> itself.
 >
-> `scripts/check_physical_tools.py` and the `declarations` CI job exist because
-> of the same gap seen from the other side: a tool that under-declares itself
-> here is wrong where it is used, in a repository this one does not build.
+> `scripts/check_physical_tools.py` and the `declarations` CI job are the same
+> gap seen from the other side: a tool that under-declares itself here is wrong
+> where it is used.
 
 It is also the first crate here extracted for a reason other than being
 separable. Upstream's tool module is 9052 lines and sits in several of the
@@ -350,7 +352,7 @@ CI now does both.
 |---|---|---:|
 | `obc-memory` | the bitemporal world model — provenance, a support graph, and the four withdrawal mechanisms (supersession, source liveness, dependency withdrawal, retention) described in [docs/BELIEF-REVISION.md](docs/BELIEF-REVISION.md). Every timestamp this crate returned was the time you *asked* rather than the time the row was written until 2026-08-18: SQLite's `datetime('now')` has no offset, `DateTime<Utc>`'s `FromStr` requires one, and both call sites fell back to `Utc::now()` on the parse error — a fallback that yields a plausible value looks like data | 88 + 2 doc |
 | `obc-planner` | the deployment planner, site plan and peripheral registry — the Rust leg of the parity claim above, and the source the vendored WASM is built from | 165 |
-| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 104 |
+| `obc-safety` | Track 0: risk classification, the deterministic actuator limit table, the hash-chained Ed25519-signed audit, argument taint tracking, node pairing, `SecretString` (redacts in `Debug` and `Display`; the only way out is a greppable `.expose()`), and the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies — tag, replay window and outbound counter — [docs/SAFETY.md](docs/SAFETY.md) | 110 |
 | `obc-conscience` | Track 0 extended to the front of the pipeline: what the agent may **observe** (consent registry, default-deny for humans, fail-closed label classifier) and what it may **reach** (egress allowlist), plus decision replay, multi-party consent, and the append-only decision log replay runs on — [docs/CONSCIENCE.md](docs/CONSCIENCE.md) | 45 |
 | `obc-approval` | the human-in-the-loop gate: three autonomy levels, a per-call check that consults a tool's declared risk class before asking, and forever grants that are **persisted** — so "yes, always" survives a restart rather than quietly meaning "yes, until you reboot". Carries the trust half too: relayed content from an untrusted writer does not get the standing of a driver-measured reading | 30 |
 | `obc-spine` | the wire: an MQTT backbone between brain and nodes, a serial LoRa gateway and a LoRa mesh with a relay, the supervisor that decides a node is lost and escalates, a P2P transport over TCP and UDP, and the four sinks that put movement commands, reflex actions, speech and fleet assignments onto it. The host end of the frame authentication [docs/SPINE-AUTH.md](docs/SPINE-AUTH.md) specifies and `firmware/` already implemented | 63 |

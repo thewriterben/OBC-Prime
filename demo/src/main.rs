@@ -1,7 +1,7 @@
 //! Watch the vendored crates do the things this repository claims they do.
 //!
 //! Everything else here is a library or a hash. This is the first host binary
-//! in the repository, and it exists because "1043 tests pass" and "you can see
+//! in the repository, and it exists because "1047 tests pass" and "you can see
 //! it refuse" are different kinds of evidence, and only one of them survives
 //! someone not trusting you.
 //!
@@ -14,12 +14,14 @@
 //!     cargo run -p obc-demo -- gate
 //!     cargo run -p obc-demo -- plan
 //!     cargo run -p obc-demo -- conscience
+//!     cargo run -p obc-demo -- track0
 
 use anyhow::Result;
 
 mod conscience;
 mod gate;
 mod plan;
+mod track0;
 
 const USAGE: &str = "\
 obc-demo — run the vendored Open Body Control crates
@@ -31,6 +33,7 @@ DEMOS:
     gate         Track 0 refusing an out-of-range actuator command
     plan         A* over an occupancy grid, with and without inflation
     conscience   the perception gate allowing wildlife and refusing a person
+    track0       the same call gated or not, decided by the tool's own risk_class
 ";
 
 #[tokio::main]
@@ -40,6 +43,7 @@ async fn main() -> Result<()> {
         Some("gate") => gate::run().await,
         Some("plan") => plan::run(),
         Some("conscience") => conscience::run(),
+        Some("track0") => track0::run(),
         Some(other) => {
             eprintln!("unknown demo '{other}'\n\n{USAGE}");
             std::process::exit(2);

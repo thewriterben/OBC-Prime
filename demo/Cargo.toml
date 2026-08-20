@@ -20,9 +20,15 @@ description = "Runs the vendored Open Body Control crates so the claims on this 
 # parity/verify_wasm.cjs. It has no upstream counterpart and nothing syncs it.
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 obc-conscience = { path = "../crates/obc-conscience" }
 obc-memory = { path = "../crates/obc-memory" }
 obc-movement = { path = "../crates/obc-movement" }
 obc-navigation = { path = "../crates/obc-navigation" }
 obc-safety = { path = "../crates/obc-safety" }
+# The `track0` demo implements two real `Tool`s, because the claim it shows is
+# about what a tool declares about itself. A struct with a `risk_class` field
+# would prove nothing.
+obc-tool-api = { path = "../crates/obc-tool-api" }
+serde_json = "1.0"
 tokio = { version = "1.42", default-features = false, features = ["rt", "rt-multi-thread", "macros"] }

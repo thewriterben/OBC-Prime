@@ -2181,11 +2181,14 @@ name = "obc-demo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "obc-conscience",
  "obc-memory",
  "obc-movement",
  "obc-navigation",
  "obc-safety",
+ "obc-tool-api",
+ "serde_json",
  "tokio",
 ]
 

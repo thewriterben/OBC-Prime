@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-19T02:51:33+00:00",
+  "generated": "2026-08-20T03:02:52+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -160,8 +160,8 @@
       "bytes": 2229
     },
     "crates/obc-safety/src/lib.rs": {
-      "sha256": "7021b26cc0f4ccc58fa158aa9f3476c865802789921097413d5293910099135a",
-      "bytes": 4523
+      "sha256": "a09c5b37fe60a42170ead0ed75dc826110990cee4d793a06b8893d56f538ab95",
+      "bytes": 4904
     },
     "crates/obc-safety/src/risk.rs": {
       "sha256": "10051bc2d2eb9843953e3fc1f08f2a638396607638c6a29573691d37c356f606",
@@ -190,6 +190,10 @@
     "crates/obc-safety/src/audit_sign.rs": {
       "sha256": "7d747d6ccdf3ba9adc98b2d536b18a9e0ed4d4c3ba3f27c2c8511492ea93f19e",
       "bytes": 4916
+    },
+    "crates/obc-safety/src/authorize.rs": {
+      "sha256": "ed38bbdaae27861930992809cef599c8e4a0c4651719cbf0392d4f9f7bbfd98e",
+      "bytes": 7215
     },
     "crates/obc-safety/src/taint.rs": {
       "sha256": "3ccd7bbca75b64f4dccdf9ea7cd1c79e2ab2cb52283be0bb68380572bb55b509",
