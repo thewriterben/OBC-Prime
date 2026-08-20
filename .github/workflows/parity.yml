@@ -281,6 +281,15 @@ jobs:
       # declaration deciding whether the gate sees it is now demonstrable
       # in this repository rather than asserted by it.
       - run: cargo run -p obc-demo -- track0
+      # The other half of the same manoeuvre, 2026-08-20. `safing.rs` moved
+      # from obc-agent into obc-reflex, so the rules whose escalation text
+      # `docs/playbooks/safing-escalations.md` is the long form of are finally
+      # in the same repository as the document. This demo exits non-zero if any
+      # `Full playbook:` pointer an escalation carries names a file this
+      # repository does not have, or an anchor the file no longer has --
+      # a heading rename that would otherwise send System 2 to a dead fragment
+      # while every sentence around it still read correctly.
+      - run: cargo run -p obc-demo -- safing
       # No subcommand prints usage and exits 0; an unknown one exits 2. Checked
       # because "the binary runs" and "the binary does the right thing when
       # misused" are different claims.

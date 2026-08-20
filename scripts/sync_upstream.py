@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 223 artifacts).
+        also updates the generator app's mirrors (12 of the 224 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -631,6 +631,32 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-reflex/src/lib.rs",
      "crates/obc-reflex/src/lib.rs",
+     None),
+    # Vendored 2026-08-20, and it closes a hole this file opened itself. The
+    # playbook entry below says, in as many words: "the reason strings live in
+    # the agent's reflex rules, which are not in this repository, so this side
+    # is the side that can be fixed." That was true for eighteen days.
+    #
+    # `safing.rs` was 934 lines in `obc-agent`, which is deliberately not
+    # vendored here, and the only thing holding it there was one import line --
+    # `use crate::reflex::{Action, ActionSink, Cmp, Condition, ReflexRule}`,
+    # where `crate::reflex` was the agent's `pub use obc_reflex as reflex`
+    # alias. Five names that read like the agent's and are all declared in the
+    # crate this repository already had. It moved upstream on 2026-08-20 and
+    # arrived here the same day, without the line moving.
+    #
+    # So `docs/playbooks/safing-escalations.md` and the rules it is the long
+    # form of are now in one repository. A reader who does not believe the
+    # playbook can open `standard_safing_rules` and count the eight rules, and
+    # `MESH_LOST_PLAYBOOK` is the literal string an escalation carries.
+    #
+    # One test did not come, and for the same reason as the extraction's:
+    # `obc-tools` depends on `obc-reflex`, so the assertion tying the playbook's
+    # `status: investigating` to what `record_incident` accepts is an
+    # integration test upstream. It is not vendored, because the tool layer it
+    # names is not here either.
+    ("crates/obc-reflex/src/safing.rs",
+     "crates/obc-reflex/src/safing.rs",
      None),
 
     # ── Track 1, and the layer that writes its own rules ─────────────────────

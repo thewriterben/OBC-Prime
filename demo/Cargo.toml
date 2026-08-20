@@ -26,7 +26,11 @@ obc-conscience = { path = "../crates/obc-conscience" }
 obc-memory = { path = "../crates/obc-memory" }
 obc-movement = { path = "../crates/obc-movement" }
 obc-navigation = { path = "../crates/obc-navigation" }
+# The `safing` demo drives a real battery reading through the real classifier
+# into the real engine. Anything less would be a fixture agreeing with itself.
+obc-reflex = { path = "../crates/obc-reflex" }
 obc-safety = { path = "../crates/obc-safety" }
+obc-telemetry = { path = "../crates/obc-telemetry" }
 # The `track0` demo implements two real `Tool`s, because the claim it shows is
 # about what a tool declares about itself. A struct with a `risk_class` field
 # would prove nothing.

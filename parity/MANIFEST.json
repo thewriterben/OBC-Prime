@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-20T03:41:00+00:00",
+  "generated": "2026-08-20T22:54:50+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -80,8 +80,8 @@
       "bytes": 15977
     },
     "crates/obc-memory/src/trajectory.rs": {
-      "sha256": "f6355d2ab2d70c47a7d321cc92e324549a983712982304053edd3c9c9728518c",
-      "bytes": 28746
+      "sha256": "2fd5d64a54fbd8a80dbfd8738b74a92fb91a6640e0ec56cd130b8bf787927df9",
+      "bytes": 28792
     },
     "crates/obc-memory/src/embed.rs": {
       "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
@@ -96,8 +96,8 @@
       "bytes": 8902
     },
     "crates/obc-memory/src/vector.rs": {
-      "sha256": "73049de6540f08016e55c5745dc5d03ed392968245a72b319d22f926b29a21a6",
-      "bytes": 16680
+      "sha256": "1ae1982d2f7b28185e347d1efb549d2befb3a9351e181c84bf88cedec10e341d",
+      "bytes": 16991
     },
     "crates/obc-planner/Cargo.toml": {
       "sha256": "21c934acc2328a5f6fe0464300faffc4ffb1e93e7ba818055790136a84b1d18b",
@@ -372,12 +372,16 @@
       "bytes": 6027
     },
     "crates/obc-reflex/Cargo.toml": {
-      "sha256": "ce03cd9185ee1d80e027013335d9dc4df94d3ab4dfa708109b75cf5410d36e18",
-      "bytes": 2376
+      "sha256": "ca485c76c76e764e1b94440e5820747afb6f9765817599e7cdee631b5f268c93",
+      "bytes": 2997
     },
     "crates/obc-reflex/src/lib.rs": {
-      "sha256": "210d6224694cc98a808f81edfdf1760d828725944b6498e21d1bf20bcbf93398",
-      "bytes": 52715
+      "sha256": "a18b7101b67196db1bb1ff14d88f08d02e446a10190aa5765610f7844f8a0bbc",
+      "bytes": 53310
+    },
+    "crates/obc-reflex/src/safing.rs": {
+      "sha256": "6b105c28a7662ae64a60b50830ac2b6e83226a7705162805c6e4259c7b026d01",
+      "bytes": 39009
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -892,8 +896,8 @@
       "bytes": 6288
     },
     "docs/playbooks/safing-escalations.md": {
-      "sha256": "6a3e3ea3d1fdf0a83492e651439a14d7306eb473386bfa760705ea7b02e799d3",
-      "bytes": 5862
+      "sha256": "55661c1ed84d50c607c53d518352ee345afaf0790345e2fe287529e0e57ee88b",
+      "bytes": 5874
     }
   },
   "wasm_build": {
