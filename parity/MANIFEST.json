@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-20T22:54:50+00:00",
+  "generated": "2026-08-21T18:30:16+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -180,20 +180,20 @@
       "bytes": 16361
     },
     "crates/obc-safety/src/limits.rs": {
-      "sha256": "bf9d91bfa4ea18fd026994bca6988cc61b3e688e6cdc0a9d3b28cc1e0d609225",
-      "bytes": 10856
+      "sha256": "7c49d9dd76df3a04d75ea1632acca492d9a27e508fffaf2f11642d9c450c6f2b",
+      "bytes": 11647
     },
     "crates/obc-safety/src/audit.rs": {
-      "sha256": "e2387d7a4245286bf934bd95d65c1d743cecbc7d692850f02de59a74e2f4bcd6",
-      "bytes": 19604
+      "sha256": "5ad40e2f8f3d95c6b7c82bb490f4d6adbe0b9d791e0516253137a7607542da90",
+      "bytes": 20199
     },
     "crates/obc-safety/src/audit_sign.rs": {
       "sha256": "7d747d6ccdf3ba9adc98b2d536b18a9e0ed4d4c3ba3f27c2c8511492ea93f19e",
       "bytes": 4916
     },
     "crates/obc-safety/src/authorize.rs": {
-      "sha256": "ed38bbdaae27861930992809cef599c8e4a0c4651719cbf0392d4f9f7bbfd98e",
-      "bytes": 7215
+      "sha256": "1810d2f9aee37be60d2db8fe97c291c2070d017616b55d7a4b4dd14c443ea46b",
+      "bytes": 13106
     },
     "crates/obc-safety/src/taint.rs": {
       "sha256": "3ccd7bbca75b64f4dccdf9ea7cd1c79e2ab2cb52283be0bb68380572bb55b509",
@@ -308,8 +308,8 @@
       "bytes": 3247
     },
     "crates/obc-a2a/src/lib.rs": {
-      "sha256": "35699745da5819afbcc0e3ddff493b0930c75206c9bdf96a8c28774b3332deb8",
-      "bytes": 43625
+      "sha256": "9e8141309807e764e632e5f38be5bce1f5e67f0ed127a69e34ab88772b60c401",
+      "bytes": 41749
     },
     "crates/obc-movement/Cargo.toml": {
       "sha256": "c0e6a1df11c3645edcb0707e06e54341ec95f67b856b8b8719dcb4999a1f0d01",
@@ -530,10 +530,6 @@
     "crates/obc-providers/src/retry.rs": {
       "sha256": "677c7753de68653489689567e03e215ec82fcfe4462acd8a590b58e0ba998ed5",
       "bytes": 5462
-    },
-    "crates/obc-providers/src/streaming.rs": {
-      "sha256": "567cf94a70021d283353aceca79bc854f28c12374a5073e5dae063b64bb53578",
-      "bytes": 9799
     },
     "crates/obc-tools/Cargo.toml": {
       "sha256": "8f4d63ea00da577cf3bb9e811aa723bcd442607a7d77eae306c38882695f031c",
@@ -820,8 +816,8 @@
       "bytes": 10976
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
-      "sha256": "2524d9b1237ff83df3d1c15939442f58b5d325c57fd0a68a33426a88b2c43d14",
-      "bytes": 11352
+      "sha256": "de70975bade26a769fc643cd218fc4fa55c7fb37f7dc71869870a38da6a8d311",
+      "bytes": 12226
     },
     "firmware/obc-esp32-s3/src/safing.rs": {
       "sha256": "61397954fc1f6837dacf01d101499cb2dc9e427bb03ea43bb56f97054fc15c84",

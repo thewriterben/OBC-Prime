@@ -23,10 +23,59 @@ measured. So here is the honest split:
 | The `[deployment]` block matches the Benchtop inventory in the generator | **verified** — emitted by the planner, not hand-written |
 | Board and accessory names resolve in the registry, zero capability gaps | **verified** — `tests/reference-bodies.test.ts` in the generator |
 | A BME280 on a real FireBeetle 2 produces `sensor.humidity` and fires the reflex | **not verified** — needs the hardware |
-| The Track 0 limit refuses an out-of-range `gpio_write` on this board | **not verified here** — the mechanism has upstream tests; this particular limit table has not been run against a physical node |
+| This body's limit table refuses pin 14, an out-of-range value, and a too-fast repeat | **verified** — `cargo run -p obc-demo -- bench` parses *this* `config.toml` and runs the gate over it |
+| The node enforces the same table the host does | **verified** — the same demo pushes the table to `firmware/obc-esp32-s3/src/safety.rs` as JSON and compares both gates' verdicts |
+| A physical ESP32-S3 refuses the command and the wire does not move | **not verified** — needs the board; see [the bench procedure](#the-bench-procedure) |
 
-If you build it and either of the last two behaves differently, that is worth an
-issue: it is the gap between a template that parses and a template that works.
+Until 2026-08-21 those last three were one row reading *"the Track 0 limit
+refuses an out-of-range `gpio_write` on this board — not verified here"*. That
+was true and it was doing two jobs badly. Two of the three claims needed nobody
+to plug anything in: they needed someone to read the file and run the gate over
+it. Only the third needs a board, and saying so makes it a job someone can
+actually finish.
+
+If you build it and either of the unverified rows behaves differently, that is
+worth an issue: it is the gap between a template that parses and a template that
+works.
+
+## The bench procedure
+
+Everything above the last row is checked in CI. This is the part that is not,
+written so that running it produces a result worth recording rather than an
+impression.
+
+**You need** a DFRobot FireBeetle 2 ESP32-S3 (or any ESP32-S3 the registry
+knows) with `firmware/obc-esp32-s3` flashed, an LED or scope probe on **pin 12**
+and on **pin 14**, and the host running this body.
+
+1. **Confirm the node took the limits.** The host pushes the table on connect
+   over the retained `obc/nodes/bench-001/limits` topic. Ask the node what
+   policy it is holding — it should report pins `[12, 13]`, values `0..=1`,
+   interval `500`. If it reports the boot default instead, the push did not
+   land, and everything below would be testing the wrong policy.
+
+2. **In policy.** Drive pin 12 high. The LED lights. This is the control: it
+   proves the path works, so that a refusal later is a refusal and not a
+   disconnected wire.
+
+3. **The refusal.** Ask for pin 14. Expect a refusal from the host gate — and
+   then the part that matters: **pin 14 must not move.** Watch the pin, not the
+   log. A gate that refuses in the log while the pin twitches is the failure
+   this whole row exists to rule out.
+
+4. **The mirror, without the host.** Stop the agent. Send the node a
+   `gpio_write` for pin 14 directly over serial. It must refuse on its own.
+   This is the one claim in `docs/SAFETY-CASE.md` §4 called load-bearing —
+   that the deterministic limit survives a compromised or absent host — and
+   step 4 is the only place it is ever actually tested.
+
+5. **Rate limit.** Two writes to pin 12 within 500 ms. The second must be
+   refused, and the pin must hold its first value rather than flicker.
+
+**Record what happened**, including the boring parts: firmware commit, board
+revision, and whether step 1 reported the pushed policy or the boot default. A
+row that says "verified" with no date and no commit is the kind of claim the
+rest of this repository spent a week removing.
 
 ## What you need
 

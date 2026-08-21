@@ -2191,8 +2191,10 @@ dependencies = [
  "obc-safety",
  "obc-telemetry",
  "obc-tool-api",
+ "serde",
  "serde_json",
  "tokio",
+ "toml",
 ]
 
 [[package]]
