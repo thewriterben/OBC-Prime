@@ -1,0 +1,10 @@
+[toolchain]
+# Pinned 2026-08-20, equal to `RUST_VERSION` in `.github/workflows/parity.yml`
+# and to upstream's. The reasoning is in that file's `env:` block.
+#
+# This file is this repository's own, not vendored — upstream's
+# `rust-toolchain.toml` is not in `scripts/sync_upstream.py`'s artifact list,
+# and the two `firmware/*/rust-toolchain.toml` files that *are* vendored pin
+# esp toolchains for the MCU, which has nothing to do with the host build.
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]
