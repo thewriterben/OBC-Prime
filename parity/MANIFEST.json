@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T18:30:16+00:00",
+  "generated": "2026-08-21T20:01:34+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -808,8 +808,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "8b36f9c5daf79c27c06aad6efc04854cd33f8757b950974907265552ebfce675",
-      "bytes": 58248
+      "sha256": "9d98baf87ac7f5181960073c17312f3e90bb371ea3b5fe5761e69595bbc03f2b",
+      "bytes": 62206
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "ffa3416a3984493ce58e59313e36d2015cf9ad8df668ccabf5bc52766a412402",
