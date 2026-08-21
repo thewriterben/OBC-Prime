@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T21:39:52+00:00",
+  "generated": "2026-08-21T22:09:10+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -816,16 +816,16 @@
       "bytes": 59409
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
-      "sha256": "ffa3416a3984493ce58e59313e36d2015cf9ad8df668ccabf5bc52766a412402",
-      "bytes": 10976
+      "sha256": "c009bec87f60d3559657140e5d0dbf772e0c6b0b7b778a3bc2018b4574ea3db3",
+      "bytes": 11872
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
-      "sha256": "de70975bade26a769fc643cd218fc4fa55c7fb37f7dc71869870a38da6a8d311",
-      "bytes": 12226
+      "sha256": "03be40ab41d6c2488bf47cc090878c89fac7906cd4777d24966f0339ce7c398d",
+      "bytes": 12447
     },
     "firmware/obc-esp32-s3/src/safing.rs": {
-      "sha256": "61397954fc1f6837dacf01d101499cb2dc9e427bb03ea43bb56f97054fc15c84",
-      "bytes": 12139
+      "sha256": "980d296abf0edf73489c105d8a7a88bc16e4b6bcb6a3f5361dd7f9169e2428ec",
+      "bytes": 12525
     },
     "firmware/obc-esp32-s3/src/sensors.rs": {
       "sha256": "9b0ac1befb92e227a9f3b884ad1a2ea75dc0f9bac70785f7dd730d2fc3bc1423",
