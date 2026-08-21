@@ -89,44 +89,62 @@ pub fn run() -> Result<()> {
     println!();
 
     let gate = SafetyGate::new(cfg.limits.clone());
-    let node = &cfg.limits[0].node_id;
-    let tool = &cfg.limits[0].tool;
+    let limit = &cfg.limits[0];
+    let node = &limit.node_id;
+    let tool = &limit.tool;
 
-    println!("── what it does with four commands ──");
+    // Derive every case from the table rather than restating it. The first
+    // version of this demo hardcoded pins 13, 14 and 12 to match what the file
+    // said that day; when the table was corrected on 2026-08-21 the demo went
+    // green on three cases that no longer meant anything. A check that has to
+    // be edited whenever its subject changes is a check that will one day be
+    // edited to agree with a mistake.
+    let allowed = *limit
+        .allowed_pins
+        .as_ref()
+        .and_then(|p| p.first())
+        .ok_or_else(|| anyhow::anyhow!("no allow-listed pin to test with"))?;
+    let refused = (0..64)
+        .find(|p| !limit.allowed_pins.as_ref().is_some_and(|a| a.contains(p)))
+        .ok_or_else(|| anyhow::anyhow!("every pin is allowed — nothing to refuse"))?;
+    let over = limit.value_max.map(|m| m + 1).unwrap_or(2);
+    let interval = limit.min_interval_ms.unwrap_or(0);
+
+    println!("── what it does with the table's own pins ──");
     let mut failures = 0;
 
-    // 1. In policy.
     failures += expect(
-        "pin 13, value 1",
-        gate.check(node, tool, 13, 1, 1_000).is_ok(),
+        &format!("pin {allowed}, value {}", limit.value_min.unwrap_or(0)),
+        gate.check(node, tool, allowed, limit.value_min.unwrap_or(0), 1_000)
+            .is_ok(),
         "allowed",
     );
 
-    // 2. The pin the README names.
     failures += expect(
-        "pin 14, value 1",
-        gate.check(node, tool, 14, 1, 2_000).is_err(),
+        &format!("pin {refused} (not in the list)"),
+        gate.check(node, tool, refused, 1, 2_000).is_err(),
         "refused — pin not in the allow-list",
     );
 
-    // 3. Value outside the declared range.
     failures += expect(
-        "pin 12, value 5",
-        gate.check(node, tool, 12, 5, 3_000).is_err(),
+        &format!("pin {allowed}, value {over}"),
+        gate.check(node, tool, allowed, over, 3_000).is_err(),
         "refused — value out of range",
     );
 
-    // 4. Rate limit: 12 fired at t=3000 above was refused, so it did not arm the
-    //    limiter. Fire a clean one, then crowd it.
-    let _ = gate.check(node, tool, 12, 1, 10_000);
+    // The out-of-range attempt above was refused, so it did not arm the
+    // limiter. Fire a clean one, then crowd it.
+    let _ = gate.check(node, tool, allowed, 1, 10_000);
     failures += expect(
-        "pin 12 again, 200ms later",
-        gate.check(node, tool, 12, 1, 10_200).is_err(),
+        &format!("pin {allowed} again, {}ms later", interval / 2),
+        gate.check(node, tool, allowed, 1, 10_000 + interval / 2)
+            .is_err(),
         "refused — faster than min_interval_ms",
     );
     failures += expect(
-        "pin 12 again, 600ms later",
-        gate.check(node, tool, 12, 1, 10_800).is_ok(),
+        &format!("pin {allowed} again, {}ms later", interval + 100),
+        gate.check(node, tool, allowed, 1, 10_000 + interval + 100)
+            .is_ok(),
         "allowed — the interval has passed",
     );
 
@@ -146,16 +164,19 @@ pub fn run() -> Result<()> {
     let pushed: Vec<fw::SafetyLimit> = serde_json::from_str(&wire)?;
     let mut node_gate = fw::SafetyGate::with_output_pins(&[]);
     if !node_gate.apply_pushed(pushed, node) {
-        bail!("the node gate rejected a limit table the host accepted");
+        bail!(
+            "the node gate rejected this table: `node_id = \"{node}\"` matches no node. \
+             The firmware compares against its own NODE_ID const, not the host's label."
+        );
     }
     println!("  host limits round-tripped as JSON and applied: ok");
 
-    // The same four commands, in the same order, against the node's clock.
+    // The same commands, in the same order, against the node's clock.
     let mut disagreements = 0;
-    let cases: &[(&str, i64, i64, u64)] = &[
-        ("pin 13, value 1", 13, 1, 1_000),
-        ("pin 14, value 1", 14, 1, 2_000),
-        ("pin 12, value 5", 12, 5, 3_000),
+    let cases: &[(String, i64, i64, u64)] = &[
+        (format!("pin {allowed}, in policy"), allowed, 1, 1_000),
+        (format!("pin {refused}, not listed"), refused, 1, 2_000),
+        (format!("pin {allowed}, value {over}"), allowed, over, 3_000),
     ];
     let host = SafetyGate::new(cfg.limits.clone());
     for (what, pin, value, now) in cases {

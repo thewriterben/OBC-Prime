@@ -23,7 +23,7 @@ measured. So here is the honest split:
 | The `[deployment]` block matches the Benchtop inventory in the generator | **verified** — emitted by the planner, not hand-written |
 | Board and accessory names resolve in the registry, zero capability gaps | **verified** — `tests/reference-bodies.test.ts` in the generator |
 | A BME280 on a real FireBeetle 2 produces `sensor.humidity` and fires the reflex | **not verified** — needs the hardware |
-| This body's limit table refuses pin 14, an out-of-range value, and a too-fast repeat | **verified** — `cargo run -p obc-demo -- bench` parses *this* `config.toml` and runs the gate over it |
+| This body's limit table refuses an unlisted pin, an out-of-range value, and a too-fast repeat | **verified** — `cargo run -p obc-demo -- bench` parses *this* `config.toml` and runs the gate over it |
 | The node enforces the same table the host does | **verified** — the same demo pushes the table to `firmware/obc-esp32-s3/src/safety.rs` as JSON and compares both gates' verdicts |
 | A physical ESP32-S3 refuses the command and the wire does not move | **not verified** — needs the board; see [the bench procedure](#the-bench-procedure) |
 
@@ -44,33 +44,64 @@ Everything above the last row is checked in CI. This is the part that is not,
 written so that running it produces a result worth recording rather than an
 impression.
 
-**You need** a DFRobot FireBeetle 2 ESP32-S3 (or any ESP32-S3 the registry
-knows) with `firmware/obc-esp32-s3` flashed, an LED or scope probe on **pin 12**
-and on **pin 14**, and the host running this body.
+> **Corrected 2026-08-21, and the correction is the interesting part.** The
+> first version of this section named a DFRobot FireBeetle 2 and pins 12 and 14,
+> taken from this file without checking them against the firmware. All three
+> were wrong, and each would have failed *plausibly* — as a dark LED or a policy
+> that never applied, both of which look exactly like the gate working. The
+> firmware has no FireBeetle build variant; `NODE_ID` is a `const` equal to
+> `obc-esp32-s3-001`, so a limit addressed to `bench-001` was silently ignored;
+> and pins 12 and 13 are not in `OUTPUT_PINS`, so they are never configured as
+> outputs at all. The `[[safety.limits]]` block above now says so in full.
 
-1. **Confirm the node took the limits.** The host pushes the table on connect
-   over the retained `obc/nodes/bench-001/limits` topic. Ask the node what
-   policy it is holding — it should report pins `[12, 13]`, values `0..=1`,
-   interval `500`. If it reports the boot default instead, the push did not
-   land, and everything below would be testing the wrong policy.
+**You need** an ESP32-S3 flashed with `firmware/obc-esp32-s3` (default build —
+the pin set is the XIAO's on every board), two LEDs with 330 Ω resistors, and a
+serial terminal at 115200. The firmware speaks newline-delimited JSON over the
+native USB-Serial-JTAG port: `{"id":"…","cmd":"…","args":{…}}`.
 
-2. **In policy.** Drive pin 12 high. The LED lights. This is the control: it
-   proves the path works, so that a refusal later is a refusal and not a
-   disconnected wire.
+Wire **GPIO 3** and **GPIO 7** each through a resistor to an LED and to ground.
+Both are in `OUTPUT_PINS`, so both are real outputs — which is what lets a dark
+LED mean *refused* rather than *never connected*.
 
-3. **The refusal.** Ask for pin 14. Expect a refusal from the host gate — and
-   then the part that matters: **pin 14 must not move.** Watch the pin, not the
-   log. A gate that refuses in the log while the pin twitches is the failure
-   this whole row exists to rule out.
+These are **chip GPIO numbers**, which is what `gpio_write` takes, and they are
+the same on every ESP32-S3. The *header* label is not: on a Seeed XIAO
+ESP32-S3, GPIO 3 and 7 are silk `D2` and `D8`; on the DFRobot FireBeetle 2 this
+body's inventory names, they are elsewhere, and on the Waveshare they are not
+broken out at all. Find the pad that carries GPIO 3 on your board's vendor
+pinout before you solder. A `D`-number carried over from another board's card
+is the same mistake as the one corrected above, one layer down.
 
-4. **The mirror, without the host.** Stop the agent. Send the node a
-   `gpio_write` for pin 14 directly over serial. It must refuse on its own.
-   This is the one claim in `docs/SAFETY-CASE.md` §4 called load-bearing —
-   that the deterministic limit survives a compromised or absent host — and
-   step 4 is the only place it is ever actually tested.
+1. **Confirm the node id.** Read the boot banner. It must say
+   `obc-esp32-s3-001`. Anything else and step 2 will be ignored, and every
+   later step will be testing the boot policy instead of this file's.
 
-5. **Rate limit.** Two writes to pin 12 within 500 ms. The second must be
-   refused, and the pin must hold its first value rather than flicker.
+2. **Push this body's limits and read back what stuck.**
+   `set_limits` does not acknowledge — it returns the active policy:
+
+   ```json
+   {"applied":true,"allowed_pins":[3,7],"value_min":0,"value_max":1,"min_interval_ms":500}
+   ```
+
+   `"applied":false` means no limit matched this node. Stop and fix it.
+
+3. **The control.** `gpio_write` pin 3 value 1. The LED lights. This is what
+   makes every refusal below mean something; if it stays dark, you have a
+   wiring fault and a later "refusal" would be indistinguishable from it.
+
+4. **The refusal.** `gpio_write` a pin that is *not* in the list — GPIO 8 is an
+   output and unlisted, so it is the honest choice. Expect a refusal, the
+   LED dark, and `gpio_read` on that pin returning `0`. **Watch the pin, not the
+   reply.** A gate that refuses in the log while the pin twitches is the failure
+   this row exists to rule out.
+
+5. **The mirror, without the host.** Stop the agent and send the same refused
+   command straight down the serial line. It must refuse on its own. This is the
+   only step anywhere in either repository that tests the load-bearing property
+   the safety case rests on — that the deterministic limit survives a
+   compromised or absent host.
+
+6. **The rate limit.** Two writes to pin 3 inside 500 ms. The second is refused,
+   and the pin holds its value rather than flickering.
 
 **Record what happened**, including the boring parts: firmware commit, board
 revision, and whether step 1 reported the pushed policy or the boot default. A
@@ -123,8 +154,8 @@ saying again. Debounce alone cannot express that difference — it only asks
 whether enough time has passed, and for a standing condition the answer is
 eventually always yes.
 
-**A Track 0 limit narrow enough to test.** `bench-001` may drive pins 12 and 13,
-values 0–1, no faster than twice a second. Ask the agent to write pin 14 and the
+**A Track 0 limit narrow enough to test.** The node may drive pins 3 and 7,
+values 0–1, no faster than twice a second. Ask the agent to write pin 8 and the
 gate refuses in code, before anything reaches the wire — and the node holds its
 own copy, so a compromised host cannot talk it round.
 
