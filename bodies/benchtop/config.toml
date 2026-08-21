@@ -148,9 +148,44 @@ dynamic_trust = true
 taint_mode = "warn"
 
 [[safety.limits]]
-node_id = "bench-001"
+# This id is the *node's* name for itself, not the host's name for the node.
+#
+# Those are two namespaces and only one of them is consulted here. The host
+# calls this board `bench-001` — that label is in `[[spine.nodes]]` above and in
+# the deployment inventory below, and the host uses it to address the cable. The
+# node compares a pushed limit against `NODE_ID`, a `const` in
+# `firmware/obc-esp32-s3/src/main.rs` equal to `obc-esp32-s3-001`, and adopts
+# the limit only if the two match or the field is empty.
+#
+# It said `bench-001` until 2026-08-21, so `apply_pushed` returned false, the
+# push was ignored without an error, and the node kept its boot policy. Nothing
+# reported this: the host logged the gate as active and the node was gated by a
+# different table than the one in this file.
+#
+# Every node running the reference firmware reports `obc-esp32-s3-001` — it is
+# one compile-time constant, not a per-board value — so addressing it here works
+# for any ESP32-S3 you flash. Leaving the field empty means "any node", which is
+# also correct for a point-to-point serial body and gives up the addressing.
+node_id = "obc-esp32-s3-001"
 tool = "gpio_write"
-allowed_pins = [12, 13]
+# Must be a subset of the firmware's `OUTPUT_PINS`, which is the only set it
+# ever calls `gpio_set_direction(..., OUTPUT)` on: GPIO 21, 3, 6, 7, 8 on the
+# default build. A pin outside it passes the gate and then drives nothing, which
+# at a bench is indistinguishable from the gate refusing.
+#
+# It said `[12, 13]` until 2026-08-21. Neither is an output on either build.
+#
+# 3 and 7 are the two entries where the firmware's own comment and the upstream
+# Oh-Ben-Claw bench card for the XIAO ESP32-S3 agree exactly, and neither is I2C
+# under either reading — which matters here, because this body has a BME280 on
+# the I2C bus.
+#
+# These are chip GPIO numbers, which is what `gpio_write` takes on every board.
+# They are NOT header labels: the silk differs per board, and this inventory
+# names a FireBeetle 2 while the default firmware build carries the XIAO's pin
+# map. Find the pad that carries GPIO 3 on your board's vendor pinout; do not
+# trust a `D`-number copied from another board's card.
+allowed_pins = [3, 7]
 value_min = 0
 value_max = 1
 min_interval_ms = 500
