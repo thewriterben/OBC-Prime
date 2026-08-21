@@ -73,6 +73,39 @@ jobs:
           python-version: '3.12'
       - run: python scripts/check_doc_links.py
 
+  citedpaths:
+    name: a cited path is here, or says whose it is
+    runs-on: ubuntu-latest
+    # Added 2026-08-21. The doclinks job above ran on
+    # `bodies/benchtop/README.md` and passed it while that file cited
+    # `docs/SAFETY-CASE.md` and `docs/BENCH-PINOUT-CARDS.md` -- both
+    # Oh-Ben-Claw files -- in a bench procedure someone acts on with hardware.
+    # It passes because it strips code spans by design, which is right for the
+    # case it was built against and is exactly the hole those two went through.
+    #
+    # This checks the opposite surface: backticked paths, and only in the
+    # documents that tell someone how to do something *here*. Histories are
+    # deliberately excluded -- naming a path that is upstream or gone is what
+    # MIGRATION.md and DECISIONS.md are for, and a probe over the whole tree
+    # returned 228 non-resolving spans of which nearly all were correct.
+    #
+    # The rule is attribution, not resolution: every path in this repo's prose
+    # that points elsewhere already says so ("upstream's `docs/ENDGAME.md`",
+    # "the generator's `tests/reference-bodies.test.ts`"). The convention was
+    # universal before the gate existed. This holds it.
+    #
+    # The selftest step is not ceremony. This gate's first real run was green,
+    # and a green gate proves nothing on its own -- the selftest runs the exact
+    # citation that caused it, with and without its attribution, and fails if
+    # the two ever agree.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_cited_paths.py --selftest
+      - run: python scripts/check_cited_paths.py
+
   behaviour:
     name: vendored wasm behaves as the goldens say
     runs-on: ubuntu-latest
