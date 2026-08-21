@@ -22,7 +22,7 @@ the reflex layer keeps working when the brain is unreachable.
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
 > `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
-> and hash-checked, and CI builds and tests them: **1052 tests**.
+> and hash-checked, and CI builds and tests them: **1067 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,17 +219,18 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1052 tests
+cargo test --workspace     # 1067 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
-And three things you can watch instead of read:
+And five things you can watch instead of read:
 
 ```bash
 cargo run -p obc-demo -- gate        # Track 0 refusing an out-of-range command
 cargo run -p obc-demo -- plan        # A* with and without a robot radius
 cargo run -p obc-demo -- conscience  # the perception gate failing closed
 cargo run -p obc-demo -- track0      # the same call gated or not, decided by the tool's own risk_class
+cargo run -p obc-demo -- safing      # every `Full playbook:` pointer an escalation carries, resolved here
 ```
 
 `demo/` is the first host binary in this repository and the only Rust here that
@@ -239,7 +240,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1052 tests pass" and "you can see it refuse" are different
+That matters because "1067 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
