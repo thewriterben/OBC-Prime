@@ -19,6 +19,24 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # Pinned 2026-08-20, in step with upstream's `ci.yml`. Upstream's `main` went
+  # red that day on a tree that had already passed nine of nine jobs, because
+  # `dtolnay/rust-toolchain@stable` resolved to 1.98.0 on the merge run and
+  # 1.97.1 on the PR run eighteen hours earlier, and 1.98.0 added a clippy lint
+  # that `-D warnings` turns into a build failure.
+  #
+  # This repository is more exposed to that than most, not less. Almost all of
+  # the Rust here is vendored: when a toolchain change breaks it, the fix has to
+  # land upstream and be synced, so the window between "red here" and "fixable
+  # here" is a round trip through another repository. A pin closes that window
+  # by making the toolchain change a thing someone chooses.
+  #
+  # Keep this equal to upstream's RUST_VERSION. Upstream's `stable-watch.yml`
+  # is what notices a new stable; there is no second copy of that job here,
+  # because a lint against vendored code is upstream's to fix either way.
+  RUST_VERSION: "1.98.0"
+
 jobs:
   manifest:
     name: vendored artifacts match manifest
@@ -170,7 +188,9 @@ jobs:
     # makes, neither of which this repository could run before.
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
@@ -272,7 +292,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - run: cargo run -p obc-demo -- gate
       - run: cargo run -p obc-demo -- plan
       - run: cargo run -p obc-demo -- conscience
@@ -339,7 +361,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - run: cargo audit
