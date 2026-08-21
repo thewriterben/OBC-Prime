@@ -22,7 +22,7 @@ measured. So here is the honest split:
 | `config.toml` parses, and the agent starts from it | **verified** — `OBC_CONFIG=config.toml oh-ben-claw doctor` reports 0 errors, 2 reflex rules loaded |
 | The `[deployment]` block matches the Benchtop inventory in the generator | **verified** — emitted by the planner, not hand-written |
 | Board and accessory names resolve in the registry, zero capability gaps | **verified** — `tests/reference-bodies.test.ts` in the generator |
-| A BME280 on a real FireBeetle 2 produces `sensor.humidity` and fires the reflex | **not verified** — needs the hardware |
+| A BME280 on a real FireBeetle 2 produces `sensor.humidity` and fires the reflex | **not verified** — needs the hardware, and until 2026-08-21 it could not have worked: the firmware opened I²C on GPIO 4/5 while the labelled bus is 5/6, so a sensor on the pads marked SDA/SCL read as a stub |
 | This body's limit table refuses an unlisted pin, an out-of-range value, and a too-fast repeat | **verified** — `cargo run -p obc-demo -- bench` parses *this* `config.toml` and runs the gate over it |
 | The node enforces the same table the host does | **verified** — the same demo pushes the table to `firmware/obc-esp32-s3/src/safety.rs` as JSON and compares both gates' verdicts |
 | A physical ESP32-S3 refuses the command and the wire does not move | **not verified** — needs the board; see [the bench procedure](#the-bench-procedure) |
