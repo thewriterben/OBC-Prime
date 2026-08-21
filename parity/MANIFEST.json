@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T20:01:34+00:00",
+  "generated": "2026-08-21T20:26:19+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -795,6 +795,10 @@
       "sha256": "7b994b9dd4074ac855a35c8a817e917543c06cd6ed67e264103447b31fab2904",
       "bytes": 2645
     },
+    "firmware/obc-esp32-s3/src/board.rs": {
+      "sha256": "c404a8f799f72f92f76adc30a66349c71b69f165ed585f355ef12bffe90ef0dc",
+      "bytes": 4785
+    },
     "firmware/obc-esp32-s3/src/camera.rs": {
       "sha256": "6a7d64a3158146efeaa9182ed89495fcc5017a79ac57cce5391489d6fcf1b318",
       "bytes": 4495
@@ -808,8 +812,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "9d98baf87ac7f5181960073c17312f3e90bb371ea3b5fe5761e69595bbc03f2b",
-      "bytes": 62206
+      "sha256": "ee74758d8c722e7aa568dc4343482d814b4cedcac5e6da137ccbf8a1ed051402",
+      "bytes": 59329
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "ffa3416a3984493ce58e59313e36d2015cf9ad8df668ccabf5bc52766a412402",

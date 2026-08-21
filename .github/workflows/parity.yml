@@ -48,6 +48,23 @@ jobs:
           python-version: '3.12'
       - name: check
         run: python scripts/sync_upstream.py check
+      # A manifest gate can only compare the files it is told about.
+      #
+      # On 2026-08-21 upstream added `firmware/obc-esp32-s3/src/board.rs` and a
+      # `mod board;` in `main.rs`. `sync` copied the changed `main.rs` and not
+      # `board.rs`, because ARTIFACTS is an explicit list and nobody had added
+      # it. On 2026-08-21 `check` then reported "223 artifacts identical" and
+      # exited 0 — every file it names *was* identical. What had been vendored
+      # was a firmware tree declaring a module it does not contain.
+      #
+      # Nothing else catches this: no CI anywhere compiles that crate, which is
+      # why the host-side shims exist at all. sync_upstream.py's own comment
+      # calls this "the exact failure mode this script exists to prevent" — a
+      # comment, not a check. This is the check.
+      - name: a vendored file's modules are vendored too
+        run: python scripts/check_vendored_mods.py --selftest
+      - name: nothing vendored declares a module we did not bring
+        run: python scripts/check_vendored_mods.py
 
   doclinks:
     name: relative links in our own prose resolve
