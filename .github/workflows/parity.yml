@@ -312,6 +312,18 @@ jobs:
       # a heading rename that would otherwise send System 2 to a dead fragment
       # while every sentence around it still read correctly.
       - run: cargo run -p obc-demo -- safing
+      # The Benchtop reference body's own limit table, 2026-08-21. Its README
+      # had one row saying the Track 0 limit "has not been run against a
+      # physical node", which was true of the *board* and quietly also true of
+      # the table itself — nobody had run the gate over this config at all.
+      #
+      # This step parses `bodies/benchtop/config.toml` and drives both gates
+      # with it: the host's, and the node's, compiled from the vendored
+      # firmware through a `#[path]` shim. It fails if a limit is edited into
+      # something the README no longer describes, if the `[safety]` section
+      # stops parsing (`deny_unknown_fields` — the `[[safety.limit]]` singular
+      # typo), or if host and node ever disagree about the same table.
+      - run: cargo run -p obc-demo -- bench
       # No subcommand prints usage and exits 0; an unknown one exits 2. Checked
       # because "the binary runs" and "the binary does the right thing when
       # misused" are different claims.

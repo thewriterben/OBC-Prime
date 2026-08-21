@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 224 artifacts).
+        also updates the generator app's mirrors (12 of the 223 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -925,7 +925,14 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     # Vendored 2026-08-14. Anthropic, OpenAI, OpenRouter, Ollama and a generic
     # OpenAI-compatible backend behind one trait, with an ordered failover chain
     # so a dead endpoint moves to the next rather than failing the turn,
-    # bounded retries, SSE streaming, and a registry that pins model names.
+    # bounded retries, and a registry that pins model names.
+    #
+    # This line said "SSE streaming" until 2026-08-21. It was vendoring
+    # `src/streaming.rs`, which upstream deleted that day for never having
+    # appeared in a `mod` declaration -- 313 lines rustc had never compiled
+    # and six tests that had never run. It was hashed faithfully here for a
+    # week: a manifest can only promise a copy is identical, never that the
+    # original was ever built.
     #
     # This page has said "bring your own model" since its first paragraph, and
     # until now nothing here could be run to check it. The claim is not that a
@@ -966,9 +973,6 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-providers/src/retry.rs",
      "crates/obc-providers/src/retry.rs",
-     None),
-    ("crates/obc-providers/src/streaming.rs",
-     "crates/obc-providers/src/streaming.rs",
      None),
 
     # ── The tool layer ───────────────────────────────────────────────────────
