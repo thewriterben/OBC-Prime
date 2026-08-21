@@ -6,7 +6,8 @@ Why this exists
 On 2026-08-21 upstream added `firmware/obc-esp32-s3/src/board.rs` and a
 `mod board;` in `main.rs`. `sync_upstream.py sync` copied the changed `main.rs`
 and did not copy `board.rs`, because `ARTIFACTS` is an explicit list and nobody
-had added it. `check` then reported **"223 artifacts identical"** and exited 0.
+had added it. On 2026-08-21 `check` reported **"223 artifacts identical"** and
+exited 0.
 
 It was telling the truth. Every file it names *was* identical. The file it does
 not name was invisible to it, and what had been vendored was a firmware tree
