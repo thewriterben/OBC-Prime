@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 223 artifacts).
+        also updates the generator app's mirrors (12 of the 224 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -1280,6 +1280,13 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("firmware/obc-esp32-s3/src/audio.rs",
      "firmware/obc-esp32-s3/src/audio.rs",
+     None),
+    # Added 2026-08-21 with upstream #118. `main.rs` declares `mod board;`, so
+    # omitting it here vendors a firmware tree that cannot build — and nothing
+    # would have said so, because no CI compiles this crate and `check` only
+    # compares the files this list names. See `scripts/check_vendored_mods.py`.
+    ("firmware/obc-esp32-s3/src/board.rs",
+     "firmware/obc-esp32-s3/src/board.rs",
      None),
     ("firmware/obc-esp32-s3/src/camera.rs",
      "firmware/obc-esp32-s3/src/camera.rs",
