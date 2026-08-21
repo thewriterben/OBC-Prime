@@ -169,16 +169,23 @@ taint_mode = "warn"
 node_id = "obc-esp32-s3-001"
 tool = "gpio_write"
 # Must be a subset of the firmware's `OUTPUT_PINS`, which is the only set it
-# ever calls `gpio_set_direction(..., OUTPUT)` on: GPIO 21, 3, 6, 7, 8 on the
+# ever calls `gpio_set_direction(..., OUTPUT)` on: GPIO 21, 3, 7, 8 on the
 # default build. A pin outside it passes the gate and then drives nothing, which
 # at a bench is indistinguishable from the gate refusing.
 #
+# GPIO 6 left that list on 2026-08-21. It is silk D5, the pad Seeed marks SCL,
+# and the firmware's I2C bus moved onto it the same day — so it was about to be
+# both a Track 0 actuator output and half the sensor bus this body wires a
+# BME280 to.
+#
 # It said `[12, 13]` until 2026-08-21. Neither is an output on either build.
 #
-# 3 and 7 are the two entries where the firmware's own comment and the upstream
-# Oh-Ben-Claw bench card for the XIAO ESP32-S3 agree exactly, and neither is I2C
-# under either reading — which matters here, because this body has a BME280 on
-# the I2C bus.
+# 3 and 7 are outputs on the default build and neither is on the I2C bus, which
+# matters here because this body wires a BME280 to it. That used to read
+# "neither is I2C under either reading" — the firmware and the board disagreed
+# about which pads carried the bus, and the sentence was hedging a question
+# rather than stating a fact. The firmware moved to the labelled pads (SDA=5,
+# SCL=6) on 2026-08-21 and the hedge went with it.
 #
 # These are chip GPIO numbers, which is what `gpio_write` takes on every board.
 # They are NOT header labels: the silk differs per board, and this inventory

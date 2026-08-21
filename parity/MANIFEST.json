@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T20:26:19+00:00",
+  "generated": "2026-08-21T21:39:52+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -756,12 +756,12 @@
       "bytes": 883
     },
     "firmware/obc-esp32-s3/BRINGUP.md": {
-      "sha256": "49539857f231441378b732b345c62c26aa0fed2b156176ff782c70201bd3774b",
+      "sha256": "234a472c61b03ae618f3ed372ece1f40760b4b2c0babb816f76f33973228664d",
       "bytes": 11848
     },
     "firmware/obc-esp32-s3/CAMERA.md": {
-      "sha256": "2ccab7991183a4b234b65f2f095cb4c4db888f69d4604251b77febaea5a2bb19",
-      "bytes": 2929
+      "sha256": "d01c8b9facc4f3e150c8d2b80bc8ec79d4867c08cfbd909727055d17da247d25",
+      "bytes": 3498
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
       "sha256": "5d718ae628c8a152065cbb9c2012ff3397b8325ba2e747b8381d2809699fdd80",
@@ -796,12 +796,12 @@
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "c404a8f799f72f92f76adc30a66349c71b69f165ed585f355ef12bffe90ef0dc",
-      "bytes": 4785
+      "sha256": "f32fdf91b9b5f1b23c081070a1df212bfa3d8c46625ed8bcdb8d4fbc450ffdd1",
+      "bytes": 5587
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
-      "sha256": "6a7d64a3158146efeaa9182ed89495fcc5017a79ac57cce5391489d6fcf1b318",
-      "bytes": 4495
+      "sha256": "4ee7f8fb5bcb395308fe13df4ebfc51bddc90926c524b97807702a6c3c2d3ae0",
+      "bytes": 4763
     },
     "firmware/obc-esp32-s3/src/camera_bindings.h": {
       "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
@@ -812,8 +812,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "ee74758d8c722e7aa568dc4343482d814b4cedcac5e6da137ccbf8a1ed051402",
-      "bytes": 59329
+      "sha256": "a4b9be151eee9dfd5a4caecf626a8e432fcf48d8a1972c8b67d1e736aedc33d5",
+      "bytes": 59409
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "ffa3416a3984493ce58e59313e36d2015cf9ad8df668ccabf5bc52766a412402",
