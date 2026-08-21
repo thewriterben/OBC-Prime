@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 224 artifacts).
+        also updates the generator app's mirrors (12 of the 225 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -1302,6 +1302,14 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("firmware/obc-esp32-s3/src/reflex.rs",
      "firmware/obc-esp32-s3/src/reflex.rs",
+     None),
+    # Added 2026-08-21 with upstream #121, and caught by
+    # `scripts/check_vendored_mods.py` rather than by anyone remembering:
+    # `sync` copied the changed `main.rs` with its new `mod sensor_math;` and
+    # `check` reported "224 artifacts identical" again. Second time that gate
+    # has earned itself in one day.
+    ("firmware/obc-esp32-s3/src/sensor_math.rs",
+     "firmware/obc-esp32-s3/src/sensor_math.rs",
      None),
     ("firmware/obc-esp32-s3/src/safety.rs",
      "firmware/obc-esp32-s3/src/safety.rs",

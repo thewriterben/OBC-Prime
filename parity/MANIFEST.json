@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T22:09:10+00:00",
+  "generated": "2026-08-21T22:34:09+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -812,12 +812,16 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "a4b9be151eee9dfd5a4caecf626a8e432fcf48d8a1972c8b67d1e736aedc33d5",
-      "bytes": 59409
+      "sha256": "3c30e531e02dcac841b9d55890cfe104293db076987090ce210631768d693c64",
+      "bytes": 59643
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "c009bec87f60d3559657140e5d0dbf772e0c6b0b7b778a3bc2018b4574ea3db3",
       "bytes": 11872
+    },
+    "firmware/obc-esp32-s3/src/sensor_math.rs": {
+      "sha256": "fb4540ef1bf1588adbb9fd295ede46f8a79e8d3d235f77c77de2f218c752bd6c",
+      "bytes": 5908
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
       "sha256": "03be40ab41d6c2488bf47cc090878c89fac7906cd4777d24966f0339ce7c398d",
@@ -828,8 +832,8 @@
       "bytes": 12525
     },
     "firmware/obc-esp32-s3/src/sensors.rs": {
-      "sha256": "9b0ac1befb92e227a9f3b884ad1a2ea75dc0f9bac70785f7dd730d2fc3bc1423",
-      "bytes": 15361
+      "sha256": "172f1bdc20cdf8af03baf1ccc058c97b1869d40260ddad97861ccb5af480967a",
+      "bytes": 11634
     },
     "firmware/heltec-lora-linktest/.cargo/config.toml": {
       "sha256": "e2171eeb9a60fae8800545d26040969ef062447ed9fecf081a5bceca1ea91cad",
