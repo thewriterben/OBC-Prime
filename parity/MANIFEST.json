@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-21T22:34:09+00:00",
+  "generated": "2026-08-22T00:00:47+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -760,16 +760,16 @@
       "bytes": 11848
     },
     "firmware/obc-esp32-s3/CAMERA.md": {
-      "sha256": "d01c8b9facc4f3e150c8d2b80bc8ec79d4867c08cfbd909727055d17da247d25",
-      "bytes": 3498
+      "sha256": "0b784398f97dabc65dcaf5cdf506d3e23b5509e799cbd8683127d2c1d043546c",
+      "bytes": 3990
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
       "sha256": "5d718ae628c8a152065cbb9c2012ff3397b8325ba2e747b8381d2809699fdd80",
       "bytes": 42298
     },
     "firmware/obc-esp32-s3/Cargo.toml": {
-      "sha256": "3c5594c8dead397abf78df050b3a3e97144bc94bf9a9ce71898f37dc5f9fcc19",
-      "bytes": 3280
+      "sha256": "a36eb814960970e184afa48e5c5eeaddfd119fb3edf73c4e09400b1e0d38caf9",
+      "bytes": 3674
     },
     "firmware/obc-esp32-s3/build.rs": {
       "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
@@ -800,8 +800,8 @@
       "bytes": 5587
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
-      "sha256": "4ee7f8fb5bcb395308fe13df4ebfc51bddc90926c524b97807702a6c3c2d3ae0",
-      "bytes": 4763
+      "sha256": "e0553fc2edd368ec2dec89e822895629bee276b8bd7ab60918e688a632282d83",
+      "bytes": 6755
     },
     "firmware/obc-esp32-s3/src/camera_bindings.h": {
       "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
