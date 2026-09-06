@@ -15,14 +15,14 @@ The bodies are yours either way. They run on your hardware, on your network, and
 the reflex layer keeps working when the brain is unreachable.
 
 > **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-seven crates of it now are. `obc-paths`,
+> repository** — but twenty-eight crates of it now are. `obc-paths`,
 > `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
 > `obc-observability`, `obc-scheduler`, `obc-conscience`, `obc-approval`,
 > `obc-spine`, `obc-tools`, `obc-providers`, `obc-mcp`, `obc-vision`,
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
-> `obc-learning`, `obc-fleet`, `obc-audio` and `obc-mission` are here, vendored
-> and hash-checked, and CI builds and tests them: **1077 tests**.
+> `obc-learning`, `obc-fleet`, `obc-audio`, `obc-mission` and `obc-body` are here, vendored
+> and hash-checked, and CI builds and tests them: **1094 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1077 tests
+cargo test --workspace     # 1094 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -241,7 +241,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1077 tests pass" and "you can see it refuse" are different
+That matters because "1094 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
