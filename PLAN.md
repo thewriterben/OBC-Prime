@@ -369,6 +369,14 @@ shell", verified against a service-manager-style start):
    > it, and `PUBLISHING.md` documents the choice: the login gates nothing, so
    > removing accounts costs ~800 lines and no feature. That is the one
    > remaining decision, and it is a decision rather than a task.
+   >
+   > 2026-09-06: **decided and done.** The OAuth round-trip went on 2026-08-21
+   > (generator PR #10); the remaining stub — session shape, cookies, auth
+   > router, drizzle/MySQL, the previewer bridge, the Manus bundle id and
+   > scheme — went on the `chore/no-accounts` branch. Nothing in the generator
+   > names the scaffolding platform any more except the history in
+   > `PUBLISHING.md`. Left in §3 of that file: one look at the web build's
+   > safe areas.
 5. Lift Accelerapp's two good modules into `firmware/`. **Open** — confirmed
    2026-08-02: no `registry.py` or `obc_templates.py` anywhere in this repo.
 6. ~~Decide on `SOUL.md`: wire it or cut it.~~ **Closed — cut.** See §6 blocker
@@ -383,13 +391,14 @@ shell", verified against a service-manager-style start):
 
 Also still open, in rough order of how much they'd embarrass a visitor:
 
-- **The generator is still private, and one thing still binds it to Manus.**
-  ~~Its OAuth is hard-wired to a sandbox portal, `package.json` is named
-  `"app-template"`, and there is no licence.~~ The package name and the licence
-  are fixed; the OAuth binding is not. It cannot be published as-is, which means
-  the onboarding story the README leans on isn't reachable yet — and the block
-  is now a single decision (`PUBLISHING.md`, option 1: remove accounts, ~800
-  lines, no feature lost) rather than three tasks.
+- ~~**The generator is still private, and one thing still binds it to Manus.**~~
+  **Closed 2026-09-06.** Package name and licence were fixed on 2026-08-02, the
+  OAuth round-trip removed on 2026-08-21, and the last of the stub (session,
+  cookies, drizzle/MySQL, previewer bridge, Manus bundle id) on 2026-09-06.
+  What stands between the generator and being public is now only the
+  repository's visibility setting — and `PUBLISHING.md` §4's warning that a
+  *hosted* instance is an open proxy, which is a deployment decision, not a
+  code one.
 - ~~**CI only checks the manifest.** The `--upstream` job is written but commented
   out, because the core repo isn't readable from CI. Drift against the core
   agent is therefore *not* caught today — only hand-edits are.~~ **Closed
