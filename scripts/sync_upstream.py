@@ -21,7 +21,7 @@ Usage
     python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 225 artifacts).
+        also updates the generator app's mirrors (12 of the 228 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged.
@@ -1128,6 +1128,32 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-vision/src/clawcam_spatial.rs",
      "crates/obc-vision/src/clawcam_spatial.rs",
+     None),
+
+    # ── A bound that traces to a datasheet ───────────────────────────────────
+    # Vendored 2026-09-06, the twenty-eighth crate. `obc-body` reads ClawBot's
+    # citation-gated body model and turns joint limits into the `SafetyLimit`s
+    # the Track 0 gate enforces. docs/SAFETY.md's claim is that a limit on
+    # hardware is a number someone can check; until this crate the numbers were
+    # whatever was typed into config. Same test as obc-safety and obc-vision,
+    # same answer: it backs a document here, and both crates it depends on
+    # (obc-movement, obc-safety) were already vendored.
+    #
+    # It is also the first vendored crate with a dependency outside the core
+    # repository: `clawbot`, pinned to a git rev in its Cargo.toml (the reason is
+    # in that file). The workspace build fetches it; CI has network.
+    #
+    # Surfaced by the drift gate itself: upstream added the crate on 2026-09-06
+    # (Oh-Ben-Claw #133) and `check` refused to stay silent about a crate that
+    # was neither vendored nor recorded as deliberately not.
+    ("crates/obc-body/Cargo.toml",
+     "crates/obc-body/Cargo.toml",
+     None),
+    ("crates/obc-body/src/lib.rs",
+     "crates/obc-body/src/lib.rs",
+     None),
+    ("crates/obc-body/tests/import.rs",
+     "crates/obc-body/tests/import.rs",
      None),
 
     # ── The agent watching itself ────────────────────────────────────────────

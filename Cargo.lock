@@ -431,6 +431,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "clawbot"
+version = "0.1.0"
+source = "git+https://github.com/thewriterben/ClawBot?rev=61cd4fdfcaef895f9136c28066354325e1443feb#61cd4fdfcaef895f9136c28066354325e1443feb"
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2150,6 +2155,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "obc-body"
+version = "0.1.0"
+dependencies = [
+ "clawbot",
+ "obc-movement",
+ "obc-safety",
 ]
 
 [[package]]

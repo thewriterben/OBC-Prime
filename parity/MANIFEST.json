@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-22T00:00:47+00:00",
+  "generated": "2026-09-06T22:36:57+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -540,8 +540,8 @@
       "bytes": 10653
     },
     "crates/obc-tools/src/builtin/audio.rs": {
-      "sha256": "3405d7e551b4332fef9e302cd110563f44458031f5c838303d7843ca924d61d9",
-      "bytes": 15557
+      "sha256": "2c5f56a30519018b76b92d7984e2ef6f45ea085839d674010c1ef7356d45b623",
+      "bytes": 15874
     },
     "crates/obc-tools/src/builtin/audio_speech.rs": {
       "sha256": "f14b662715725876a202f40bf14c55fb08dafdbd5ed1be016a4bce14c225ba40",
@@ -624,8 +624,8 @@
       "bytes": 9689
     },
     "crates/obc-tools/src/builtin/shell.rs": {
-      "sha256": "d9b9c14c0880a193af8e96ca78e19a6aa32ab602a56a3ccf9f358fe4c48131f8",
-      "bytes": 5115
+      "sha256": "2b24a3eb4cbf507d9fbdaa8235e119644c296527e38f59eb96e5e6d070403153",
+      "bytes": 6555
     },
     "crates/obc-tools/src/builtin/site_anchor.rs": {
       "sha256": "56927002db05ef6271b91722f2b8791cbfa8e44328296cac8bc96a59e4683008",
@@ -678,6 +678,18 @@
     "crates/obc-vision/src/clawcam_spatial.rs": {
       "sha256": "b699b83dd491fbb1985ed1599da075e70c2783ece3a76099cb043e4d3dcfa81e",
       "bytes": 4093
+    },
+    "crates/obc-body/Cargo.toml": {
+      "sha256": "c15ccb5811cb17e4c91bf4834d9136414644068ff1c00092cbd88d4990ce3647",
+      "bytes": 2556
+    },
+    "crates/obc-body/src/lib.rs": {
+      "sha256": "b0c0eea9b46294b7be71d3caee91d41d84906afbf6d444b8afad53a00c303c70",
+      "bytes": 10760
+    },
+    "crates/obc-body/tests/import.rs": {
+      "sha256": "ff5e06d6adfd364b6a3dc9bbd179239b9be1e0c0f44fee7086a7adafab6cf56b",
+      "bytes": 14772
     },
     "crates/obc-observability/Cargo.toml": {
       "sha256": "c78add67061d1379185dfa93b8808473222059de95b8f270bf1b38d874da9794",
@@ -764,8 +776,8 @@
       "bytes": 3990
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
-      "sha256": "5d718ae628c8a152065cbb9c2012ff3397b8325ba2e747b8381d2809699fdd80",
-      "bytes": 42298
+      "sha256": "cd3c896df8d109a87bfb91eb7ef6cad6c482fe8d683a404bcdd0c60a51423870",
+      "bytes": 42544
     },
     "firmware/obc-esp32-s3/Cargo.toml": {
       "sha256": "a36eb814960970e184afa48e5c5eeaddfd119fb3edf73c4e09400b1e0d38caf9",
@@ -788,16 +800,16 @@
       "bytes": 475
     },
     "firmware/obc-esp32-s3/sdkconfig.defaults": {
-      "sha256": "f560270e9c4413b80833cb515197dc8383d9624eea53f9ed35777f72ad37d428",
-      "bytes": 515
+      "sha256": "2210b87ad7f48a97e5d07d060b20ab39321ce0df96ffbb16222815eebd940ded",
+      "bytes": 3421
     },
     "firmware/obc-esp32-s3/src/audio.rs": {
       "sha256": "7b994b9dd4074ac855a35c8a817e917543c06cd6ed67e264103447b31fab2904",
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "f32fdf91b9b5f1b23c081070a1df212bfa3d8c46625ed8bcdb8d4fbc450ffdd1",
-      "bytes": 5587
+      "sha256": "e554c2f1af8cfae21a048c0e8e9696f8aa23d4ecc4ce6634a33abc4a3efc983b",
+      "bytes": 9402
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
       "sha256": "e0553fc2edd368ec2dec89e822895629bee276b8bd7ab60918e688a632282d83",
@@ -812,8 +824,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "3c30e531e02dcac841b9d55890cfe104293db076987090ce210631768d693c64",
-      "bytes": 59643
+      "sha256": "fc57a1531e9eebb90937c96a94b1d4d3ba0de9d52d545160cbaba7a1de413a78",
+      "bytes": 67443
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "c009bec87f60d3559657140e5d0dbf772e0c6b0b7b778a3bc2018b4574ea3db3",
@@ -824,8 +836,8 @@
       "bytes": 5908
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
-      "sha256": "03be40ab41d6c2488bf47cc090878c89fac7906cd4777d24966f0339ce7c398d",
-      "bytes": 12447
+      "sha256": "d843b4f20add55f97572b664dc84d56d2e0699a445f5e76c710d985df634b105",
+      "bytes": 14683
     },
     "firmware/obc-esp32-s3/src/safing.rs": {
       "sha256": "980d296abf0edf73489c105d8a7a88bc16e4b6bcb6a3f5361dd7f9169e2428ec",
