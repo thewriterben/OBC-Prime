@@ -447,10 +447,13 @@ jobs:
     # will not work here. PEER_REPO_TOKEN is a fine-grained PAT with
     # `Contents: read` on thewriterben/OBC-deployment-generator and nothing else.
     #
-    # It has an expiry. When it lapses this job fails on checkout with
-    # "Repository not found", which reads like drift and is not — a drift failure
+    # It has an expiry. When it lapses this job fails on checkout, and the
+    # message is "Bad credentials" (measured 2026-09-06: PAT issued 2026-07-30,
+    # green 2026-08-22, dead by 2026-09-06 — a 30-day token). An earlier version
+    # of this comment guessed "Repository not found"; that is what a *missing*
+    # token gives. Either way it reads like drift and is not — a drift failure
     # names a file and two hashes. Re-issue the PAT rather than debugging the
-    # manifest.
+    # manifest, and update the PEER_REPO_TOKEN secret.
     #
     # ── Merge order, which this job requires and used to require silently ────
     # The first checkout below takes the generator's DEFAULT BRANCH. So any sync
