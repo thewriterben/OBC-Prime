@@ -5,6 +5,47 @@ New entries go at the top.
 
 ---
 
+## 2026-09-11 — A bundle we did not build is not a bundle we can vendor
+
+`sync` copies five wasm artifacts out of upstream's `planner-wasm/pkg/`. That
+directory is **gitignored upstream**: it holds whatever the last `wasm-pack` run
+left there, and nothing says which branch that run was on.
+
+Without `--rebuild-wasm` the script already declined to describe such a bundle —
+the `wasm_build` block is only written by a run that did the build, on the stated
+grounds that a sync which merely copied a bundle "has no standing to say what
+that bundle was compiled from". That reasoning was applied to the metadata and
+not to the bytes: the copy happened anyway.
+
+Found on 2026-09-11. A sync on the `mcp-respawn-dead-server` branch pulled in the
+bundle left over from the `registry-lilygo-t-camera-plus-s3` build. `check
+--upstream` did catch it, because `registry.rs` is a recorded build input and had
+changed between the two branches — but that was luck. A foreign bundle whose
+`WASM_SOURCES` happen to match would have passed every gate: the artifact hashes
+cannot see it (a compiled file never drifts from its own hash), the build-input
+hashes would agree, and only `verify_wasm.cjs`'s behavioural goldens stood
+between it and being vendored.
+
+**Decision.** `sync` refuses, and copies nothing, when it is not rebuilding and an
+incoming wasm artifact's bytes differ from the vendored one. Identical bytes are
+not refused — there is nothing new to vouch for — and `--rebuild-wasm` is the
+supported way to change the bundle. It costs about thirteen seconds.
+
+**Consequences.** A sync whose only obstacle is the bundle now stops instead of
+half-applying, and says which file and which two hashes. The refusal is exercised
+by `python scripts/sync_upstream.py selftest`, which drives the decision over a
+scratch tree in three states and runs in CI beside the other gates: this
+repository's rule is that a gate whose first run is green has proved nothing.
+
+The narrower mistake that went with the discovery is worth recording too. The
+first commit on that branch staged `parity/MANIFEST.json` without the wasm file
+it described, so the manifest claimed a hash the committed bundle did not have.
+That is a different failure, and the existing `check` catches it exactly as
+designed — reproduced against the commit afterwards, and it reports "edited since
+sync" with both hashes. No gate was missing there; the `git add` was selective.
+
+---
+
 ## 2026-08-14 — The mirror repository merges first, and the gate never said so
 
 A sync that touches one of the generator's mirrored artifacts needs two pull
