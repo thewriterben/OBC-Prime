@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 228 artifacts).
+        also updates the generator app's mirrors (12 of the 230 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -169,6 +169,11 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-memory/src/world.rs",
      "crates/obc-memory/src/world.rs",
+     None),
+    # Added upstream in #142 (streaming); `lib.rs` declares `mod notes;`, so
+    # vendoring that without this entry leaves a tree that cannot compile.
+    ("crates/obc-memory/src/notes.rs",
+     "crates/obc-memory/src/notes.rs",
      None),
     ("crates/obc-memory/src/liveness.rs",
      "crates/obc-memory/src/liveness.rs",
@@ -1071,6 +1076,12 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-tools/src/builtin/power.rs",
      "crates/obc-tools/src/builtin/power.rs",
+     None),
+    # Added upstream in #142 (streaming); `builtin/mod.rs` declares `mod
+    # search;`, so vendoring that without this entry leaves a tree that cannot
+    # compile — the failure check_vendored_mods.py exists to catch.
+    ("crates/obc-tools/src/builtin/search.rs",
+     "crates/obc-tools/src/builtin/search.rs",
      None),
     ("crates/obc-tools/src/builtin/sensing.rs",
      "crates/obc-tools/src/builtin/sensing.rs",
