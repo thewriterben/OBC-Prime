@@ -1,15 +1,15 @@
 {
-  "generated": "2026-09-07T04:07:53+00:00",
+  "generated": "2026-09-11T17:54:04+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
-      "sha256": "b4a19524e5b4169ee4536f5838fefbb3a8377fc834ebafb29b287870a8dcbead",
-      "bytes": 41671
+      "sha256": "f10a191c6a5cbe3a9552c0893b3bd1719e3acad2842f31680e314797ac958494",
+      "bytes": 42354
     },
     "firmware-templates/templates.json": {
-      "sha256": "d272053ee6a2c50a83853d53a4d114a7fb273adc0964b3018ba5f3628df3f46e",
-      "bytes": 91842
+      "sha256": "7a1b3b3b5e782dafa1f462aaf1b5504ec13f3fa2368a9b64205f546120b4fb80",
+      "bytes": 93887
     },
     "parity/fixtures/deployment/nanopi/inventory.json": {
       "sha256": "ec15e1a073fe07f4895117241a6f9867f42bc0f2bbfc64956ca2017f07bef5c7",
@@ -32,8 +32,8 @@
       "bytes": 556
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
-      "sha256": "40a1d25a979c02b8dbe5c09df0a8898ef7e3f037c709cec8d5ce45496189bd2a",
-      "bytes": 223997
+      "sha256": "6e6d441dd087cb628229493c464d5f4a97f78ce87e07ee935cabebde5cf3e3d8",
+      "bytes": 226367
     },
     "wasm/obc-planner/obc_planner_wasm.js": {
       "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
@@ -128,8 +128,8 @@
       "bytes": 649
     },
     "crates/obc-planner/src/peripherals/registry.rs": {
-      "sha256": "038d4ec6e3ae70d5db0ab533f710102d8fb6183a6a5baa7fa7038e3e7b31ab01",
-      "bytes": 109873
+      "sha256": "fe482996ac10178884ecd5c9641117578db706d455a619b075a21f22ac4abf34",
+      "bytes": 111573
     },
     "crates/obc-planner/src/deployment/mod.rs": {
       "sha256": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
@@ -921,7 +921,7 @@
     "rebuild": "wasm-pack build planner-wasm --target nodejs",
     "built_by_this_script": true,
     "toolchain": {
-      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
       "wasm-pack": "wasm-pack 0.15.0",
       "wasm-bindgen": "0.2.127"
     },
@@ -934,7 +934,7 @@
       "crates/obc-planner/src/geo/mod.rs": "88e552902ad4f9d0727641da0989316a0e6c500c3138b34b6b1e5b6207519283",
       "crates/obc-planner/src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
       "crates/obc-planner/src/peripherals/mod.rs": "fe85608430e20762f324cbf2b4c076f69eb17d3a4d37d686d8fef67bdf079083",
-      "crates/obc-planner/src/peripherals/registry.rs": "038d4ec6e3ae70d5db0ab533f710102d8fb6183a6a5baa7fa7038e3e7b31ab01",
+      "crates/obc-planner/src/peripherals/registry.rs": "fe482996ac10178884ecd5c9641117578db706d455a619b075a21f22ac4abf34",
       "crates/obc-planner/src/deployment/mod.rs": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
       "crates/obc-planner/src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
       "crates/obc-planner/src/deployment/firmware_scaffold.rs": "a7812f69611101d330f0958bedd397bb6055cb14ac11de5a736578308965b8a6",
