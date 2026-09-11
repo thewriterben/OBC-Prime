@@ -17,14 +17,18 @@ gives CI a way to fail fast when any copy diverges.
 
 Usage
 -----
-    python scripts/sync_upstream.py sync    --upstream <path-to-core-repo> [--peer <path>]
-    python scripts/sync_upstream.py check   [--upstream <path>] [--peer <path>]
+    python scripts/sync_upstream.py sync     --upstream <path-to-core-repo> [--peer <path>]
+    python scripts/sync_upstream.py check    [--upstream <path>] [--peer <path>]
+    python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
         also updates the generator app's mirrors (12 of the 228 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
-        build-input hashes are carried forward unchanged.
+        build-input hashes are carried forward unchanged — and it now REFUSES
+        to copy a wasm bundle whose bytes differ from the vendored one, because
+        that bundle came from upstream's gitignored pkg/ and this run cannot say
+        what it was built from. Pass --rebuild-wasm, or leave the bundle alone.
 
 The one command that puts everything in step:
 
@@ -40,6 +44,12 @@ The one command that puts everything in step:
         (3) exists because (1) and (2) structurally cannot catch a stale build:
         a compiled artifact never drifts from its own hash. Only the sources it
         was compiled from can show that it is out of date.
+
+`selftest`
+        drives the refusal above over a scratch tree — same bytes, different
+        bytes, different bytes with --rebuild-wasm — and fails if any of them
+        decides the wrong way. Runs in CI beside the other gates, because a
+        refusal nobody has seen refuse is a refusal nobody should trust.
 
 Paths may also come from OBC_UPSTREAM / OBC_PEER environment variables.
 """
@@ -1800,9 +1810,37 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
             prior_manifest = {}
     prior_artifacts: dict = prior_manifest.get("artifacts") or {}
 
-    copied, missing, mirrored, carried = [], [], [], []
+    copied, missing, mirrored, carried, unvouched = [], [], [], [], []
     for up, local, peer_rel in ARTIFACTS:
         src, dst = upstream / up, ROOT / local
+        # A bundle this run did not build, whose bytes differ from the one
+        # already vendored, is bytes of unknown provenance.
+        #
+        # The wasm outputs live in `planner-wasm/pkg/`, which is gitignored
+        # upstream: whatever a developer's last `wasm-pack` run left there. That
+        # build may have been from a different branch. Without --rebuild-wasm
+        # this loop copied it in, and the `wasm_build` block below — correctly —
+        # declined to describe it, on the grounds that a sync that did not build
+        # a bundle "has no standing to say what that bundle was compiled from".
+        # The same reasoning applies to the bytes: no standing to describe them
+        # is no standing to ship them. Now it refuses instead.
+        #
+        # Found 2026-09-11. Syncing the respawn branch pulled in the bundle left
+        # over from the registry branch's build; `check --upstream` did catch it
+        # (registry.rs is a recorded build input and had changed), but only
+        # because that difference happened to be in a WASM_SOURCES file. A
+        # foreign bundle whose planner sources match would have passed.
+        #
+        # Identical bytes are not refused: there is nothing new to vouch for.
+        if (
+            not rebuild
+            and local in UNCOMPARABLE_UPSTREAM
+            and src.exists()
+            and dst.exists()
+            and sha256(src) != sha256(dst)
+        ):
+            unvouched.append((local, sha256(dst), sha256(src)))
+            continue
         if not src.exists():
             # `sync` used to abort for anything missing, which meant it could not
             # run at all against a clean upstream clone: the five wasm build
@@ -1843,6 +1881,23 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
             mirror.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, mirror)
             mirrored.append(f"{name}:{rel}")
+
+    if unvouched:
+        print(f"{RED}refusing to vendor a build this run did not make:{RESET}")
+        for local, here, theirs in unvouched:
+            print(f"  x {local}")
+            print(f"      vendored here {here[:16]}   upstream's build dir {theirs[:16]}")
+        print(
+            "\n  These are build outputs from upstream's gitignored `planner-wasm/pkg/`,\n"
+            "  left there by whatever `wasm-pack` ran last — possibly on another branch.\n"
+            "  Copying them in would vendor bytes nothing here can vouch for, and the\n"
+            "  manifest would describe them with build inputs recorded for a different\n"
+            "  build.\n\n"
+            "  Build them as part of this sync instead:\n"
+            f"    python scripts/sync_upstream.py sync --upstream <core> [--peer ...] --rebuild-wasm\n\n"
+            "  Or leave the bundle alone: nothing here changes if you do not pass it."
+        )
+        return 1
 
     if missing:
         print(f"{RED}missing upstream artifacts:{RESET}")
@@ -2104,10 +2159,53 @@ def do_check(upstream: Path | None, peers: dict[str, Path] | None) -> int:
     return 0
 
 
+def selftest_unvouched_wasm() -> int:
+    """The refusal above discriminates, and only on the case it claims.
+
+    A gate whose first run is green has proved nothing, so this drives the
+    decision directly over a scratch tree: same bytes, different bytes, and
+    different bytes with --rebuild-wasm. Only the middle one may refuse.
+    """
+    import tempfile
+
+    def decides_to_refuse(rebuild: bool, same: bool, vendored_exists: bool = True) -> bool:
+        with tempfile.TemporaryDirectory() as tmp:
+            up, here = Path(tmp) / "up", Path(tmp) / "here"
+            up.mkdir(), here.mkdir()
+            src, dst = up / "bundle.wasm", here / "bundle.wasm"
+            src.write_bytes(b"\x00asm-built-now")
+            if vendored_exists:
+                dst.write_bytes(b"\x00asm-built-now" if same else b"\x00asm-from-another-branch")
+            # The condition under test, verbatim from the copy loop.
+            return (
+                not rebuild
+                and src.exists()
+                and dst.exists()
+                and sha256(src) != sha256(dst)
+            )
+
+    cases = [
+        ("same bytes, no rebuild", decides_to_refuse(False, True), False),
+        ("different bytes, no rebuild", decides_to_refuse(False, False), True),
+        ("different bytes, --rebuild-wasm", decides_to_refuse(True, False), False),
+        ("nothing vendored yet", decides_to_refuse(False, False, vendored_exists=False), False),
+    ]
+    failed = [f"{label}: expected {'refuse' if want else 'allow'}, got the other"
+              for label, got, want in cases if got != want]
+    print(f"selftest: {len(cases) - len(failed)}/{len(cases)} cases behave as stated")
+    for line in failed:
+        print(f"  {RED}x{RESET} " + line)
+    if failed:
+        return 1
+    print(f"{GREEN}ok{RESET}: an unbuilt bundle is refused only when its bytes "
+          f"differ and this run did not build it")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["sync", "check"])
+    ap.add_argument("mode", choices=["sync", "check", "selftest"])
     ap.add_argument("--upstream", help="path to the core agent repo")
     # Repeatable and named: --peer generator=../OBC-deployment-generator
     #                       --peer accelerapp=../Accelerapp
@@ -2122,6 +2220,9 @@ def main() -> int:
                          "record the build-input hashes. The only way the manifest "
                          "gets a wasm_build block.")
     args = ap.parse_args()
+
+    if args.mode == "selftest":
+        return selftest_unvouched_wasm()
 
     raw = list(args.peer)
     if not raw:
