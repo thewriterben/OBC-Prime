@@ -61,6 +61,7 @@ jobs:
       # why the host-side shims exist at all. sync_upstream.py's own comment
       # calls this "the exact failure mode this script exists to prevent" — a
       # comment, not a check. This is the check.
+
       # `sync` refuses to vendor a wasm bundle it did not build when that
       # bundle's bytes differ from the vendored one — the bytes come from
       # upstream's gitignored `planner-wasm/pkg/`, which holds whatever
