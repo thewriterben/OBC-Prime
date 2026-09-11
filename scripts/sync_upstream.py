@@ -1515,6 +1515,44 @@ UNCOMPARABLE_UPSTREAM: dict[str, str] = {
         "gitignored upstream (root .gitignore: Cargo.lock)",
 }
 
+# The subset of the above that is a *build* of the planner — the wasm-pack
+# output. These are what `sync` refuses to vendor when it did not build them
+# (see the copy loop), because their provenance is a compiler run nobody
+# recorded. The two Cargo.locks are gitignored upstream for an unrelated reason
+# and are ordinary files that change on their own; conflating the two is what
+# made the first version of that guard refuse every sync whose lockfiles moved.
+WASM_BUILD_OUTPUTS: frozenset[str] = frozenset(
+    k for k in UNCOMPARABLE_UPSTREAM if k.startswith("wasm/obc-planner/")
+)
+
+
+def bundle_decision(
+    local: str,
+    rebuild: bool,
+    bytes_differ: bool,
+    vendored_is_current: bool,
+) -> str:
+    """What `sync` does with one incoming artifact: "copy", "keep" or "refuse".
+
+    Split out of the copy loop so the decision can be driven directly by
+    `selftest` — the loop needs a filesystem, this needs four booleans.
+
+    Only a build of the planner is in question. Upstream's `planner-wasm/pkg/`
+    is gitignored there, so whatever sits in it is the residue of someone's last
+    `wasm-pack` run, possibly on another branch, and nothing here can say what
+    it was compiled from.
+
+      * rebuilding, or identical bytes, or not a bundle -> "copy", as before.
+      * differing bytes, ours still built from upstream's current planner
+        sources -> "keep". Ours is correct and theirs is unvouched; swapping
+        would be a strict downgrade.
+      * differing bytes, ours stale -> "refuse". Ours is out of date and theirs
+        cannot be vouched for, so only `--rebuild-wasm` resolves it.
+    """
+    if rebuild or local not in WASM_BUILD_OUTPUTS or not bytes_differ:
+        return "copy"
+    return "keep" if vendored_is_current else "refuse"
+
 
 # Directories whose contents are vendored in their entirety, mapped to the few
 # files inside them that belong to this repository instead.
@@ -1810,6 +1848,22 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
             prior_manifest = {}
     prior_artifacts: dict = prior_manifest.get("artifacts") or {}
 
+    # Is the bundle already vendored here still a build of upstream's current
+    # planner sources? If it is, an incoming bundle from upstream's pkg/ has
+    # nothing to offer: ours is correct, and swapping it for an unvouched one of
+    # unknown provenance would be a strict downgrade. If it is NOT, ours is
+    # stale and theirs is unvouched, so neither can be shipped and only a
+    # rebuild resolves it.
+    #
+    # This is the distinction the first version of the guard could not make. It
+    # refused whenever the bytes differed, which on 2026-09-11 blocked a
+    # straightforward catch-up sync whose planner sources had not moved at all.
+    recorded_sources = (prior_manifest.get("wasm_build") or {}).get("sources") or {}
+    vendored_bundle_is_current = bool(recorded_sources) and all(
+        (upstream / rel).exists() and recorded_sources.get(rel) == sha256(upstream / rel)
+        for rel in WASM_SOURCES
+    )
+
     copied, missing, mirrored, carried, unvouched = [], [], [], [], []
     for up, local, peer_rel in ARTIFACTS:
         src, dst = upstream / up, ROOT / local
@@ -1832,15 +1886,29 @@ def do_sync(upstream: Path, peers: dict[str, Path] | None = None, rebuild: bool 
         # foreign bundle whose planner sources match would have passed.
         #
         # Identical bytes are not refused: there is nothing new to vouch for.
-        if (
-            not rebuild
-            and local in UNCOMPARABLE_UPSTREAM
-            and src.exists()
-            and dst.exists()
-            and sha256(src) != sha256(dst)
-        ):
-            unvouched.append((local, sha256(dst), sha256(src)))
-            continue
+        #
+        # Scoped to WASM_BUILD_OUTPUTS, not to UNCOMPARABLE_UPSTREAM. The first
+        # version of this keyed on the latter, which also holds the two firmware
+        # Cargo.lock files — gitignored upstream for a different reason entirely,
+        # and ordinary files that legitimately change. That refused every sync
+        # whose lockfiles had moved, with a message about `planner-wasm/pkg/`
+        # that did not apply to them. Found on 2026-09-11 by the first real sync
+        # after the guard merged, which is the run it blocked.
+        if local in WASM_BUILD_OUTPUTS and src.exists() and dst.exists():
+            verdict = bundle_decision(
+                local, rebuild, sha256(src) != sha256(dst), vendored_bundle_is_current
+            )
+            if verdict == "keep":
+                entry = prior_artifacts.get(local) or {
+                    "sha256": sha256(dst), "bytes": dst.stat().st_size
+                }
+                carried.append((local, "vendored bundle is current; upstream's pkg/ "
+                                       "holds a different, unvouched build"))
+                copied.append((local, entry["sha256"], entry["bytes"]))
+                continue
+            if verdict == "refuse":
+                unvouched.append((local, sha256(dst), sha256(src)))
+                continue
         if not src.exists():
             # `sync` used to abort for anything missing, which meant it could not
             # run at all against a clean upstream clone: the five wasm build
@@ -2166,39 +2234,41 @@ def selftest_unvouched_wasm() -> int:
     decision directly over a scratch tree: same bytes, different bytes, and
     different bytes with --rebuild-wasm. Only the middle one may refuse.
     """
-    import tempfile
+    WASM = "wasm/obc-planner/obc_planner_wasm_bg.wasm"
+    LOCK = "firmware/obc-esp32-s3/Cargo.lock"
 
-    def decides_to_refuse(rebuild: bool, same: bool, vendored_exists: bool = True) -> bool:
-        with tempfile.TemporaryDirectory() as tmp:
-            up, here = Path(tmp) / "up", Path(tmp) / "here"
-            up.mkdir(), here.mkdir()
-            src, dst = up / "bundle.wasm", here / "bundle.wasm"
-            src.write_bytes(b"\x00asm-built-now")
-            if vendored_exists:
-                dst.write_bytes(b"\x00asm-built-now" if same else b"\x00asm-from-another-branch")
-            # The condition under test, verbatim from the copy loop.
-            return (
-                not rebuild
-                and src.exists()
-                and dst.exists()
-                and sha256(src) != sha256(dst)
-            )
-
+    # (label, args to bundle_decision, expected verdict)
     cases = [
-        ("same bytes, no rebuild", decides_to_refuse(False, True), False),
-        ("different bytes, no rebuild", decides_to_refuse(False, False), True),
-        ("different bytes, --rebuild-wasm", decides_to_refuse(True, False), False),
-        ("nothing vendored yet", decides_to_refuse(False, False, vendored_exists=False), False),
+        ("identical bytes, no rebuild", (WASM, False, False, False), "copy"),
+        ("differing bytes, ours is stale", (WASM, False, True, False), "refuse"),
+        ("differing bytes, ours is current", (WASM, False, True, True), "keep"),
+        ("differing bytes, --rebuild-wasm", (WASM, True, True, False), "copy"),
+        ("--rebuild-wasm wins even when ours is current", (WASM, True, True, True), "copy"),
+        # The regression, found by the first real sync after the guard merged:
+        # UNCOMPARABLE_UPSTREAM also lists two firmware Cargo.locks, which are
+        # gitignored upstream for an unrelated reason and change on their own.
+        # Keying the guard on that dict refused every sync whose lockfiles moved.
+        ("a changed firmware Cargo.lock", (LOCK, False, True, False), "copy"),
     ]
-    failed = [f"{label}: expected {'refuse' if want else 'allow'}, got the other"
-              for label, got, want in cases if got != want]
+    # And the same for every non-bundle artifact in the dict, not just the one.
+    cases += [
+        (f"uncomparable but not a bundle: {k}", (k, False, True, False), "copy")
+        for k in sorted(UNCOMPARABLE_UPSTREAM)
+        if k not in WASM_BUILD_OUTPUTS
+    ]
+
+    failed = [
+        f"{label}: expected {want}, got {bundle_decision(*args)}"
+        for label, args, want in cases
+        if bundle_decision(*args) != want
+    ]
     print(f"selftest: {len(cases) - len(failed)}/{len(cases)} cases behave as stated")
     for line in failed:
         print(f"  {RED}x{RESET} " + line)
     if failed:
         return 1
-    print(f"{GREEN}ok{RESET}: an unbuilt bundle is refused only when its bytes "
-          f"differ and this run did not build it")
+    print(f"{GREEN}ok{RESET}: a bundle this run did not build is kept when ours is "
+          f"current, refused when ours is stale, and only ever copied on a rebuild")
     return 0
 
 
