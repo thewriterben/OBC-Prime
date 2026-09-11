@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-11T17:54:04+00:00",
+  "generated": "2026-09-11T22:18:36+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -64,12 +64,16 @@
       "bytes": 1721
     },
     "crates/obc-memory/src/lib.rs": {
-      "sha256": "7457f8398ad7c7ae2cfbde34a871df5dc8cae6f580ae5e0b08364cb2a24a70ae",
-      "bytes": 20188
+      "sha256": "5e1eda39ee52d7544ea6e9f25f0187748871c9c08b1d83e6f81465857f92a531",
+      "bytes": 27984
     },
     "crates/obc-memory/src/world.rs": {
       "sha256": "e6869eda344a9ba28f7ec43450e5510b198dc647f00291d935eeafac622ebaca",
       "bytes": 66043
+    },
+    "crates/obc-memory/src/notes.rs": {
+      "sha256": "2fdcd1643ee133ac1c5a70929385b366905feb3a2cefc7104549791f79bd304d",
+      "bytes": 9528
     },
     "crates/obc-memory/src/liveness.rs": {
       "sha256": "1c17afa67b73e5e2a56974b584e1534bffed270c5c20b7cc87b1f2fb93f99228",
@@ -480,44 +484,44 @@
       "bytes": 2520
     },
     "crates/obc-mcp/src/client.rs": {
-      "sha256": "25f97094f18178fd7d51df165395c75011ce798d04d84cf22c3db7f48f16b09d",
-      "bytes": 31711
+      "sha256": "e8038f5ae703241f9e9cdbe4658501024d3b9659920724166032b547cf1d56bd",
+      "bytes": 35393
     },
     "crates/obc-mcp/src/lib.rs": {
-      "sha256": "10a0e7f0ba0bbdf6c35d97c28096b4717837213ea5c9704558da5b2965dc9bdd",
-      "bytes": 35911
+      "sha256": "279038650c4ec8cb19c1fecf88ba6153f36d4a0736510a3d8014df6323c22731",
+      "bytes": 38778
     },
     "crates/obc-mcp/src/server.rs": {
       "sha256": "e2d8491ab715757ee02e3a1228a6b875cc084fd953652b214ae2372bf0085fd8",
       "bytes": 24763
     },
     "crates/obc-providers/Cargo.toml": {
-      "sha256": "e97486b8dc7f735ebed45c27befbe66f50fa79a455c95ee3779551bad190d36e",
-      "bytes": 3184
+      "sha256": "69b0d13b410e5158fcd0baa98b6dbfd81ace88df8a4e27172c00f40572b40c12",
+      "bytes": 3245
     },
     "crates/obc-providers/src/anthropic.rs": {
-      "sha256": "d8a9864f1208d964829dda72f4adaaa291e04a3d035add0dd43605832d1f1b71",
-      "bytes": 6989
+      "sha256": "c1f3f73950aca28f1880766231065801ef0f78d7b6851c6e297073496d7ad2fb",
+      "bytes": 23331
     },
     "crates/obc-providers/src/compatible.rs": {
       "sha256": "77972048e289fdbf1e27de48f9a120c5f307b617e8b8bcaa2ef813434f65a101",
       "bytes": 6010
     },
     "crates/obc-providers/src/failover.rs": {
-      "sha256": "eaf94a1c500dd5d8fa7e8e4d7461d689f962d23836264b973ca1e50a21c9c23b",
-      "bytes": 4343
+      "sha256": "3c468152f7925de928a28dd98fd588febede07f3ebdea412c807f64f1bfea168",
+      "bytes": 5820
     },
     "crates/obc-providers/src/lib.rs": {
-      "sha256": "299a72cc25b4686c4ce95e2a2dc6dedea3a1ef7dd7d6fd4705cd1ef1b2d751b4",
-      "bytes": 12556
+      "sha256": "752062f76ee53b865db786f653d21c2e9bfae949c91dcf6c6a54e71c5401cb64",
+      "bytes": 21295
     },
     "crates/obc-providers/src/model_registry.rs": {
-      "sha256": "8870a1dbcd60f29f1a65407d6c872757e9abee94d5885400a8be3051096ca6d7",
-      "bytes": 10183
+      "sha256": "a8d767a530264f21ddd58ef75e0ed1ffa3fb9970e658910a64a4f537cf41e970",
+      "bytes": 10269
     },
     "crates/obc-providers/src/ollama.rs": {
-      "sha256": "896bdc5c552d493e980e6dfd0e1bf591678a8c8aa378bfc130f5f614e69bf6a4",
-      "bytes": 5092
+      "sha256": "da6010a60cfd1d604981668b1ffb22859f96691e9f938ba775e1a2dc1836b712",
+      "bytes": 14786
     },
     "crates/obc-providers/src/openai.rs": {
       "sha256": "700b2ab99e2ed91ae46e934a66a9222f4355ff917458a48dcf59cbf2cd6a6cef",
@@ -528,8 +532,8 @@
       "bytes": 5904
     },
     "crates/obc-providers/src/retry.rs": {
-      "sha256": "677c7753de68653489689567e03e215ec82fcfe4462acd8a590b58e0ba998ed5",
-      "bytes": 5462
+      "sha256": "b9ae00d4f90788c9c0170256a6ab931b678ad4697095fa3f9b305baabe41bdfc",
+      "bytes": 9926
     },
     "crates/obc-tools/Cargo.toml": {
       "sha256": "8f4d63ea00da577cf3bb9e811aa723bcd442607a7d77eae306c38882695f031c",
@@ -588,8 +592,8 @@
       "bytes": 6796
     },
     "crates/obc-tools/src/builtin/memory.rs": {
-      "sha256": "1274190feac85085fd462f773038a1ef25aa9e01547cead9436c1a4a34a4fd9c",
-      "bytes": 6034
+      "sha256": "559bd8b27169bec3d9c7ce40eb1321f3254de794ef35708012026ffa12c4c8e0",
+      "bytes": 7976
     },
     "crates/obc-tools/src/builtin/mesh.rs": {
       "sha256": "8abf20aaf7f9b901c572c8cb1c58e88236d264c9eaac7ce87a5b654cbf0967a7",
@@ -600,8 +604,8 @@
       "bytes": 6856
     },
     "crates/obc-tools/src/builtin/mod.rs": {
-      "sha256": "e306d9e8386a46af254d6fa77a9e88d07b432bbc42f1b2c240b25177fb9952ed",
-      "bytes": 612
+      "sha256": "66cb18813447df9923eff75e9c41001f8a966c8811ea4e8377e29a1d653fee0c",
+      "bytes": 628
     },
     "crates/obc-tools/src/builtin/movement.rs": {
       "sha256": "428fd769f552878bd77e2573670ff1a2f4995f682603d49bcfd1f52f2b977800",
@@ -618,6 +622,10 @@
     "crates/obc-tools/src/builtin/power.rs": {
       "sha256": "5fc4fbdf0de4633134ada516e099121c2c367624ef881fcd01b26ba2cdf8d511",
       "bytes": 8689
+    },
+    "crates/obc-tools/src/builtin/search.rs": {
+      "sha256": "84238f0075e635b58d450ed6c490d68b5ea157c9a161d352e445b489cdbfa102",
+      "bytes": 4558
     },
     "crates/obc-tools/src/builtin/sensing.rs": {
       "sha256": "eaf1ddca9b83906ebb7a56a01862a59c57ba53844c5e71267d0e563145e3e6e5",
@@ -648,8 +656,8 @@
       "bytes": 3644
     },
     "crates/obc-tools/src/lib.rs": {
-      "sha256": "d18d7a08accd9c841a7563652f34699a0055dad91e734f9593351d2af43d7504",
-      "bytes": 9128
+      "sha256": "01ca7e7b7a42a92dd8ddddd3cefcaa5024f6c0bb56c5e730df92d6143c542ee0",
+      "bytes": 9475
     },
     "crates/obc-vision/Cargo.toml": {
       "sha256": "1fcdc34ee72870eff6d49bddb3b01c68e42c5799b977f1b72d6ca0fe3c76a565",

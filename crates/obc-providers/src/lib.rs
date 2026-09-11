@@ -77,6 +77,23 @@ pub struct ChatCompletion {
     pub model: String,
 }
 
+/// A piece of a streamed completion, handed to a [`DeltaSink`] as it arrives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamDelta {
+    /// More assistant text. Concatenating every `Text` in order reproduces
+    /// the final [`ChatCompletion::message`].
+    Text(String),
+    /// Discard everything received so far for this completion: a wrapper
+    /// (retry, failover) is starting the request over after a partial stream
+    /// failed. A client that has already rendered text clears it.
+    Restart,
+}
+
+/// Where streamed deltas go. A plain `&dyn Fn` rather than a channel or a
+/// trait object with state, so a caller can capture whatever it likes
+/// (an event bus, a `String`, a test's `Vec`) and nothing here has to know.
+pub type DeltaSink<'a> = &'a (dyn Fn(StreamDelta) + Send + Sync);
+
 /// A provider that can generate chat completions.
 #[async_trait]
 pub trait Provider: Send + Sync {
@@ -90,6 +107,31 @@ pub trait Provider: Send + Sync {
         tools: &[Box<dyn Tool>],
         config: &ProviderConfig,
     ) -> Result<ChatCompletion>;
+
+    /// Generate a chat completion, delivering text to `sink` as it is produced.
+    ///
+    /// The returned [`ChatCompletion`] is complete and identical in shape to
+    /// what [`Provider::chat_completion`] returns, so the agent loop's tool
+    /// handling does not change; only the operator sees words earlier.
+    ///
+    /// The default does not stream: it runs `chat_completion` and hands the
+    /// whole message to the sink once. Every provider therefore "streams" in
+    /// the sense the agent needs (one delta, then done), and only the ones
+    /// that override this — Ollama and Anthropic since 2026-09-11 — stream in
+    /// the sense the operator wants.
+    async fn chat_completion_streaming(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[Box<dyn Tool>],
+        config: &ProviderConfig,
+        sink: DeltaSink<'_>,
+    ) -> Result<ChatCompletion> {
+        let completion = self.chat_completion(messages, tools, config).await?;
+        if !completion.message.is_empty() {
+            sink(StreamDelta::Text(completion.message.clone()));
+        }
+        Ok(completion)
+    }
 }
 
 // ── Provider Factory ─────────────────────────────────────────────────────────
@@ -313,6 +355,139 @@ pub struct ProviderConfig {
     /// Optional response format (structured output / JSON mode).
     #[serde(default)]
     pub response_format: Option<ResponseFormat>,
+    /// Ask the provider to cache the stable prefix (system prompt, tool
+    /// schemas, history up to the ephemeral blocks). Anthropic honours it via
+    /// `cache_control` breakpoints; Ollama caches the prefix on its own. On by
+    /// default since 2026-09-11.
+    #[serde(default = "default_prompt_caching")]
+    pub prompt_caching: bool,
+    /// Ollama only: the request's `think` field. `Some(false)` switches a
+    /// thinking model (Qwen3) to answering directly — the `/no_think` soft
+    /// switch in a system prompt is not honoured by the template. Leave unset
+    /// for models without the thinking capability; Ollama rejects the field.
+    #[serde(default)]
+    pub think: Option<bool>,
+    /// Per-turn routing to a second, cloud brain (`[provider.routing]`). This
+    /// block is the local/routine brain; see [`RoutingConfig`].
+    #[serde(default)]
+    pub routing: Option<Box<RoutingConfig>>,
+}
+
+/// `[provider.routing]`: two brains, chosen per turn. The rules live in
+/// `obc_agent::routing`; this is the policy's knobs. `deny_unknown_fields`
+/// because a misspelt knob here silently routes everything one way.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoutingConfig {
+    #[serde(default = "default_prompt_caching")]
+    pub enabled: bool,
+    /// The cloud brain. Its key comes from the provider's environment variable
+    /// like any other; without one the router logs once at startup and every
+    /// turn stays local.
+    pub cloud: ProviderConfig,
+    /// Operator turns (console, channels, gateway) go to the cloud. Default true.
+    #[serde(default = "default_prompt_caching")]
+    pub console_to_cloud: bool,
+    /// With `console_to_cloud = false`: a turn with at least this many tools
+    /// registered goes to the cloud. 0 disables the rule. Default 8.
+    #[serde(default = "default_tool_threshold")]
+    pub tool_threshold: usize,
+    /// Sessions whose id starts with one of these stay local: System 2 wakes,
+    /// the long-horizon harness, edge nodes. Default `["system2", "harness-", "edge-"]`.
+    #[serde(default = "default_local_session_prefixes")]
+    pub local_session_prefixes: Vec<String>,
+    /// Facts from these sources (exactly, or `source:qualifier`) make a turn
+    /// private, which keeps it local. Default `["clawcam"]`.
+    #[serde(default = "default_private_sources")]
+    pub private_sources: Vec<String>,
+    /// Facts whose entity starts with one of these are private. Default
+    /// `["vision.subject."]` (ClawCam detections of people and animals).
+    #[serde(default = "default_private_entity_prefixes")]
+    pub private_entity_prefixes: Vec<String>,
+    /// After a cloud failure, route local for this long. Default 300.
+    #[serde(default = "default_offline_backoff_secs")]
+    pub offline_backoff_secs: u64,
+    /// Estimated USD of cloud turns per day before the router stops sending
+    /// them. 0 = no cap. Default 0.
+    #[serde(default)]
+    pub daily_budget_usd: f64,
+    /// Prices used for that estimate (chars/4 tokens). Defaults are Claude
+    /// Sonnet 5 list prices on 2026-09-11.
+    #[serde(default = "default_cloud_input_price")]
+    pub cloud_input_price_per_million: f64,
+    #[serde(default = "default_cloud_output_price")]
+    pub cloud_output_price_per_million: f64,
+}
+
+fn default_tool_threshold() -> usize {
+    8
+}
+fn default_local_session_prefixes() -> Vec<String> {
+    ["system2", "harness-", "edge-"]
+        .into_iter()
+        .map(String::from)
+        .collect()
+}
+fn default_private_sources() -> Vec<String> {
+    vec!["clawcam".to_string()]
+}
+fn default_private_entity_prefixes() -> Vec<String> {
+    vec!["vision.subject.".to_string()]
+}
+fn default_offline_backoff_secs() -> u64 {
+    300
+}
+fn default_cloud_input_price() -> f64 {
+    2.0
+}
+fn default_cloud_output_price() -> f64 {
+    10.0
+}
+
+impl RoutingConfig {
+    /// Every knob at its default, with this cloud brain.
+    pub fn default_with_cloud(cloud: ProviderConfig) -> Self {
+        Self {
+            enabled: true,
+            cloud,
+            console_to_cloud: true,
+            tool_threshold: default_tool_threshold(),
+            local_session_prefixes: default_local_session_prefixes(),
+            private_sources: default_private_sources(),
+            private_entity_prefixes: default_private_entity_prefixes(),
+            offline_backoff_secs: default_offline_backoff_secs(),
+            daily_budget_usd: 0.0,
+            cloud_input_price_per_million: default_cloud_input_price(),
+            cloud_output_price_per_million: default_cloud_output_price(),
+        }
+    }
+}
+
+/// The environment variable a provider reads its key from, if it needs one.
+pub fn key_env_var(provider_name: &str) -> Option<&'static str> {
+    match provider_name {
+        "anthropic" => Some("ANTHROPIC_API_KEY"),
+        "openai" => Some("OPENAI_API_KEY"),
+        "openrouter" => Some("OPENROUTER_API_KEY"),
+        _ => None,
+    }
+}
+
+/// Whether a provider that needs a key has one: inline, or in its environment
+/// variable. Providers without a known key variable (Ollama, compatible
+/// endpoints) count as ready.
+pub fn key_present(config: &ProviderConfig) -> bool {
+    if config.api_key.as_ref().is_some_and(|k| !k.is_empty()) {
+        return true;
+    }
+    match key_env_var(&config.name) {
+        Some(var) => std::env::var(var).is_ok_and(|v| !v.trim().is_empty()),
+        None => true,
+    }
+}
+
+fn default_prompt_caching() -> bool {
+    true
 }
 
 fn default_provider_name() -> String {
@@ -338,6 +513,53 @@ impl Default for ProviderConfig {
             fallbacks: vec![],
             retry: None,
             response_format: None,
+            prompt_caching: default_prompt_caching(),
+            think: None,
+            routing: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod streaming_default_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    struct OneShot;
+
+    #[async_trait]
+    impl Provider for OneShot {
+        fn name(&self) -> &str {
+            "oneshot"
+        }
+        async fn chat_completion(
+            &self,
+            _messages: &[ChatMessage],
+            _tools: &[Box<dyn Tool>],
+            config: &ProviderConfig,
+        ) -> Result<ChatCompletion> {
+            Ok(ChatCompletion {
+                message: "whole answer".into(),
+                tool_calls: vec![],
+                provider: "oneshot".into(),
+                model: config.model.clone(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_provider_that_does_not_stream_still_delivers_one_delta() {
+        let seen = Mutex::new(Vec::new());
+        let sink = |d: StreamDelta| seen.lock().unwrap().push(d);
+        let cfg = ProviderConfig::default();
+        let c = OneShot
+            .chat_completion_streaming(&[], &[], &cfg, &sink)
+            .await
+            .unwrap();
+        assert_eq!(c.message, "whole answer");
+        assert_eq!(
+            seen.into_inner().unwrap(),
+            vec![StreamDelta::Text("whole answer".into())]
+        );
     }
 }
