@@ -464,6 +464,18 @@ jobs:
     # names a file and two hashes. Re-issue the PAT rather than debugging the
     # manifest, and update the PEER_REPO_TOKEN secret.
     #
+    # That paragraph is now also a check. It lapsed again between 2026-08-29 and
+    # 2026-09-11, and on the run list the red looked exactly like a drifted
+    # mirror — eleven of twelve jobs green, this one dead at `checkout`, nothing
+    # compared. `check_peer_access.py` runs first and tells apart the four
+    # things "Bad credentials" cannot: no secret, expired secret, secret without
+    # SSO, secret not granted this repository. It does not let the job pass;
+    # unverified is not verified. It makes the red say what it is.
+    #
+    # Same correction this repository already made once, for the same reason:
+    # `check_vendored_mods.py` exists because a failure mode was written down
+    # instead of tested for.
+    #
     # ── Merge order, which this job requires and used to require silently ────
     # The first checkout below takes the generator's DEFAULT BRANCH. So any sync
     # touching one of the 12 mirrored artifacts fails against it from the moment
@@ -504,6 +516,17 @@ jobs:
     # not green.
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Before the checkout, so a credential failure cannot arrive wearing the
+      # shape of a drifted mirror. Fails the job when the peer is unreadable —
+      # the point is that the red names its cause, not that it goes away.
+      - run: python scripts/check_peer_access.py --selftest
+      - name: the generator is readable from this runner
+        env:
+          PEER_REPO_TOKEN: ${{ secrets.PEER_REPO_TOKEN }}
+        run: python scripts/check_peer_access.py
       - name: check out the generator (needs PEER_REPO_TOKEN; the repo is private)
         uses: actions/checkout@v4
         with:
@@ -522,9 +545,6 @@ jobs:
           ref: ${{ github.head_ref }}
           path: peer-branch
           token: ${{ secrets.PEER_REPO_TOKEN || github.token }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - name: generator mirrors match
         env:
           HEAD_REF: ${{ github.head_ref }}

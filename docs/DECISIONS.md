@@ -5,6 +5,58 @@ New entries go at the top.
 
 ---
 
+## 2026-09-12 — A check that could not run must not fail like a check that did
+
+`parity`'s `peer` job compares the 12 generator mirrors against the generator's
+own copies. The generator is private, so the comparison needs `PEER_REPO_TOKEN`
+— a fine-grained PAT with a **30-day life**. Issued 2026-07-30, green
+2026-08-22, dead by 2026-09-06, and dead again on 2026-09-11.
+
+When it lapses, `actions/checkout` dies with "Bad credentials" and the job goes
+red. On the run list that red is indistinguishable from a mirror that genuinely
+drifted, and the obvious first move — open the manifest and look for the file
+that moved — is the wrong one. The measured shape of the 2026-09-11 failure:
+eleven of twelve jobs green, `peer` dead at its second step, **nothing
+compared at all**.
+
+`parity.yml` has said exactly this in a comment since 2026-09-06: *"Either way
+it reads like drift and is not — a drift failure names a file and two hashes."*
+That was right, and it was a comment. It did not stop the same confusion
+happening five days later, because a comment is read by whoever is already
+reading the file, and the person looking at a red run is looking at the run.
+
+**Decision.** `scripts/check_peer_access.py` runs **before** either checkout and
+makes one API call to the repository endpoint. It separates the four states that
+"Bad credentials" collapses into one:
+
+| | meaning | fix |
+|---|---|---|
+| no token, 200 | the generator went public | correct this file and `parity.yml` |
+| no token, 404 | the secret was never set | set it |
+| token, 401 | expired or revoked | re-issue the PAT |
+| token, 403 | SSO not authorised, or rate-limited | authorise, don't re-issue |
+| token, 404 | valid, but not granted this repository | widen the grant |
+
+**It does not let the job pass.** That was the tempting version and it is wrong:
+unreadable peer means the mirrors are unverified, and unverified is not
+verified — the same rule that makes a Blender-less `verify-artifact` exit 3
+rather than 0 in OpenDesignCore. What changes is only that the red states its
+own cause, in the step summary as well as the log.
+
+The diagnosis function is pure and `--selftest` drives all seven cases through
+it, asserting among other things that **no two produce the same headline**. A
+preflight whose messages read alike would be this same defect one layer further
+in.
+
+This is the second time this repository has converted a prose warning into a
+gate for the same reason. `check_vendored_mods.py` exists because
+`sync_upstream.py` described "the exact failure mode this script exists to
+prevent" in a comment; a fortnight later that failure mode happened. The
+pattern is worth naming: **when a file has to explain how to read its own
+failure, the explanation belongs in the failure.**
+
+---
+
 ## 2026-09-11 — A bundle we did not build is not a bundle we can vendor
 
 `sync` copies five wasm artifacts out of upstream's `planner-wasm/pkg/`. That
