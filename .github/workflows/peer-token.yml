@@ -1,0 +1,55 @@
+name: peer token
+
+# A canary for one credential, and nothing else.
+#
+# `parity`'s `peer` job cannot compare the 12 generator mirrors without
+# PEER_REPO_TOKEN, a fine-grained PAT on a private repository. That PAT has
+# lapsed three times — 2026-08-29ish, found 2026-09-06; again by 2026-09-11 —
+# and each time the discovery was the same: someone pushed, `parity` went red,
+# and the red looked like a drifted mirror. `check_peer_access.py` fixed the
+# *legibility* of that red. It did not change when anyone finds out.
+#
+# This does. Once a day, the probe runs on its own, so a lapse surfaces within a
+# day of happening rather than on whatever merge happens to come next — and, if
+# GitHub reports the token's expiry, a week *before* it happens.
+#
+# Why a separate workflow rather than a `schedule:` on parity.yml: that file has
+# twelve jobs, one of which builds every vendored crate twice and another of
+# which installs cargo-audit from source. Running all of it daily to check one
+# credential would cost twenty minutes a day and bury the answer among eleven
+# other results. A notification that says "peer token" says what happened.
+#
+# It is deliberately allowed to fail on the *warning*, which parity's own job is
+# not: this run exists only to give notice, while over there the mirrors are
+# verifiable today and a gate that goes red over a future problem is a gate
+# someone turns off.
+#
+# Note for whoever finds this quiet: GitHub disables scheduled workflows after
+# 60 days with no repository activity, and says so by email. It is not a silent
+# stop, but it is a stop — `workflow_dispatch` is here so it can be re-run by
+# hand to confirm it still works.
+
+on:
+  schedule:
+    # 06:17 UTC. Not on the hour: GitHub's scheduler queues heavily at :00 and
+    # delays are common enough that the docs mention them.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  canary:
+    name: the generator token still works
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # The gate's own cases first. A canary that has quietly stopped being able
+      # to tell a live token from a dead one is worse than no canary, because its
+      # green is the thing being trusted.
+      - run: python scripts/check_peer_access.py --selftest
+      - name: PEER_REPO_TOKEN is alive, and not about to lapse
+        env:
+          PEER_REPO_TOKEN: ${{ secrets.PEER_REPO_TOKEN }}
+        run: python scripts/check_peer_access.py --warn-days 7 --fail-on-warning
