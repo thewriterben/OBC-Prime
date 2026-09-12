@@ -2436,6 +2436,7 @@ dependencies = [
  "cron",
  "rusqlite",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]
@@ -2504,6 +2505,7 @@ dependencies = [
  "obc-position",
  "obc-reflex",
  "obc-safety",
+ "obc-scheduler",
  "obc-spine",
  "obc-telemetry",
  "obc-tool-api",
