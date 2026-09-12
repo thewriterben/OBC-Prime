@@ -45,13 +45,33 @@ names its own cause instead of looking like drift.
 It also does not fetch or compare anything. `sync_upstream.py` does that, and
 this runs before it precisely so that its failure cannot be mistaken for one.
 
+Early warning
+-------------
+The four diagnoses above are post-mortems: by the time any of them prints, the
+mirrors are already unverified. GitHub returns a
+`github-authentication-token-expiration` header on requests authenticated with a
+PAT that has an expiry, so `--warn-days N` reports the days remaining and says
+so loudly while the token still works. `peer-token.yml` runs that daily with
+`--fail-on-warning`, which turns "find out on your next merge" into "find out
+within a day".
+
+**Unverified as of 2026-09-12:** the header was checked against the `gho_` OAuth
+token this machine had, which has no expiry and so returned none — that tells us
+nothing about what a fine-grained PAT returns, and no valid PAT was available to
+test with. So the header is read if it is there and its absence is reported as
+*absence*, never as "plenty of time". If it turns out GitHub does not send it for
+this token type, the daily job still catches the lapse within a day; it just
+cannot pre-announce it. Confirm on the next PAT and delete this paragraph.
+
 Run:  PEER_REPO_TOKEN=... python scripts/check_peer_access.py
+      python scripts/check_peer_access.py --warn-days 7 --fail-on-warning
       python scripts/check_peer_access.py --selftest
       python scripts/check_peer_access.py --repo owner/name   (probe by hand)
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 import urllib.error
@@ -129,8 +149,45 @@ def diagnose(*, token_set: bool, status: int) -> tuple[bool, str, list[str]]:
     ]
 
 
-def probe(repo: str, token: str) -> int:
-    """HTTP status from the repository endpoint. Never prints the token."""
+EXPIRY_HEADER = "github-authentication-token-expiration"
+
+# GitHub documents "2022-11-28 15:30:00 UTC". Parsed tolerantly because an
+# unparseable date must read as "could not tell", never as "fine".
+EXPIRY_FORMATS = ("%Y-%m-%d %H:%M:%S %Z", "%Y-%m-%d %H:%M:%S UTC", "%Y-%m-%d")
+
+
+def expiry_note(raw: str | None, warn_days: int, today: dt.date) -> tuple[bool, str]:
+    """Pure: (is_warning, line). A date we cannot read is not a reassurance."""
+    if not raw:
+        return False, (
+            "GitHub reported no expiry for this token. Either it does not expire, "
+            "or it does not say so for this token type — this cannot tell which, "
+            "so treat the daily run as the warning rather than this line."
+        )
+
+    when = None
+    for fmt in EXPIRY_FORMATS:
+        try:
+            when = dt.datetime.strptime(raw.strip(), fmt).date()
+            break
+        except ValueError:
+            continue
+    if when is None:
+        return True, f"could not parse the expiry GitHub reported ({raw!r}); check it by hand"
+
+    left = (when - today).days
+    if left < 0:
+        return True, f"the token's stated expiry was {when} — {-left} day(s) ago, and it still answered"
+    if left <= warn_days:
+        return True, (
+            f"the token expires {when}, in {left} day(s). Re-issue it now: when it "
+            "lapses, `parity` goes red and the mirrors stop being checked."
+        )
+    return False, f"the token expires {when}, in {left} day(s)"
+
+
+def probe(repo: str, token: str) -> tuple[int, str | None]:
+    """HTTP status and the expiry header, if any. Never prints the token."""
     req = urllib.request.Request(
         f"https://api.github.com/repos/{repo}",
         headers={
@@ -143,12 +200,12 @@ def probe(repo: str, token: str) -> int:
         req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.status
+            return resp.status, resp.headers.get(EXPIRY_HEADER)
     except urllib.error.HTTPError as e:
-        return e.code
+        return e.code, e.headers.get(EXPIRY_HEADER)
     except urllib.error.URLError as e:
         print(f"could not reach api.github.com: {e.reason}", file=sys.stderr)
-        return 0
+        return 0, None
 
 
 # Each case must produce a *different* headline from every other. A preflight
@@ -165,6 +222,20 @@ SELFTEST = [
 ]
 
 
+# The expiry half. A missing or unreadable date must never read as "fine" --
+# that is the whole point of having it, and the easy way to get it wrong.
+TODAY = dt.date(2026, 9, 12)
+EXPIRY_SELFTEST = [
+    ("no header at all", None, False),
+    ("expires well in the future", "2026-12-01 00:00:00 UTC", False),
+    ("expires inside the window", "2026-09-15 00:00:00 UTC", True),
+    ("expires today", "2026-09-12 00:00:00 UTC", True),
+    ("already expired but still answering", "2026-09-01 00:00:00 UTC", True),
+    ("a date shape nobody predicted", "next Tuesday", True),
+    ("date only, no clock", "2026-09-13", True),
+]
+
+
 def selftest() -> int:
     failed: list[str] = []
     headlines: dict[str, str] = {}
@@ -178,16 +249,25 @@ def selftest() -> int:
         if not ok and not guidance:
             failed.append(f"{label}: fails without saying what to do")
 
-    print(f"selftest: {len(SELFTEST) - len(failed)}/{len(SELFTEST)} cases behave as stated")
+    for label, raw, want_warn in EXPIRY_SELFTEST:
+        warn, line = expiry_note(raw, warn_days=7, today=TODAY)
+        if warn != want_warn:
+            failed.append(f"expiry/{label}: expected {'a warning' if want_warn else 'quiet'}, got the other")
+        if not line:
+            failed.append(f"expiry/{label}: said nothing")
+
+    total = len(SELFTEST) + len(EXPIRY_SELFTEST)
+    print(f"selftest: {total - len(failed)}/{total} cases behave as stated")
     for line in failed:
         print("  x " + line)
     if failed:
         return 1
     print("ok: the four ways this can fail are told apart, and each names its fix")
+    print("ok: an absent or unreadable expiry reads as unknown, not as time remaining")
     return 0
 
 
-def summary(headline: str, guidance: list[str], ok: bool) -> None:
+def summary(headline: str, guidance: list[str], ok: bool, expiry: str | None) -> None:
     """Put the diagnosis on the run page, not only in a collapsed log."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -197,6 +277,8 @@ def summary(headline: str, guidance: list[str], ok: bool) -> None:
         fh.write(f"**{headline}**\n\n")
         for line in guidance:
             fh.write(f"{line}\n\n")
+        if expiry:
+            fh.write(f"{expiry}\n\n")
 
 
 def main(argv: list[str]) -> int:
@@ -206,9 +288,13 @@ def main(argv: list[str]) -> int:
     repo = REPO
     if "--repo" in argv:
         repo = argv[argv.index("--repo") + 1]
+    warn_days = 7
+    if "--warn-days" in argv:
+        warn_days = int(argv[argv.index("--warn-days") + 1])
+    fail_on_warning = "--fail-on-warning" in argv
 
     token = os.environ.get("PEER_REPO_TOKEN", "").strip()
-    status = probe(repo, token)
+    status, expiry_raw = probe(repo, token)
     ok, headline, guidance = diagnose(token_set=bool(token), status=status)
 
     print(f"probed {repo} {'with' if token else 'without'} PEER_REPO_TOKEN -> HTTP {status}")
@@ -216,12 +302,35 @@ def main(argv: list[str]) -> int:
     for line in guidance:
         print()
         print(line)
-    summary(headline, guidance, ok)
+
+    # Only meaningful when the token worked: an expiry read off a rejected
+    # request would be describing a credential that is already gone.
+    warn, expiry_line = (False, None)
+    if ok and token:
+        warn, expiry_line = expiry_note(expiry_raw, warn_days, dt.date.today())
+        print()
+        print(("!  " if warn else "   ") + expiry_line)
+        if warn:
+            # A GitHub annotation, so it is on the run page and not only in a log.
+            print(f"::warning title=PEER_REPO_TOKEN needs re-issuing::{expiry_line}")
+
+    summary(headline, guidance, ok, expiry_line)
 
     if not ok:
         print()
         print("The 12 generator mirrors were NOT compared. Unverified is not verified.")
-    return 0 if ok else 1
+        return 1
+    if warn and fail_on_warning:
+        print()
+        print(REISSUE)
+        print()
+        print(
+            "Failing on the warning because this run exists only to give notice. "
+            "parity's own peer job does not: the mirrors are verifiable today, and "
+            "a gate that goes red over a future problem is a gate someone turns off."
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

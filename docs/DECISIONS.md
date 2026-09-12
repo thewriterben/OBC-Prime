@@ -48,6 +48,32 @@ it, asserting among other things that **no two produce the same headline**. A
 preflight whose messages read alike would be this same defect one layer further
 in.
 
+**And a second decision, because the first one only fixes half of it.** Making
+the red legible does not change *when* anyone sees it: still whenever someone
+next pushes. `peer-token.yml` runs the same probe on a daily schedule, so a
+lapse surfaces within a day of happening — and, where GitHub reports the token's
+expiry, up to a week before it. Two things about it are deliberate:
+
+* **It is its own workflow, not a `schedule:` on `parity.yml`.** That file has
+  twelve jobs, one building every vendored crate twice and another installing
+  cargo-audit from source. Twenty minutes a day to check one credential, with
+  the answer buried among eleven other results, against a notification that
+  says "peer token".
+* **It fails on a near expiry; `parity`'s own job does not.** The canary exists
+  only to give notice. Over there the mirrors are verifiable *today*, and a gate
+  that goes red over a future problem is a gate someone turns off — the same
+  reasoning `check_counts.py` was narrowed under.
+
+The expiry half is **best-effort and labelled as such**. GitHub documents a
+`github-authentication-token-expiration` header for PATs that expire; it could
+only be tested here against a `gho_` OAuth token, which has no expiry and
+returned none, so nothing was proven either way. The code therefore reports an
+absent header as *absence* and an unparseable date as a warning — never as time
+remaining, which is the one way a reassurance can be worse than silence. Seven
+further selftest cases pin that, including "already expired but still answering"
+and "a date shape nobody predicted". Confirm against the next real PAT and
+delete the caveat.
+
 This is the second time this repository has converted a prose warning into a
 gate for the same reason. `check_vendored_mods.py` exists because
 `sync_upstream.py` described "the exact failure mode this script exists to

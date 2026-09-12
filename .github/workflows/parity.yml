@@ -472,6 +472,12 @@ jobs:
     # SSO, secret not granted this repository. It does not let the job pass;
     # unverified is not verified. It makes the red say what it is.
     #
+    # That fixes what the red says and not *when* anyone sees it, which is still
+    # "whenever someone next pushes". `peer-token.yml` runs the same probe once a
+    # day for exactly that, and fails on a near expiry where this job does not:
+    # here the mirrors are verifiable today, and a gate that goes red over a
+    # future problem is a gate someone turns off.
+    #
     # Same correction this repository already made once, for the same reason:
     # `check_vendored_mods.py` exists because a failure mode was written down
     # instead of tested for.
