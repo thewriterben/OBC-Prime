@@ -59,20 +59,26 @@ expiry, up to a week before it. Two things about it are deliberate:
   cargo-audit from source. Twenty minutes a day to check one credential, with
   the answer buried among eleven other results, against a notification that
   says "peer token".
-* **It fails on a near expiry; `parity`'s own job does not.** The canary exists
-  only to give notice. Over there the mirrors are verifiable *today*, and a gate
-  that goes red over a future problem is a gate someone turns off — the same
-  reasoning `check_counts.py` was narrowed under.
+* **It survived the fix.** The PAT was replaced on 2026-09-12 with one that
+  **does not expire**, which removes the clock that caused both lapses and none
+  of the other ways the token can die: revocation, an organisation policy sweep,
+  a repository rename. A non-expiring token is arguably the *most* likely to be
+  swept, because it never prompts a review. All of those arrive as the same
+  "Bad credentials".
 
-The expiry half is **best-effort and labelled as such**. GitHub documents a
-`github-authentication-token-expiration` header for PATs that expire; it could
-only be tested here against a `gho_` OAuth token, which has no expiry and
-returned none, so nothing was proven either way. The code therefore reports an
-absent header as *absence* and an unparseable date as a warning — never as time
-remaining, which is the one way a reassurance can be worse than silence. Seven
-further selftest cases pin that, including "already expired but still answering"
-and "a date shape nobody predicted". Confirm against the next real PAT and
-delete the caveat.
+**An early-warning path was written and deleted the same day.** It read GitHub's
+`github-authentication-token-expiration` header and warned a week ahead. Against
+a token that does not expire, that branch cannot fire — so it would have shipped
+a warning that can never happen, dressed as a safety net, for a hypothetical
+future PAT nobody has decided to issue. Deleted under the same rule as an
+unreachable module: not added, because nothing calls it.
+
+Recording one loose end rather than losing it: the header was never confirmed to
+arrive at all. It was tried against a `gho_` OAuth token (no expiry, no header)
+and then against the new PAT (no expiry, no header) — both observations equally
+consistent with GitHub not sending it for these token types. Anyone re-adding
+this on an expiring token should verify the header exists **before** building on
+it, rather than inheriting the assumption from here.
 
 This is the second time this repository has converted a prose warning into a
 gate for the same reason. `check_vendored_mods.py` exists because
