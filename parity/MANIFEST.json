@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-12T06:31:33+00:00",
+  "generated": "2026-09-12T06:46:14+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -536,8 +536,8 @@
       "bytes": 9955
     },
     "crates/obc-tools/Cargo.toml": {
-      "sha256": "a07a1311e31af233f6f76388bd204240abcfb7ff50594707d564c0d3d709b1d6",
-      "bytes": 3867
+      "sha256": "7e4868cc8ad32e3207cc31608d5552a286da3d4c9e65b251e91f9c60f01a6ca6",
+      "bytes": 4154
     },
     "crates/obc-tools/src/builtin/aerial.rs": {
       "sha256": "479952c3177a76470834beb8e0964283295dc98f38196c421d666bf5188ea4ee",
@@ -556,8 +556,12 @@
       "bytes": 10028
     },
     "crates/obc-tools/src/builtin/browser.rs": {
-      "sha256": "7bece3c767c14d4b201e239507dc49ebab33d786275fc195cbe6556f431bef37",
-      "bytes": 44866
+      "sha256": "43e043046959d1fdb75cc75b87a30628e79714f5699c2ece2fa4db9d587e36df",
+      "bytes": 51652
+    },
+    "crates/obc-tools/src/builtin/browser_cdp.rs": {
+      "sha256": "f4d0c6335f4de54747e2217b03b0b167354fb0a415b5f0beb9880e7395d4e691",
+      "bytes": 14188
     },
     "crates/obc-tools/src/builtin/comms.rs": {
       "sha256": "f74502e09b3cefbfece1d1ce5d697d5c0a08cc12ed47dca8cf3c07453adfc410",
@@ -604,8 +608,8 @@
       "bytes": 6856
     },
     "crates/obc-tools/src/builtin/mod.rs": {
-      "sha256": "8ad1b605c5ce6e686199e6cedeeef8ffb78841b4a38ccc26425ae31bf7e99b01",
-      "bytes": 646
+      "sha256": "25102a3be22402af53165ee91fa809af11550d41f2628bee620bb149785a1b00",
+      "bytes": 667
     },
     "crates/obc-tools/src/builtin/movement.rs": {
       "sha256": "428fd769f552878bd77e2573670ff1a2f4995f682603d49bcfd1f52f2b977800",
@@ -636,8 +640,8 @@
       "bytes": 9689
     },
     "crates/obc-tools/src/builtin/shell.rs": {
-      "sha256": "2b24a3eb4cbf507d9fbdaa8235e119644c296527e38f59eb96e5e6d070403153",
-      "bytes": 6555
+      "sha256": "2d5adc68c45400c9501e49eb6d445615613037bb276a388e0041f81a56f8291c",
+      "bytes": 17572
     },
     "crates/obc-tools/src/builtin/site_anchor.rs": {
       "sha256": "56927002db05ef6271b91722f2b8791cbfa8e44328296cac8bc96a59e4683008",

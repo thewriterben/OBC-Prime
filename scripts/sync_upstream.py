@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 232 artifacts).
+        also updates the generator app's mirrors (12 of the 233 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -1028,6 +1028,27 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-tools/src/builtin/browser.rs",
      "crates/obc-tools/src/builtin/browser.rs",
+     None),
+    # Added upstream 2026-09-12. `builtin/mod.rs` declares `mod browser_cdp;`, so
+    # this is not optional. It is a protocol client rather than a Tool — one
+    # WebSocket command at a time against a tab's debugger URL — and carries no
+    # risk_class of its own for that reason.
+    #
+    # What it changes is `browser.rs`, which does hold the tools. Until this
+    # landed, `browser_click` / `browser_type` / `browser_scroll` logged the
+    # request and reported success without touching a page: upstream's own words
+    # are "a model that 'clicked' got told it had". They now really click and
+    # really type. **Neither file overrides `risk_class`**, so all of them still
+    # take `RiskClass::default()` — the same declaration they had when they were
+    # no-ops.
+    #
+    # `declarations` passes them, and defensibly: driving a browser actuates
+    # nothing physical, which is what that gate is about. Recorded here anyway
+    # because the capability moved and the declaration did not, and a real click
+    # on a real page can be as irreversible as a servo — a purchase, a send, a
+    # delete. Upstream's call to make; this notes that it is open.
+    ("crates/obc-tools/src/builtin/browser_cdp.rs",
+     "crates/obc-tools/src/builtin/browser_cdp.rs",
      None),
     ("crates/obc-tools/src/builtin/comms.rs",
      "crates/obc-tools/src/builtin/comms.rs",
