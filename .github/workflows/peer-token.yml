@@ -3,26 +3,32 @@ name: peer token
 # A canary for one credential, and nothing else.
 #
 # `parity`'s `peer` job cannot compare the 12 generator mirrors without
-# PEER_REPO_TOKEN, a fine-grained PAT on a private repository. That PAT has
-# lapsed three times — 2026-08-29ish, found 2026-09-06; again by 2026-09-11 —
-# and each time the discovery was the same: someone pushed, `parity` went red,
-# and the red looked like a drifted mirror. `check_peer_access.py` fixed the
+# PEER_REPO_TOKEN, a fine-grained PAT on a private repository. The PAT in place
+# until 2026-09-12 lapsed twice — found 2026-09-06, and again 2026-09-11 — and
+# each time the discovery was the same: someone pushed, `parity` went red, and
+# the red looked like a drifted mirror. `check_peer_access.py` fixed the
 # *legibility* of that red. It did not change when anyone finds out.
 #
-# This does. Once a day, the probe runs on its own, so a lapse surfaces within a
-# day of happening rather than on whatever merge happens to come next — and, if
-# GitHub reports the token's expiry, a week *before* it happens.
+# This does. Once a day the probe runs on its own, so the token dying surfaces
+# within a day rather than on whatever merge happens to come next.
+#
+# The 2026-09-12 replacement does not expire, which removes the specific clock
+# that caused both lapses and none of the reasons for this job. A token that
+# cannot expire can still be revoked, dropped by an organisation policy sweep,
+# or lose access when a repository is renamed — and a non-expiring token is the
+# kind most likely to be swept, precisely because it never prompts a review.
+# All of those arrive as the same "Bad credentials".
+#
+# An earlier version of this warned a week ahead by reading GitHub's
+# `github-authentication-token-expiration` header. Removed the same day, once
+# the new token turned out not to expire: the branch could not fire, and a
+# safety net that cannot catch anything is worse than an honest absence of one.
 #
 # Why a separate workflow rather than a `schedule:` on parity.yml: that file has
 # twelve jobs, one of which builds every vendored crate twice and another of
 # which installs cargo-audit from source. Running all of it daily to check one
 # credential would cost twenty minutes a day and bury the answer among eleven
 # other results. A notification that says "peer token" says what happened.
-#
-# It is deliberately allowed to fail on the *warning*, which parity's own job is
-# not: this run exists only to give notice, while over there the mirrors are
-# verifiable today and a gate that goes red over a future problem is a gate
-# someone turns off.
 #
 # Note for whoever finds this quiet: GitHub disables scheduled workflows after
 # 60 days with no repository activity, and says so by email. It is not a silent
@@ -49,7 +55,7 @@ jobs:
       # to tell a live token from a dead one is worse than no canary, because its
       # green is the thing being trusted.
       - run: python scripts/check_peer_access.py --selftest
-      - name: PEER_REPO_TOKEN is alive, and not about to lapse
+      - name: PEER_REPO_TOKEN still reads the generator
         env:
           PEER_REPO_TOKEN: ${{ secrets.PEER_REPO_TOKEN }}
-        run: python scripts/check_peer_access.py --warn-days 7 --fail-on-warning
+        run: python scripts/check_peer_access.py
