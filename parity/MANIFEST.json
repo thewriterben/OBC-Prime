@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T04:15:22+00:00",
+  "generated": "2026-09-13T05:33:41+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -868,12 +868,12 @@
       "bytes": 706
     },
     "firmware/heltec-lora-linktest/Cargo.lock": {
-      "sha256": "9ca13d669d6dabfba7a4f62f6857684ec374da3f46b534f1097a504ed200af5f",
-      "bytes": 42281
+      "sha256": "cc0d0e1a24db3206ed67cd752d37c5be723dd66e488515ef56d96e97be75054e",
+      "bytes": 44823
     },
     "firmware/heltec-lora-linktest/Cargo.toml": {
-      "sha256": "2bca9bc3754d5089247d568cad3a32727e5fbbd7f888ea2977f2b16e3f72e6b3",
-      "bytes": 948
+      "sha256": "663c902cbd587227619d8b22f8817247a466cca9a01fbdac5d4557ba8969c8cf",
+      "bytes": 1846
     },
     "firmware/heltec-lora-linktest/build.rs": {
       "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
@@ -892,16 +892,16 @@
       "bytes": 4778
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "2f6ab4356be6f30188ba929daa8a1b2a68a98b6fed5b44603d828fdd46ea373d",
-      "bytes": 13029
+      "sha256": "61b16c5e6a2bc2548809e2519f4e69f625a0505b1d21182d5602638b3579c796",
+      "bytes": 13985
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
       "sha256": "c739892eadce2eab54acd6745c31b9720cb02eb343bd3debd0578684b72dd8ee",
       "bytes": 12284
     },
     "firmware/heltec-lora-linktest/src/sx1262.rs": {
-      "sha256": "231bd684d60a2e22c0cf3b8b9a7f7338d94db1adc8a54b2aac2a547080637d33",
-      "bytes": 14157
+      "sha256": "31df084f4aa504d02f835cbefc6c3e6ee3a25a72fa600dc42ef5c9e277e6a234",
+      "bytes": 15899
     },
     "firmware/lora-node/README.md": {
       "sha256": "b614e7606099cf93b2204af96a58c8b8d1390a8b764db3321799969cf8021b8a",
