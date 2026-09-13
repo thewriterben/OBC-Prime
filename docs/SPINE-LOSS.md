@@ -10,9 +10,15 @@
 > (`lora_gateway::{GatewayLink, GatewayHandle, supervise_gateway}`,
 > `mesh_supervisor::{MeshHealth::Unobservable, SpineView}`), in this
 > repository; the wiring (§3, `src/main.rs`) is upstream. §4's tests exist
-> and pass. §5's bench procedure has **not been run**: the bench base is
-> the live brain's port. What §1 could not establish — the cause of the
-> loss — is still open.
+> and pass. §5 was run the same evening against the live brain (upstream
+> `e344853`, walkthrough §A5n, `results/bench_spine_loss-20260913-170626.json`):
+> **PASS 7/7** — the pull reproduced `os error 22`, `lost` in the same
+> second, the node `unobservable` 2.4 s later, reopens at 1/2/4/8/16 then
+> 30 s, no escalation for either node in 272 s, reopened on the first
+> attempt after the replug, frames verified after the base's own
+> power-cycle. Not run separately: the station DTR reset across a reopen.
+> What §1 could not establish — the cause of the 18:56Z loss — is still
+> open; the fact history will show its cadence if it recurs.
 
 ## 1. What was measured
 
