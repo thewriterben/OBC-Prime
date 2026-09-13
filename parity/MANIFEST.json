@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T17:09:25+00:00",
+  "generated": "2026-09-13T18:27:00+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -106,6 +106,10 @@
     "crates/obc-memory/tests/mushroom_real_episodes.rs": {
       "sha256": "c1efdaa664d235d6c894397066059f5870cb4e138b59ebec832ff98148f122da",
       "bytes": 10501
+    },
+    "crates/obc-memory/tests/posture_real_effect.rs": {
+      "sha256": "ce411d18b5766099eba1a9fd9604c6f27a8f9fcb7c3ad891bf125d3f7686d215",
+      "bytes": 17983
     },
     "crates/obc-planner/Cargo.toml": {
       "sha256": "21c934acc2328a5f6fe0464300faffc4ffb1e93e7ba818055790136a84b1d18b",
@@ -380,12 +384,12 @@
       "bytes": 2997
     },
     "crates/obc-reflex/src/lib.rs": {
-      "sha256": "917786815aa2cb6185822db6570c8aef31f818ef6a939a94ef47c329ef0b7caf",
-      "bytes": 62119
+      "sha256": "8dc0e1c86b335f4bd05a6baabb34da873558d6c385706865ff0093046db3c744",
+      "bytes": 82574
     },
     "crates/obc-reflex/src/safing.rs": {
-      "sha256": "6b105c28a7662ae64a60b50830ac2b6e83226a7705162805c6e4259c7b026d01",
-      "bytes": 39009
+      "sha256": "0a564703df858349c2eb4032a7882b5177712e86207edc58eb6ddf96046841fb",
+      "bytes": 39029
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -688,8 +692,8 @@
       "bytes": 54709
     },
     "crates/obc-vision/src/clawcam_rules.rs": {
-      "sha256": "3dae903e3ffae420e999b43b69de7c8691ce21c726438e8fa6e9cf200bfc5918",
-      "bytes": 16702
+      "sha256": "b12e4b605f7d4a6a71e0d13555917004d1808e38e9877a3120d0d0b3bf3f18ce",
+      "bytes": 16826
     },
     "crates/obc-vision/src/clawcam_spatial.rs": {
       "sha256": "b699b83dd491fbb1985ed1599da075e70c2783ece3a76099cb043e4d3dcfa81e",
@@ -844,12 +848,12 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "22ba3d1a325527126723be8e64b5812553bdfd726531e3d6149a5ece377d4402",
-      "bytes": 77522
+      "sha256": "2acb19257578f7f28af8e6e5c96e9ee947fa0d5d70cf243006a45babfdf4a2e8",
+      "bytes": 80347
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
-      "sha256": "06044967436d132c02c729f8ae54a53374566cf3e5801f549f046236c604b1b1",
-      "bytes": 29213
+      "sha256": "eb56db661e73df950338eeff87bbd8bedb5c17aad53ad189b4aea2927bd41dd8",
+      "bytes": 49527
     },
     "firmware/obc-esp32-s3/src/sensor_math.rs": {
       "sha256": "fb4540ef1bf1588adbb9fd295ede46f8a79e8d3d235f77c77de2f218c752bd6c",
@@ -860,8 +864,8 @@
       "bytes": 14683
     },
     "firmware/obc-esp32-s3/src/safing.rs": {
-      "sha256": "3df739ef6179e7abcf4af72fe99579a60348f36a434c128840f22b4dd32ea6e0",
-      "bytes": 14025
+      "sha256": "af6b69b2db0b6fdce09ac4abd17b7233d8ce6977314d0feb4f3b12ec2aba981b",
+      "bytes": 14363
     },
     "firmware/obc-esp32-s3/src/sensors.rs": {
       "sha256": "bad30fca3aff557e20b867c318cb70029ff1baa85f756d7bf15f76b58bd9c3ed",

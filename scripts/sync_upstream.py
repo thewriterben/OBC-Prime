@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 233 artifacts).
+        also updates the generator app's mirrors (12 of the 234 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -211,6 +211,11 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     # defaults is owed the instrument, not the sentence about it.
     ("crates/obc-memory/tests/mushroom_real_episodes.rs",
      "crates/obc-memory/tests/mushroom_real_episodes.rs",
+     None),
+    # Its sibling (upstream baa5da7, 2026-09-13): three candidate metrics for
+    # what the descending posture does to real episodes. Same terms.
+    ("crates/obc-memory/tests/posture_real_effect.rs",
+     "crates/obc-memory/tests/posture_real_effect.rs",
      None),
 
     # ── The planner ──────────────────────────────────────────────────────────

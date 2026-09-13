@@ -708,8 +708,9 @@ fn main() -> anyhow::Result<()> {
     // means lost. Kept well under the host `stale_ms` (set stale_ms ≥ ~3× this).
     const BEACON_INTERVAL_MS: u64 = 30_000;
     let mut last_beacon_ms: u64 = 0;
-    // Link watchdog: time of last host contact. If the host goes silent past the
-    // safing timeout, the built-in `safe-link-offline` rule fires (on-MCU offline
+    // Link watchdog: time of last host contact on *either* link — a USB byte or a
+    // mesh command addressed to us. If the host goes silent past the safing
+    // timeout, the built-in `safe-link-offline` rule fires (on-MCU offline
     // safing), independent of battery safing.
     let mut last_host_contact_ms: u64 = now_ms();
     // Emit link/power status only when it *changes* (not every tick), so the serial
@@ -797,6 +798,21 @@ fn main() -> anyhow::Result<()> {
                                 if let Ok(s) = std::str::from_utf8(&uart_line) {
                                     if command_targets_us(s) {
                                         if let Ok(resp) = handle_request(s, &mut agent_state) {
+                                            // A command that reached us over the mesh is host
+                                            // contact. Until 2026-09-13 only USB bytes counted
+                                            // (above), so a node with USB closed, commanded
+                                            // over the authenticated LoRa link, measured
+                                            // silence from boot and reported "host link lost"
+                                            // — the detector was wired to one of its two
+                                            // inputs. Counted here, on a line that parsed as
+                                            // a request, and not at `command_targets_us`: the
+                                            // bridge forwards *every* verified frame to this
+                                            // UART, the base's own 5 s `gw_keepalive` included,
+                                            // and that has no `to`, so it "targets us" — it is
+                                            // station liveness, not the host, and counting it
+                                            // meant the node never went offline at all
+                                            // (bench_link_contact, 2026-09-13, first attempt).
+                                            last_host_contact_ms = now_ms();
                                             // Stamp the reply with identity so the host
                                             // bridge keys it as `mesh.<node>.cmd_result`
                                             // (correlatable by the echoed `id`), not a
@@ -909,15 +925,32 @@ fn main() -> anyhow::Result<()> {
                         Err(e) => error = Some(e.to_string()),
                     }
                 }
-                let report = serde_json::json!({
+                // `ev`/`bl`: what the rule fired on — the readings of the
+                // entities it reads and the baselines it compares against, by
+                // position in the rule (see `reflex::FiredReflex`). This is the
+                // transition log a later vetting stage trains on; it rides in
+                // every report from the day the rule does, and costs ~12 bytes
+                // a value against the 228-byte line
+                // (`tests/spine_payload_budget.rs` measures the two built-in
+                // shapes).
+                let mut report = serde_json::json!({
                     "type": "reflex",
                     "node_id": NODE_ID,
                     "rule_id": fired.rule_id,
                     "action": serde_json::to_value(&fired.action).unwrap_or(serde_json::Value::Null),
                     "applied": applied,
-                    "error": error,
                     "ts_ms": now,
+                    "ev": fired.ev,
                 });
+                // `error` only when there is one: `"error":null` was 13 bytes of
+                // every report, and with the evidence aboard the escalate shape
+                // sat 7 bytes under the line (`spine_payload_budget`).
+                if let Some(e) = error {
+                    report["error"] = serde_json::json!(e);
+                }
+                if !fired.bl.is_empty() {
+                    report["bl"] = serde_json::json!(fired.bl);
+                }
                 let spine_msg = report.to_string();
                 send_line(&mut usb, &spine_msg);
                 mirror_spine(&mut spine_uart, &spine_msg);
@@ -1173,12 +1206,19 @@ fn handle_request(line: &str, state: &mut AgentState) -> anyhow::Result<Response
                             Err(e) => error = Some(e.to_string()),
                         }
                     }
-                    reports.push(serde_json::json!({
-                    "rule_id": f.rule_id,
-                    "action": serde_json::to_value(&f.action).unwrap_or(serde_json::Value::Null),
-                    "applied": applied,
-                    "error": error,
-                }));
+                    let mut report = serde_json::json!({
+                        "rule_id": f.rule_id,
+                        "action": serde_json::to_value(&f.action).unwrap_or(serde_json::Value::Null),
+                        "applied": applied,
+                        "ev": f.ev,
+                    });
+                    if let Some(e) = error {
+                        report["error"] = serde_json::json!(e);
+                    }
+                    if !f.bl.is_empty() {
+                        report["bl"] = serde_json::json!(f.bl);
+                    }
+                    reports.push(report);
                 }
                 Ok(serde_json::json!({ "node_id": NODE_ID, "fired": reports }).to_string())
             }
