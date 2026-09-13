@@ -5,6 +5,52 @@ New entries go at the top.
 
 ---
 
+## 2026-09-13 — A lost spine is recorded, not survived silently, and never fatal
+
+The first evening the brain ran with the mushroom body, the posture policy
+and an authenticated LoRa gateway all live, the gateway's serial port went
+away eleven minutes in (`os error 22`, the surprise-removal kind). The I/O
+thread returned, the RX loop ended, one `WARN` was written, and the brain
+ran for fourteen more minutes believing two healthy nodes were lost —
+the mesh supervisor escalated both at 120 s — while a posture send failed
+with "serial I/O thread has exited". An operator restart fixed it in
+seconds. Design in [SPINE-LOSS.md](SPINE-LOSS.md).
+
+**Decision.** The brain does not stop, and it does not pretend. Three
+things, in order of value: a `spine.gateway` fact in world memory that
+says whether the host can hear the mesh, written on every transition;
+`MeshHealth::Unobservable`, so that while the gateway is down every node
+is *unobservable* rather than *offline*, no escalation fires and the
+offline clock does not run; and a reopen loop around `open_split`, 1 s
+doubling to 30 s, forever, behind a writer the existing command sink swaps
+in place so the sink handed out at startup survives the outage. The auth
+window resumes from its persisted ceiling; no new auth state.
+
+**Options not taken.** *Refuse to keep running without the spine when
+`[descending]` is enabled* — consistent with the startup refusal, and
+wrong: a misconfiguration at boot and a port that vanishes at runtime are
+different things, and killing Telegram, memory and the episode record over
+a USB hub blinking turns one lost link into a lost body. *Retry the failed
+`descend` from inside the gateway* — the posture policy already retries on
+the next turn and records the failure on the node's fact; a second retry
+loop for the same idempotent command is how a node gets the same frame
+four times. *A bounded number of reopen attempts* — a body meant to run
+unattended does not give up on its own spine at 3 a.m. because the count
+ran out.
+
+**Consequences.** `decide` gains an input (the gateway state) and a fourth
+health value, which every consumer of `mesh.<node>.health` must accept.
+The 2026-09-12 entry below — *a check that could not run must not fail
+like a check that did* — now applies to the mesh supervisor, which had
+been the largest remaining place it did not. Two questions surfaced the
+same evening are recorded in SPINE-LOSS.md §6 and deliberately not decided
+here: whether the host owes the node a heartbeat (the node declares the
+host lost 30 s after its last command, by design), and whether the host
+should re-push RAM-only rules when it hears a node's boot beacon. Both
+belong with the WILD port, and both are the mirror image of this one.
+Nothing is built yet; this entry precedes the code, which is not the
+usual order here, because the decision was needed to know what to build.
+
 ## 2026-09-13 — No language model on a node, and what would reopen it
 
 The question was whether the ESP32 nodes should run a language model of their
