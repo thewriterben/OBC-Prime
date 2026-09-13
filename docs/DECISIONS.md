@@ -5,6 +5,58 @@ New entries go at the top.
 
 ---
 
+## 2026-09-13 — Rules survive a node's reboot; limits do not, and the host puts them back
+
+A node's host-pushed reflex rules and its Track 0 limits both lived only in
+RAM. On 2026-08-22 the boot posture became deny-all so a reset could never
+*widen* policy, and the node was made to announce its boot so a host could
+notice. Nobody built the noticing. On 2026-09-13 the brain's first live
+posture (`descend`, novelty 0.372 → slot 0 = 0.15) arrived at a node whose
+die-temperature rules had died in a power cycle hours earlier: 154 reflex
+reports that afternoon, every one `safe-link-offline`, the LED rule gone
+and nothing saying so. The SPINE-LOSS entry below deferred the question to
+the WILD port; this decides it.
+
+**Decision.** The two halves are treated differently because they are
+different things.
+
+*Limits stay RAM-only and deny-all at boot.* They are actuator authority.
+The host holds them (`[[safety.limits]]`), and the mesh supervisor
+re-pushes them whenever a node names a boot the host has not pushed
+against — `boot_id` on the boot announcement, on every beacon (with
+`policy: "deny-all"` until a push lands), and on every reply — retrying
+while the beacon still says deny-all. A `set_limits` fits a mesh frame.
+
+*Rules persist on the node, in NVS,* tagged with firmware version and
+schema, restored at boot through the same validation a push gets, and
+cleared with a one-boot announcement (`stale` / `corrupt`) when they do
+not pass. They carry no authority — every write a rule fires still goes
+through the gate — and they do not fit a mesh frame (one rule is 330 bytes
+against 228), so the host *cannot* put them back in the field. A rule set
+that survives its own node's reboot is System 1 keeping its promise: "keeps
+reacting when the host is unreachable" includes just after a reboot.
+
+When limits land, the reflex engine *rearms*: a new policy is a new world,
+and a standing condition whose write the old gate refused fires once more.
+
+**Options not taken.** *Persist limits too* — reverses 08-22 for
+convenience; a stale allow-list surviving a reflash is exactly the widening
+that decision exists to prevent. *Re-push rules from the host* — requires a
+chunked mesh push that does not exist, for a payload the census showed does
+not fit; and the base station could not even carry a `set_limits` until
+this work (its console read from a 128-byte FIFO — a claim in a census is
+not evidence, only the air is). *A host heartbeat to nodes* — decided
+against for now: a mesh node's "host link" means "commanded recently" and
+is not read as a fault by anything; airtime spent to make a rule feel
+better. *Rules re-pushed on USB only* — that is the state that failed.
+
+**Consequences.** A node reset now ends with the node whole — rules from
+its own flash within a second, limits from the host within a minute — with
+nobody touching it; measured end to end on the bench
+(`bench_rules_persist.py --live`, 62 s). The stored record's wire form is
+now something a firmware version bump must consider (schema constant in
+`rules_store`). Filed with the WILD port thread: `Oh-Ben-Claw/docs/WILD-2026-09.md`.
+
 ## 2026-09-13 — A lost spine is recorded, not survived silently, and never fatal
 
 The first evening the brain ran with the mushroom body, the posture policy

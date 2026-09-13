@@ -1,6 +1,6 @@
 {
-  "generated": "2026-09-13T20:51:30+00:00",
-  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
+  "generated": "2026-09-13T22:33:42+00:00",
+  "upstream": "C:\\e\\obc-clean",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
@@ -848,12 +848,16 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "c4eeb67ce44012ed7a72b2db550b5be2f6ae4d1c88643d897e5bdd4400ce12f4",
-      "bytes": 81434
+      "sha256": "29a0524fb0f86b8b5daf3fa169d89c1b4e20b5eefd44eac49fda6d6d7ae35c46",
+      "bytes": 86037
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
-      "sha256": "eb56db661e73df950338eeff87bbd8bedb5c17aad53ad189b4aea2927bd41dd8",
-      "bytes": 49527
+      "sha256": "f9157a6c812f9094607dc440dc52621c6750c0ad95ea7c8a0073e213b3980015",
+      "bytes": 51263
+    },
+    "firmware/obc-esp32-s3/src/rules_store.rs": {
+      "sha256": "a354f945d1dbe3ba19ae16dcf3a94a9b578a1ea5847f80d2d8625d6cc684d4d5",
+      "bytes": 11539
     },
     "firmware/obc-esp32-s3/src/sensor_math.rs": {
       "sha256": "fb4540ef1bf1588adbb9fd295ede46f8a79e8d3d235f77c77de2f218c752bd6c",

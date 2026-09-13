@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 234 artifacts).
+        also updates the generator app's mirrors (12 of the 235 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -1446,6 +1446,12 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("firmware/obc-esp32-s3/src/reflex.rs",
      "firmware/obc-esp32-s3/src/reflex.rs",
+     None),
+    # Added 2026-09-13 with upstream 985861f: `main.rs` declares
+    # `mod rules_store;` (host-pushed rules persisted in NVS; ADR of the same
+    # date in docs/DECISIONS.md).
+    ("firmware/obc-esp32-s3/src/rules_store.rs",
+     "firmware/obc-esp32-s3/src/rules_store.rs",
      None),
     # Added 2026-08-21 with upstream #121, and caught by
     # `scripts/check_vendored_mods.py` rather than by anyone remembering:
