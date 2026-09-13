@@ -330,12 +330,13 @@ Stated because a safety document that only lists strengths is marketing.
   root secret ([SPINE-AUTH.md](SPINE-AUTH.md) step 4, bench-verified). MQTT
   and P2P tool calls and results are signed and verified when
   `[security] require_frame_auth` is on (step 5), which it is not by
-  default. What that leaves: the host reads the base station's console over
-  USB and trusts what the base verified — the host checks no LoRa tag
-  itself; the serial wire between a bridge station and the node behind it
+  default. The host verifies each LoRa frame again under the same root
+  before it reaches world memory (same day, `lora_gateway::LoraAuth`), so
+  the base station's console is checked rather than believed. What that
+  leaves: the serial wire between a bridge station and the node behind it
   is unauthenticated; and a station's flash holds the root, so a captured
   station can sign as any station. Track 0 on the node is the boundary that
-  survives all three.
+  survives both.
 
 - **Perception content in the planning path.** Taint tracking guards tool
   *arguments*. Text recovered from an image by `vision_analyze` still reaches the

@@ -343,9 +343,8 @@ one problem this design cannot solve on its own.
    above; and a bridge built with a different root rejected 12/12 as a bad
    tag and accepted nothing. **Not** verified: an on-air replay (the host
    cannot inject raw frames; refusal is proven on the host, persistence by
-   the reboot), and any host-side verification — the host still trusts the
-   base station's console over USB, which is §3.4's remaining bullet and the
-   honest statement of where the trust boundary now sits. It also found a
+   the reboot). Host-side verification followed the same evening — see the
+   note under step 5. It also found a
    link defect that was not an auth defect: two stations' identical 5 s
    keepalive timers locking step after a reset and transmitting into each
    other's frames indefinitely; the keepalive interval now carries
@@ -380,6 +379,23 @@ one problem this design cannot solve on its own.
    `[security] require_frame_auth`, default off, deriving per-node keys from the
    existing `pairing_secret`. Off by default because the moment it is on, a node
    that has not been upgraded goes silent — the migration window §4 asks for.
+
+   **The LoRa frame, the bullet step 4 left: done 2026-09-13, same evening.**
+   The base station prints each frame's `ctr=` and `mac=`, and the host
+   (`obc_spine::lora_gateway::LoraAuth`) verifies the tag again under the
+   deployment root and judges the counter against a per-station window
+   persisted in world memory with `M = 1`, as `SPINE-REPLAY.md` §3 said the
+   host should — before anything reaches `mesh.*`. Unlike the MQTT/P2P half
+   there is no key and no default-off: `[lora_gateway] spine_root_file` is
+   required when the gateway opens, because the stations have authenticated
+   every frame since step 4 and a host that ingested unverified lines would
+   be the only unauthenticated hop left. A rejection is a fact
+   (`spine.auth.gw-XX`: `ctr`, `accepted`, `rejected`, `last_rejected`),
+   which answers `SPINE-REPLAY.md` §5.3–4. Bench, on the production path
+   (`tests/lora_gateway_live.rs`): 9 verified / 0 refused under the
+   stations' root; 0 / 9 `bad tag` under zeros, nothing in world memory.
+   The trust boundary now sits where §4 says it does — a captured station or
+   node — and not at a USB cable.
 6. **Re-sync firmware into OBC-Prime** and update `SAFETY.md` §4.3 from "no
    authentication story" to what it then is, including what it still is not.
 

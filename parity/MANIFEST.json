@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T07:00:16+00:00",
+  "generated": "2026-09-13T07:31:13+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -172,12 +172,12 @@
       "bytes": 5915
     },
     "crates/obc-safety/src/spine_tag.rs": {
-      "sha256": "8b6bbc3bdaa053dda2f85309416aca8510f4228a9f5eb0bec4b2f8ed9c1027ad",
-      "bytes": 7200
+      "sha256": "a61fc4ab30c190ca87d268d5afda37a5d2810a60f391262e2b49aed18685e73c",
+      "bytes": 7645
     },
     "crates/obc-safety/src/replay.rs": {
-      "sha256": "c1b9a819d1d2e82aa14389b0b81ce903566651cec61e4c55ad5c2e129930ff0d",
-      "bytes": 12433
+      "sha256": "21652b0925f70a8222a995e053d48b9b7f4e738cc4adf34117e7273be2a03aec",
+      "bytes": 14488
     },
     "crates/obc-safety/src/frame_auth.rs": {
       "sha256": "f40f3b5e904de7bdec7cea5191634c9cc6be93107ca61a64ccac94eb71e13032",
@@ -456,8 +456,8 @@
       "bytes": 5014
     },
     "crates/obc-spine/src/lora_gateway.rs": {
-      "sha256": "51ebb42cbc4ec95866b7fcc306f74bcb176ce751e5b1fba4b395b79407c8b835",
-      "bytes": 38452
+      "sha256": "a0f56e1cfebdd7e51352c024711da3eea87823164ade6e82d96405bea166f397",
+      "bytes": 60805
     },
     "crates/obc-spine/src/lora_mesh.rs": {
       "sha256": "3eedb40a620bf3fd9e72aea81e6d72dc0d99b37b9e42455b6b9822f3d9f91f01",
@@ -892,8 +892,8 @@
       "bytes": 4732
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "3f39013d28389e8974d30183beb879bd1ec85501529f4056f934c2a2cbff5c51",
-      "bytes": 26710
+      "sha256": "b4587605d1c8e66abb4325050e694564e4860b5580337c90fb4c2074baced74c",
+      "bytes": 27642
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
       "sha256": "e879dd5d92c657f6d763c84e202f4fc785a088e196ff699ca43a47966403c93f",
