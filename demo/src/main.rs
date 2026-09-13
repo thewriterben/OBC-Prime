@@ -1,7 +1,7 @@
 //! Watch the vendored crates do the things this repository claims they do.
 //!
 //! Everything else here is a library or a hash. This is the first host binary
-//! in the repository, and it exists because "1149 tests pass" and "you can see
+//! in the repository, and it exists because "1160 tests pass" and "you can see
 //! it refuse" are different kinds of evidence, and only one of them survives
 //! someone not trusting you.
 //!

@@ -22,7 +22,7 @@ the reflex layer keeps working when the brain is unreachable.
 > `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
 > `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
 > `obc-learning`, `obc-fleet`, `obc-audio`, `obc-mission` and `obc-body` are here, vendored
-> and hash-checked, and CI builds and tests them: **1113 tests**.
+> and hash-checked, and CI builds and tests them: **1160 tests**.
 >
 > They cover the bitemporal world model, the deployment planner the parity
 > claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
@@ -219,7 +219,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1113 tests
+cargo test --workspace     # 1160 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -241,7 +241,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1113 tests pass" and "you can see it refuse" are different
+That matters because "1160 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 
