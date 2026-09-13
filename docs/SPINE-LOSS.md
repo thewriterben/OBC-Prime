@@ -1,13 +1,18 @@
 # A lost spine
 
-> **Written 2026-09-13, unbuilt.** The brain lost its base station's serial
-> port eleven minutes after opening it, ran headless for fourteen more, and
-> the only place that said so was one `WARN` line in a seven-megabyte log.
-> This is the design for what should happen instead. Decision recorded in
+> **Written 2026-09-13; built the same evening** (upstream `7288c64`,
+> vendored here). The brain lost its base station's serial port eleven
+> minutes after opening it, ran headless for fourteen more, and the only
+> place that said so was one `WARN` line in a seven-megabyte log. This is
+> the design for what happens instead. Decision recorded in
 > [DECISIONS.md](DECISIONS.md) (2026-09-13, *A lost spine is recorded, not
-> survived silently, and never fatal*). Everything it touches is upstream in
-> Oh-Ben-Claw's `crates/obc-spine` and `src/main.rs`; nothing here is in
-> this repository yet.
+> survived silently, and never fatal*). §2.1–2.3 are `crates/obc-spine`
+> (`lora_gateway::{GatewayLink, GatewayHandle, supervise_gateway}`,
+> `mesh_supervisor::{MeshHealth::Unobservable, SpineView}`), in this
+> repository; the wiring (§3, `src/main.rs`) is upstream. §4's tests exist
+> and pass. §5's bench procedure has **not been run**: the bench base is
+> the live brain's port. What §1 could not establish — the cause of the
+> loss — is still open.
 
 ## 1. What was measured
 
