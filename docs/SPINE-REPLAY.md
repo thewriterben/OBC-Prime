@@ -26,9 +26,21 @@
 > found by the host tests: a window that resumes at its ceiling must resume
 > with its bitmap *full*, not empty; empty accepts the replay of everything
 > in the 64 below the ceiling, which is the hole the ceiling exists to
-> close. Steps 4–6 of the bench procedure remain unrun; §5.3–4 (what a
-> rejection does beyond a console line) remain open. The rest of this
-> document is unchanged.
+> close. §5.3–4 (what a rejection does beyond a console line) remain open.
+>
+> **Steps 4–5 run 2026-09-13 evening** (upstream `b3243fa`, walkthrough
+> §A5o, `scripts/bench_seq_wear.py`, on the bridge). Step 4: 40 host-driven
+> resets at 2–4 s — the counter resumed **exactly N = 32 higher on every
+> boot**, one ceiling write per boot, never a repeat. Flash consumption was
+> *not* measured: `nvs_get_stats().free_entries` (now on the boot line)
+> stayed at 624 through 40 writes, so it does not see a rewrite of an
+> existing key; wear stays inferred (one entry write per boot). Step 5,
+> with the store poisoned at the `CeilingStore` boundary (a bench feature,
+> not a corrupted partition): the station sent the 20 numbers it was
+> already authorised, refused the next extension, went silent; the host
+> read it offline at 94.6 s and presumed it lost 120 s later; a reset
+> resumed at the last ceiling persisted before the fault. Step 6 still
+> needs a third radio. The rest of this document is unchanged.
 
 A design, not a decision, and deliberately **unbuilt** for the authenticated
 counter it describes. Step 3 of
