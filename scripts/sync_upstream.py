@@ -193,8 +193,15 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-memory/src/journal.rs",
      "crates/obc-memory/src/journal.rs",
      None),
-    ("crates/obc-memory/src/vector.rs",
-     "crates/obc-memory/src/vector.rs",
+    # `vector.rs` (VectorStore, EmbeddingClient — zero callers since the tool
+    # impls were struck on 2026-07-30) was deleted upstream on 2026-09-12 and
+    # `mushroom.rs` arrived in the same change: the sparse-expansion memory
+    # over episode embeddings (FlyHash tag, fly Bloom-filter novelty, FlyModel
+    # compartments) that `trajectory.rs` now declares. `lib.rs` declares
+    # `mod mushroom;`, so vendoring that without this entry leaves a tree that
+    # cannot compile — the same reason `notes.rs` is listed.
+    ("crates/obc-memory/src/mushroom.rs",
+     "crates/obc-memory/src/mushroom.rs",
      None),
 
     # ── The planner ──────────────────────────────────────────────────────────
@@ -539,9 +546,12 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-movement/src/lib.rs",
      "crates/obc-movement/src/lib.rs",
      None),
-    ("crates/obc-movement/src/feedback.rs",
-     "crates/obc-movement/src/feedback.rs",
-     None),
+    # `feedback.rs` (PController, ClosedLoopServo — parked, never wired) was
+    # deleted upstream on 2026-09-13: the spinal tier put the closed loop on
+    # the node (`Condition::SensorSlot` + the `descend` command in
+    # `firmware/obc-esp32-s3/src/reflex.rs`), and a host-side controller
+    # chasing a position from world memory is the layer that change routed
+    # around.
 
     # ── Knowing where you are and how to get somewhere ───────────────────────
     # Vendored 2026-08-08, the fourteenth crate and the largest: Monte Carlo
