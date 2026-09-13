@@ -203,6 +203,15 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-memory/src/mushroom.rs",
      "crates/obc-memory/src/mushroom.rs",
      None),
+    # The body's measurement on the agent's own recorded episodes (2026-09-13):
+    # the prequential replay that set its defaults — 20,000 cells at 2 %,
+    # warm-up centring, threshold 0.25 — and the numbers CHANGELOG cites for
+    # them. Ignored unless `OBC_TRAJECTORIES_DB` names a real store, so CI
+    # compiles it and runs nothing; vendored because a reader who doubts the
+    # defaults is owed the instrument, not the sentence about it.
+    ("crates/obc-memory/tests/mushroom_real_episodes.rs",
+     "crates/obc-memory/tests/mushroom_real_episodes.rs",
+     None),
 
     # ── The planner ──────────────────────────────────────────────────────────
     # The second piece to move here (2026-07-30), on the same terms as the memory

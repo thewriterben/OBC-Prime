@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T16:20:48+00:00",
+  "generated": "2026-09-13T17:09:25+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -84,8 +84,8 @@
       "bytes": 15977
     },
     "crates/obc-memory/src/trajectory.rs": {
-      "sha256": "03c75e127a62b40213547d58011eeac2b8552ea4353439b51a5b875bd3b534eb",
-      "bytes": 36786
+      "sha256": "523000d3cd56019ed5db01844dc138e3d28b903b410ce75375f9ef48487c62d8",
+      "bytes": 37227
     },
     "crates/obc-memory/src/embed.rs": {
       "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
@@ -100,8 +100,12 @@
       "bytes": 8902
     },
     "crates/obc-memory/src/mushroom.rs": {
-      "sha256": "fa3b6e70afa6cd77b99819770943147c85d90f69a76baae691ab49deb76917ae",
-      "bytes": 30225
+      "sha256": "fbabe3f09ffdd9d08f2d72d679bdaf82bf5cb6bbb6097ce9e3034c9ed69f5332",
+      "bytes": 40644
+    },
+    "crates/obc-memory/tests/mushroom_real_episodes.rs": {
+      "sha256": "c1efdaa664d235d6c894397066059f5870cb4e138b59ebec832ff98148f122da",
+      "bytes": 10501
     },
     "crates/obc-planner/Cargo.toml": {
       "sha256": "21c934acc2328a5f6fe0464300faffc4ffb1e93e7ba818055790136a84b1d18b",
