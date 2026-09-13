@@ -5,6 +5,65 @@ New entries go at the top.
 
 ---
 
+## 2026-09-13 — No language model on a node, and what would reopen it
+
+The question was whether the ESP32 nodes should run a language model of their
+own, so that a node cut off from the gateway could still reason. The survey
+is `EDGE-LM-2026-09.md`; this records what it settled.
+
+On the S3 N16R8 boards on the bench, nobody has demonstrated a model that
+follows an instruction at a usable speed. The demonstrated points are a
+sub-1M dense core writing children's stories at ~10 tok/s, and a real 135M
+instruct model at forty-five minutes per answer. The one measured runtime
+(slvDev, 2026-07-21) is PSRAM-bandwidth-bound at 60.7 MB/s with no vector
+unit to speak of; its author says the lever is bytes-per-token, not compute,
+and that his 28.9M parameter count is "never a capability multiple". The
+vendor's own agent framework, ESP-Claw, runs rules and memory on the chip
+and calls out for reasoning — which is the shape this repo already has.
+
+**Decision.** The spinal tier stays what upstream `CONNECTOME-2026-09.md` §2.2 describes:
+local reflex rules that run whether or not the gateway is reachable, and a
+descending command that is a small modulation vector. Reasoning lives on the
+gateway, and on the SBC edge loop when one is present (`edge.rs`). No node
+firmware carries a language model, and no roadmap item assumes one.
+
+**Options not taken.** *A tiny model on the S3* — the demonstrated ones cannot
+follow an instruction, and a node that generates prose it cannot act on is
+a heater. *An instruct model streamed from SD* — demonstrated at 45 minutes
+per answer, which is not a reflex tier at any definition. *The ESP32-P4* —
+the only board with a demonstrated instruction-follower (a 180M ternary MoE
+at ~9 tok/s, tool-calling described by its own author as unreliable, and
+unmeasured by anyone else). The P4 has no radio on-chip, so a P4 node is a
+P4 plus a radio MCU plus a UART between them — the unauthenticated serial
+wire the entry below already flags for the bridge, now on every node. That
+is a different node design, not a faster one, and it would have to be
+decided on its own terms before a board is bought.
+
+**What would reopen this.** Not a bigger model on a newer chip, and — 
+corrected the same day, after reading `obc-reflex` and `posture.rs` rather
+than the survey — not a bandwidth benchmark either. A `descend` is at most
+sixteen levels in `[0, 1]`; a node-side policy that produced them from its
+own sensor snapshot would be a map of a few dozen weights, which fits an S3
+without a single trick from the survey. Compute was never the question. What
+is missing is a **metric** for what a better posture is and **data** on
+which the current one-bit policy (novel → cautious) has been scored, and
+the one-bit policy has not yet run live at all. So: the harness
+`crates/obc-memory/tests/posture_real_effect.rs` (upstream) reads the
+`descending.*` and `mesh.<node>.reflex` facts the brain already records and
+prints three candidate metrics — whether posture is mechanically live at
+all, whether caution buys Track 0 refusals, and the lost-frame natural
+experiment on outcomes. When it has run against weeks rather than hours,
+and one metric has been chosen and recorded here, a learned policy has
+something to beat. That would be its own ADR. A language model still would
+not be the object under discussion.
+
+**Consequences.** The int8 wake-word spotter in V2-IMPLEMENTATION is
+unaffected; it is TinyML, not a language model, and this decision does not
+touch it. `V2-STRATEGY.md` §F's "small-model reflex tier" is confirmed as
+an SBC feature and should not drift toward the MCU in later revisions. A
+node that loses the gateway degrades to its rules, and says so in its
+announcement, which is the behaviour the safety model already assumes.
+
 ## 2026-09-13 — The stations hold the root secret, and there is no permissive mode
 
 SPINE-AUTH.md §3.1 provisions each *node* with only its own derived key, so
