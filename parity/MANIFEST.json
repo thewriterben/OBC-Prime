@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T19:46:34+00:00",
+  "generated": "2026-09-13T20:51:30+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -472,8 +472,8 @@
       "bytes": 29181
     },
     "crates/obc-spine/src/mesh_supervisor.rs": {
-      "sha256": "15ba83bf1c384936f1118294b404721447832dd8756cb1f91784ee49e0f4cb40",
-      "bytes": 55896
+      "sha256": "1e0c06d2a71b7745cc91eec1a9e032e619621d980c0897cbb54507103a5523d3",
+      "bytes": 80050
     },
     "crates/obc-spine/src/p2p.rs": {
       "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
@@ -832,8 +832,8 @@
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "e554c2f1af8cfae21a048c0e8e9696f8aa23d4ecc4ce6634a33abc4a3efc983b",
-      "bytes": 9402
+      "sha256": "fadbe768cd22faf6d0f5aac82c0448fdb7b5f82507e42fd0ed70096ead97054d",
+      "bytes": 9895
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
       "sha256": "b6dee842580c00b536addaef46550705eea7af4ce60f23f6418cb62d9aaccabb",
@@ -848,8 +848,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "2acb19257578f7f28af8e6e5c96e9ee947fa0d5d70cf243006a45babfdf4a2e8",
-      "bytes": 80347
+      "sha256": "c4eeb67ce44012ed7a72b2db550b5be2f6ae4d1c88643d897e5bdd4400ce12f4",
+      "bytes": 81434
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "eb56db661e73df950338eeff87bbd8bedb5c17aad53ad189b4aea2927bd41dd8",
@@ -860,8 +860,8 @@
       "bytes": 5908
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
-      "sha256": "d843b4f20add55f97572b664dc84d56d2e0699a445f5e76c710d985df634b105",
-      "bytes": 14683
+      "sha256": "639de43ee232d9081bafc40ef8e370409786c1d6f0c4e5d9a4d22a605020268b",
+      "bytes": 15348
     },
     "firmware/obc-esp32-s3/src/safing.rs": {
       "sha256": "af6b69b2db0b6fdce09ac4abd17b7233d8ce6977314d0feb4f3b12ec2aba981b",
@@ -900,8 +900,8 @@
       "bytes": 4732
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "b4587605d1c8e66abb4325050e694564e4860b5580337c90fb4c2074baced74c",
-      "bytes": 27642
+      "sha256": "49eb4fa7f271b0ad50df152057a76cbd136f5eab295c2fd31ff3779c11e7e181",
+      "bytes": 29262
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
       "sha256": "e879dd5d92c657f6d763c84e202f4fc785a088e196ff699ca43a47966403c93f",
