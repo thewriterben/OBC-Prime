@@ -298,8 +298,58 @@ one problem this design cannot solve on its own.
 
    `SPINE-REPLAY.md` §6 is a bench procedure, so the person with the boards does
    not have to re-derive what "it works" means.
-4. **Wire format v2** behind a config key that defaults to strict, with the old
-   format rejected rather than tolerated.
+4. ~~**Wire format v2** behind a config key that defaults to strict, with the old
+   format rejected rather than tolerated.~~ **Done 2026-09-13, on the bench,
+   between the two Heltec stations.** `[src][seq][ttl][ctr:u32][payload ≤
+   228][mac:8]`, as §3.2 sketched, with these differences from the line as
+   written:
+
+   - **No config key, no permissive mode, no migration window.** §4 asked for
+     a key that defaults to strict; the built form is stricter — v1 is gone
+     from the firmware, not tolerated behind a flag. The fleet is two
+     stations on one desk, so the migration window the key existed for had
+     nobody in it, and a permissive mode that nobody needs is a permissive
+     mode that only an attacker would use. A v1 frame now decodes as garbage
+     and fails the tag, logged as such.
+   - **The counter is the one from step 3, finished.** `SeqCounter` had been
+     built for the 8-bit `seq` on the morning of the same day
+     (`SPINE-REPLAY.md` header); the u32 it was designed for now rides on it
+     unchanged, and `seq` is its low byte so the log lines and the host
+     parser read as they always have. The receiver is the RFC 4303 window
+     step 3 specified, persisted as a ceiling `h + M` with `M = 8`, one per
+     source, in the same NVS namespace — the `SeenSet` ring it replaced is
+     deleted; the window de-duplicates relays with the counter the tag
+     covers. Measured: a bridge reset skipped 3 frames (bound 8) and resumed
+     its own counter 25 above the last the base had accepted (bound 33).
+   - **Stations hold the root, not a derived key.** §3.1 flashes each *node*
+     with only its own key. The Heltecs are the infrastructure that verifies
+     every frame from every source, so each needs every key, and each
+     derives them from the root on first hearing a `src`. Recorded in
+     `DECISIONS.md` with its cost. The root is a build-time environment
+     variable (`OBC_SPINE_ROOT`); a build without one fails with the message
+     that says what to set, and the boot log prints a two-byte fingerprint
+     so two boards can be compared without printing the secret.
+   - **The correlation id shrank with it**, as step 1 required: eight hex
+     characters. The two-pin `set_limits` that would have been the casualty
+     is 204 bytes with 24 spare.
+   - **A rejection is one console line** — `SPINE ◄ REJECTED src= ctr= … :
+     <reason>` — except a `Seen` counter, which is what a relay duplicate is
+     and is silent. Whether a rejection should also raise a fact
+     (`SPINE-REPLAY.md` §5.3–4) is still open.
+
+   Verified by `scripts/bench_spine_auth.py` (walkthrough §A5d): 25/25
+   authenticated keepalives across both directions with counters strictly
+   increasing; `descend` over the authenticated link 10/10; the reboot gap
+   above; and a bridge built with a different root rejected 12/12 as a bad
+   tag and accepted nothing. **Not** verified: an on-air replay (the host
+   cannot inject raw frames; refusal is proven on the host, persistence by
+   the reboot), and any host-side verification — the host still trusts the
+   base station's console over USB, which is §3.4's remaining bullet and the
+   honest statement of where the trust boundary now sits. It also found a
+   link defect that was not an auth defect: two stations' identical 5 s
+   keepalive timers locking step after a reset and transmitting into each
+   other's frames indefinitely; the keepalive interval now carries
+   counter-derived jitter.
 5. ~~**Wire the host half** — `NodePairingManager` gets its callers, and
    `require_pairing` starts meaning something.~~ **Done 2026-08-01, for MQTT and
    P2P.** All three bullets of §3.4 except the LoRa frame, which is step 4:

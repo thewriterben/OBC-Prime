@@ -5,6 +5,52 @@ New entries go at the top.
 
 ---
 
+## 2026-09-13 — The stations hold the root secret, and there is no permissive mode
+
+SPINE-AUTH.md §3.1 provisions each *node* with only its own derived key, so
+a captured node cannot impersonate a sibling. Step 4 put the tag on the wire
+between the two Heltec stations, and the first question was which key a
+station carries.
+
+A station is not a node. It is the infrastructure that verifies every frame
+on the air, from every source — the base verifies the bridge, the bridge
+verifies the base, and a third station would verify both. A station holding
+only its own key can sign and cannot check, which is the half of
+authentication that catches nothing. It needs every source's key, and every
+source's key is, by construction, the root.
+
+**Decision.** Each Heltec station is built with the deployment's root
+(`OBC_SPINE_ROOT`, a build-time environment variable; a build without it
+fails and says what to set) and derives `HKDF(root, "gw-XX")` for any `src`
+on first hearing it. The root never enters the repository; the boot log
+prints two bytes of its SHA-256 so two boards can be compared without
+printing it.
+
+**Options not taken.** *A key table per station* (each peer's derived key
+flashed in, no root) is the same secret material in a different shape: a
+table of every derived key lets an attacker sign as every station, exactly
+as the root does, and it has to be regenerated and reflashed on every
+station whenever a station is added. *Asymmetric keys* (§5.1) would let a
+station verify without being able to sign as anyone — the real fix — and
+cost 64 bytes per frame on a 240-byte radio budget. Still the right answer
+for MQTT; still disqualified on LoRa by arithmetic.
+
+**Consequences.** Extracting the root from a station's flash is the "cloned
+node" threat of SPINE-REPLAY.md §4, one station wider: the attacker can
+sign as any station, not just one. That widening is accepted because the
+stations are the same physical class as the nodes and are deployed the
+same way, and because the alternative was a scheme that verifies nothing.
+Revocation is reflash-everything, as §3.1 already said. Nodes on the far
+side of a station's UART are outside this entirely — the bridge signs what
+it forwards, and the node ↔ bridge serial wire is unauthenticated.
+
+**And no permissive mode.** §4 asked for a strict-by-default config key
+with a migration window; the built form has no key and no v1 path. The
+fleet is two stations on one desk; a migration window with nobody in it is
+a fallback with only one user, and §4 names who that is. If a third station
+arrives running v1 it will be rejected loudly, one line per frame, which is
+the correct thing to happen to a station that has not been provisioned.
+
 ## 2026-09-12 — A check that could not run must not fail like a check that did
 
 `parity`'s `peer` job compares the 12 generator mirrors against the generator's

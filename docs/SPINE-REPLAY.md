@@ -12,8 +12,23 @@
 > when NVS is unusable; six host tests pin §2's properties including a
 > reboot never landing in a neighbour's ring across the 256 wrap. §6 steps
 > 1–3 were run on the bench with DTR resets (unclean): 7 boots, counts
-> strictly increasing, every gap 31 ≤ 32. Steps 4–6 and the node's u32
-> counter remain as written below. The rest of this document is unchanged.
+> strictly increasing, every gap 31 ≤ 32.
+>
+> **Finished the same evening, with SPINE-AUTH step 4.** The u32 counter
+> rides on that `SeqCounter` unchanged (`seq` is its low byte), and §3 is
+> built as written: `ReplayWindow` — 64-bit bitmap, per source, persisted as
+> a ceiling `h + M` with **M = 8** — replaced the de-dup ring, which is
+> deleted. **N stays 32.** Measured on a bridge reset
+> (`scripts/bench_spine_auth.py reboot-gap`): the bridge's counter resumed 25
+> above the last the base had accepted, the base accepted its first frames,
+> and the bridge re-accepted the base after **3 skipped frames** — the
+> bounded silence §3 promises, in the safe direction. One correction to §3
+> found by the host tests: a window that resumes at its ceiling must resume
+> with its bitmap *full*, not empty; empty accepts the replay of everything
+> in the 64 below the ceiling, which is the hole the ceiling exists to
+> close. Steps 4–6 of the bench procedure remain unrun; §5.3–4 (what a
+> rejection does beyond a console line) remain open. The rest of this
+> document is unchanged.
 
 A design, not a decision, and deliberately **unbuilt** for the authenticated
 counter it describes. Step 3 of

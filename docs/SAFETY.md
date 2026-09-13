@@ -324,6 +324,18 @@ Stated because a safety document that only lists strengths is marketing.
   this: the published state of the art either checks physics with hard maths or
   checks meaning with another language model, and the second is not a verifier.
 - **Uncovered tools.** See §2.1. No rule means no gate.
+- **The transport, partly.** Since 2026-09-13 every LoRa frame between the
+  Heltec stations carries an 8-byte HMAC and a persisted counter, so a
+  frame on the air cannot be forged or replayed without the deployment's
+  root secret ([SPINE-AUTH.md](SPINE-AUTH.md) step 4, bench-verified). MQTT
+  and P2P tool calls and results are signed and verified when
+  `[security] require_frame_auth` is on (step 5), which it is not by
+  default. What that leaves: the host reads the base station's console over
+  USB and trusts what the base verified — the host checks no LoRa tag
+  itself; the serial wire between a bridge station and the node behind it
+  is unauthenticated; and a station's flash holds the root, so a captured
+  station can sign as any station. Track 0 on the node is the boundary that
+  survives all three.
 
 - **Perception content in the planning path.** Taint tracking guards tool
   *arguments*. Text recovered from an image by `vision_analyze` still reaches the
