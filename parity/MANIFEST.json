@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-13T05:48:15+00:00",
+  "generated": "2026-09-13T06:08:45+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -892,12 +892,12 @@
       "bytes": 4778
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "61b16c5e6a2bc2548809e2519f4e69f625a0505b1d21182d5602638b3579c796",
-      "bytes": 13985
+      "sha256": "2098a0f5a7433eec7af4c927875f94bacb249e0ae2ba5735ff401920fc99050b",
+      "bytes": 16581
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
-      "sha256": "c739892eadce2eab54acd6745c31b9720cb02eb343bd3debd0578684b72dd8ee",
-      "bytes": 12284
+      "sha256": "c9bc2c85d8b33255e9f0d4be476b304d81990d3e2c1c9332fc6132c42ae80473",
+      "bytes": 23107
     },
     "firmware/heltec-lora-linktest/src/sx1262.rs": {
       "sha256": "31df084f4aa504d02f835cbefc6c3e6ee3a25a72fa600dc42ef5c9e277e6a234",
