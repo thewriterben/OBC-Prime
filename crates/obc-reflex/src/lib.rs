@@ -114,6 +114,22 @@ impl Snapshot {
 pub enum Condition {
     /// Compare a sensor/entity numeric value (e.g. `living_room.temp > 28`).
     Sensor { entity: String, op: Cmp, value: f64 },
+    /// Like `Sensor`, but the threshold is bound to a node **modulation slot**:
+    /// `min + level·(max − min)`, where `level ∈ [0, 1]` is whatever the node
+    /// last received on its `descend` command, or `default` if nothing. This
+    /// is the spinal tier's handle — the brain moves a threshold inside a
+    /// range the rule owns; it never names an actuator. The host evaluates
+    /// this at `default`: modulation is a node-side concept, and a rule that
+    /// runs on the host has no descending path to be modulated by. See
+    /// `firmware/obc-esp32-s3/src/reflex.rs` for the node half.
+    SensorSlot {
+        entity: String,
+        op: Cmp,
+        slot: u8,
+        min: f64,
+        max: f64,
+        default: f64,
+    },
     /// A GPIO/entity equals an integer value.
     GpioEq { entity: String, value: i64 },
     /// A fact's (optionally nested) string value equals `equals`. With `field`,
@@ -141,6 +157,19 @@ impl Condition {
             Condition::Sensor { entity, op, value } => {
                 snap.nums.get(entity).is_some_and(|v| op.test(*v, *value))
             }
+            Condition::SensorSlot {
+                entity,
+                op,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                let threshold = min + default.clamp(0.0, 1.0) * (max - min);
+                snap.nums
+                    .get(entity)
+                    .is_some_and(|v| op.test(*v, threshold))
+            }
             Condition::GpioEq { entity, value } => snap
                 .nums
                 .get(entity)
@@ -165,6 +194,7 @@ impl Condition {
     pub fn collect_entities(&self, set: &mut HashSet<String>) {
         match self {
             Condition::Sensor { entity, .. }
+            | Condition::SensorSlot { entity, .. }
             | Condition::GpioEq { entity, .. }
             | Condition::State { entity, .. } => {
                 set.insert(entity.clone());
@@ -173,7 +203,42 @@ impl Condition {
             Condition::Or { any } => any.iter().for_each(|c| c.collect_entities(set)),
         }
     }
+
+    /// Reject a slot binding no node can hold. The same check the node runs
+    /// when rules are pushed (`set_reflex_rules`), applied here at config load
+    /// so a bad rule fails the host at startup rather than the node at push.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            Condition::SensorSlot {
+                slot,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                if *slot as usize >= MAX_SLOTS {
+                    return Err(format!("slot {slot} out of range (max {})", MAX_SLOTS - 1));
+                }
+                if !(min.is_finite() && max.is_finite()) {
+                    return Err(format!("slot {slot}: min/max must be finite"));
+                }
+                if !(*default >= 0.0 && *default <= 1.0) {
+                    return Err(format!(
+                        "slot {slot}: default level {default} not in [0, 1]"
+                    ));
+                }
+                Ok(())
+            }
+            Condition::And { all } => all.iter().try_for_each(Condition::validate),
+            Condition::Or { any } => any.iter().try_for_each(Condition::validate),
+            Condition::Sensor { .. } | Condition::GpioEq { .. } | Condition::State { .. } => Ok(()),
+        }
+    }
 }
+
+/// Modulation slots a node holds — pinned to the firmware's `MAX_SLOTS` by
+/// `tests/firmware_node_gates.rs`.
+pub const MAX_SLOTS: usize = 16;
 
 /// The action a fired reflex performs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -188,6 +253,11 @@ pub enum Action {
     /// Publish a payload to a spine topic.
     Publish { topic: String, payload: Value },
     /// Hand control up to System 2 (wake the LLM agent) with a reason.
+    ///
+    /// The reason is the woken agent's *prompt*, so it is long on purpose — the
+    /// safing playbooks in [`safing`] run to a thousand characters of triage.
+    /// Log [`escalation_label`] of it, never the whole thing; see that function
+    /// for what a full-text log cost us.
     Escalate { reason: String },
     /// Apply a typed, safety-bounded movement (Movement subsystem). Still bounded
     /// by the Track 0 gate inside the `MovementController` before it actuates.
@@ -237,6 +307,13 @@ pub struct ReflexRule {
 }
 
 impl ReflexRule {
+    /// Reject a rule the node side would refuse (see [`Condition::validate`]).
+    pub fn validate(&self) -> Result<(), String> {
+        self.when
+            .validate()
+            .map_err(|e| format!("reflex rule {}: {e}", self.id))
+    }
+
     /// The minimum interval (ms) between fires implied by `debounce_ms` + `max_rate_hz`.
     fn min_interval_ms(&self) -> u64 {
         let rate_ms = self
@@ -464,6 +541,41 @@ pub async fn dispatch(actions: &[FiredReflex], sink: &dyn ActionSink) -> anyhow:
     Ok(())
 }
 
+/// The part of an escalation reason worth putting on a log line: its first
+/// sentence, or the whole string when there is no sentence break.
+///
+/// An escalation reason does double duty. It is the prompt System 2 is woken
+/// with (`build_objective` interpolates it verbatim), so the safing playbooks
+/// are written as full triage directives — [`safing::MESH_LOST_PLAYBOOK`] is
+/// about 1,060 characters. It was also the log message at four sites, which is
+/// why on the night of 2026-07-28 a phantom mesh node (see the module comment
+/// on `mesh_supervisor::snapshot`) wrote 2,367 lines carrying the same
+/// paragraph — 2.5 MB, 41 % of a 46-day log file, in about nine hours at
+/// twelve lines a minute. The reasoner still gets every word; the log gets the
+/// sentence a human reads.
+///
+/// The break is `". "` or a trailing `"."` — deliberately not any `'.'`, so
+/// `mesh_status` calls and `docs/playbooks/x.md` paths inside a sentence do not
+/// split it. A reason with no break is returned whole, which is the old
+/// behaviour and is right for the short ones (`"person detected (verified) on
+/// a camera"`). Capped at [`LABEL_MAX`] so a reason written as one long
+/// sentence still cannot flood a line.
+pub fn escalation_label(reason: &str) -> &str {
+    let end = reason
+        .find(". ")
+        .map(|i| i + 1)
+        .or_else(|| reason.strip_suffix('.').map(str::len).map(|n| n + 1))
+        .unwrap_or(reason.len());
+    let label = &reason[..end];
+    match label.char_indices().nth(LABEL_MAX) {
+        Some((cut, _)) => &label[..cut],
+        None => label,
+    }
+}
+
+/// Character cap on an [`escalation_label`].
+pub const LABEL_MAX: usize = 160;
+
 /// A safe default sink that only *logs* intended actions without executing them
 /// — useful for dry-run / supervised rollout before wiring the real spine sink.
 pub struct LoggingActionSink;
@@ -479,7 +591,10 @@ impl ActionSink for LoggingActionSink {
         Ok(())
     }
     async fn escalate(&self, reason: &str) -> anyhow::Result<()> {
-        tracing::info!(reason, "reflex: escalate to System 2 (dry-run)");
+        tracing::info!(
+            escalation = escalation_label(reason),
+            "reflex: escalate to System 2 (dry-run)"
+        );
         Ok(())
     }
     async fn move_actuator(&self, command: &MovementCommand) -> anyhow::Result<()> {
@@ -687,6 +802,55 @@ mod tests {
     use super::*;
     use obc_memory::world::WorldMemory;
     use serde_json::json;
+
+    #[test]
+    fn escalation_label_is_the_first_sentence() {
+        // The real playbook. Its first sentence is what a reader needs; the
+        // remaining ~1,000 characters are triage instructions for the LLM.
+        let full = safing::MESH_LOST_PLAYBOOK;
+        assert!(full.len() > 900, "playbook shrank: {}", full.len());
+        assert_eq!(
+            escalation_label(full),
+            "A mesh node is presumed lost (LoRa escalation)."
+        );
+    }
+
+    #[test]
+    fn a_reason_with_no_sentence_break_is_kept_whole() {
+        // The short reasons were never the problem and must not be truncated.
+        let short = "person detected (verified) on a camera";
+        assert_eq!(escalation_label(short), short);
+        assert_eq!(escalation_label(""), "");
+    }
+
+    #[test]
+    fn only_a_sentence_break_splits_it() {
+        // A bare '.' split would cut at `mesh_status` calls and at
+        // `docs/playbooks/x.md`, producing a label that reads as a fragment.
+        assert_eq!(
+            escalation_label("call `a.b` then stop. And more."),
+            "call `a.b` then stop."
+        );
+        assert_eq!(
+            escalation_label("see docs/playbooks/mesh-node-lost.md"),
+            "see docs/playbooks/mesh-node-lost.md"
+        );
+        // A trailing period is a break; a one-sentence reason keeps it.
+        assert_eq!(escalation_label("all quiet."), "all quiet.");
+    }
+
+    #[test]
+    fn one_long_sentence_still_cannot_flood_a_line() {
+        let long = "x".repeat(LABEL_MAX * 3);
+        assert_eq!(escalation_label(&long).chars().count(), LABEL_MAX);
+    }
+
+    #[test]
+    fn the_cap_cuts_on_a_character_not_a_byte() {
+        // Slicing mid-codepoint would panic, and a reason can carry an em dash.
+        let long = "é".repeat(LABEL_MAX * 2);
+        assert_eq!(escalation_label(&long).chars().count(), LABEL_MAX);
+    }
 
     #[test]
     fn fact_value_extraction() {
@@ -1043,6 +1207,62 @@ mod tests {
         let fired = e.evaluate(&snap(&[("sensor.temperature", 30.0)]), 1_000);
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].rule_id, "fan-on-hot");
+    }
+
+    fn slot_cond(slot: u8, default: f64) -> Condition {
+        Condition::SensorSlot {
+            entity: "sensor.temperature".to_string(),
+            op: Cmp::Gt,
+            slot,
+            min: 20.0,
+            max: 60.0,
+            default,
+        }
+    }
+
+    #[test]
+    fn a_slot_bound_threshold_evaluates_at_its_default_on_the_host() {
+        // 20 + 0.5·40 = 40 °C: the host has no descending path, so the rule
+        // holds its default — the same answer a freshly booted node gives.
+        let c = slot_cond(3, 0.5);
+        assert!(c.eval(&snap(&[("sensor.temperature", 45.0)])));
+        assert!(!c.eval(&snap(&[("sensor.temperature", 35.0)])));
+        assert!(!c.eval(&snap(&[])));
+        let mut ents = HashSet::new();
+        c.collect_entities(&mut ents);
+        assert!(ents.contains("sensor.temperature"));
+    }
+
+    #[test]
+    fn a_slot_the_node_cannot_hold_fails_validation_and_names_the_rule() {
+        let mut r = fan_rule();
+        r.when = slot_cond(16, 0.5);
+        let err = r.validate().unwrap_err();
+        assert!(
+            err.contains("fan-on-hot") && err.contains("slot 16"),
+            "{err}"
+        );
+        r.when = Condition::Or {
+            any: vec![slot_cond(1, 1.5)],
+        };
+        assert!(r.validate().unwrap_err().contains("not in [0, 1]"));
+        r.when = slot_cond(15, 1.0);
+        assert!(r.validate().is_ok());
+        assert!(
+            fan_rule().validate().is_ok(),
+            "a literal threshold has nothing to validate"
+        );
+    }
+
+    #[test]
+    fn slot_condition_serializes_to_the_node_wire_form() {
+        let json = serde_json::to_string(&slot_cond(3, 0.5)).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"sensor_slot","entity":"sensor.temperature","op":"gt","slot":3,"min":20.0,"max":60.0,"default":0.5}"#
+        );
+        let back: Condition = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, slot_cond(3, 0.5));
     }
 
     #[test]

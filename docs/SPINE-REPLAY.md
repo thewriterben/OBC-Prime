@@ -1,6 +1,22 @@
 # The replay counter
 
-A design, not a decision, and deliberately **unbuilt**. Step 3 of
+> **Built in half, 2026-09-13.** §2's ceiling scheme is running on the Heltec
+> stations' existing 8-bit `seq` — not yet on the u32 counter the tag will
+> carry — because the bench found the exact failure this document predicts,
+> one layer down: a base station reset (a serial port opened with DTR was
+> enough) restarted its `seq` at 0, and the bridge's 32-entry de-dup ring
+> dropped its next commands as duplicates. Four recorded runs "sent" frames
+> that never left the ring. `SeqCounter` in upstream's
+> `firmware/heltec-lora-linktest/src/spine.rs` persists the ceiling in NVS
+> (`spine/seq_ceil`), reserve 32 tied to the ring size by a test, fail-closed
+> when NVS is unusable; six host tests pin §2's properties including a
+> reboot never landing in a neighbour's ring across the 256 wrap. §6 steps
+> 1–3 were run on the bench with DTR resets (unclean): 7 boots, counts
+> strictly increasing, every gap 31 ≤ 32. Steps 4–6 and the node's u32
+> counter remain as written below. The rest of this document is unchanged.
+
+A design, not a decision, and deliberately **unbuilt** for the authenticated
+counter it describes. Step 3 of
 [`SPINE-AUTH.md`](SPINE-AUTH.md) — the counter that makes the tag from step 2
 mean something over time — is the first item in that plan whose central claim
 cannot be checked without a board. "The counter never goes backwards across a

@@ -351,6 +351,40 @@ impl NodeCommand {
         }
     }
 
+    /// A descending modulation for `to`: `(slot, level)` pairs, levels in
+    /// `[0, 1]`, only the slots being changed. The node applies them
+    /// all-or-nothing to its reflex slots (`firmware/obc-esp32-s3/src/reflex.rs`);
+    /// with `clear`, it first returns every slot to its rule's default. Refuses
+    /// here what the node would refuse, so a bad message never spends a frame.
+    pub fn descend(
+        to: impl Into<String>,
+        id: impl Into<String>,
+        pairs: &[(u8, f64)],
+        clear: bool,
+    ) -> anyhow::Result<Self> {
+        for (slot, level) in pairs {
+            anyhow::ensure!(
+                (*slot as usize) < obc_reflex::MAX_SLOTS,
+                "descend: slot {slot} out of range (max {})",
+                obc_reflex::MAX_SLOTS - 1
+            );
+            anyhow::ensure!(
+                *level >= 0.0 && *level <= 1.0,
+                "descend: slot {slot}: level {level} not in [0, 1]"
+            );
+        }
+        let m: Vec<Value> = pairs
+            .iter()
+            .map(|(s, l)| json!([s, (l * 1000.0).round() / 1000.0]))
+            .collect();
+        let args = if clear {
+            json!({ "clear": true, "m": m })
+        } else {
+            json!({ "m": m })
+        };
+        Ok(Self::new(to, id, "descend", args))
+    }
+
     /// Encode to the single newline-free line the gateway will carry over LoRa and
     /// the node will feed to its request dispatcher.
     pub fn encode(&self) -> String {
@@ -591,6 +625,65 @@ mod tests {
     use super::*;
 
     const REFLEX_LINE: &str = "SPINE ◄ src=28 seq=30 rssi=-42 dBm : {\"type\":\"reflex\",\"node_id\":\"obc-esp32-s3-001\",\"rule\":\"safe-link-offline\"}";
+
+    /// A `cmd_result` heard over the air lands as the fact `mesh_command`'s
+    /// reply-wait polls, with the command's id on it. The line is verbatim from
+    /// the base console on 2026-09-12 (`results/bench_descend_lora-20260912-233135.json`,
+    /// step b2) — ANSI colour and all, since that is what the serial port hands
+    /// the host.
+    #[test]
+    fn a_real_reply_line_becomes_the_fact_the_tool_waits_for() {
+        let line = "\u{1b}[0;32mI (147833) heltec_lora_linktest: SPINE ◄ src=40 seq=51 rssi=-50 dBm snr=12 dB : \
+                    {\"id\":\"b2\",\"node_id\":\"obc-esp32-s3-001\",\"ok\":true,\"result\":\"{\\\"active\\\":[[3,0.0]],\\\"applied\\\":1}\",\"type\":\"cmd_result\"}\u{1b}[0m";
+        let world = WorldMemory::open_in_memory().unwrap();
+        let ing = ingest_gateway_line(line, &world, 1_000).expect("a ◄ line with JSON ingests");
+        assert_eq!(ing.node_id, "obc-esp32-s3-001");
+        assert_eq!(ing.msg_type, "cmd_result");
+        let fact = world
+            .current("mesh.obc-esp32-s3-001.cmd_result")
+            .unwrap()
+            .expect("the reply fact exists");
+        assert_eq!(fact.value["id"], json!("b2"));
+        assert_eq!(fact.value["ok"], json!(true));
+        assert_eq!(fact.value["_mesh"]["rssi_dbm"], json!(-50));
+        // The node's `result` is a JSON document inside a string; the tool
+        // hands it on as-is, and a consumer parses it once more.
+        let inner: Value = serde_json::from_str(fact.value["result"].as_str().unwrap()).unwrap();
+        assert_eq!(inner["active"], json!([[3, 0.0]]));
+    }
+
+    #[test]
+    fn a_descend_encodes_sparse_pairs_the_node_parses() {
+        let c =
+            NodeCommand::descend("obc-esp32-s3-001", "a7", &[(3, 0.5), (7, 1.0)], false).unwrap();
+        assert_eq!(c.cmd, "descend");
+        assert_eq!(c.args, json!({ "m": [[3, 0.5], [7, 1.0]] }));
+        assert!(c.fits_one_frame());
+        // The node reads `m` back as `Vec<(u8, f64)>`.
+        let back: Vec<(u8, f64)> = serde_json::from_value(c.args["m"].clone()).unwrap();
+        assert_eq!(back, vec![(3, 0.5), (7, 1.0)]);
+        let cleared = NodeCommand::descend("n", "a7", &[], true).unwrap();
+        assert_eq!(cleared.args, json!({ "clear": true, "m": [] }));
+    }
+
+    #[test]
+    fn a_descend_the_node_would_refuse_is_refused_before_it_spends_a_frame() {
+        let err = NodeCommand::descend("n", "a7", &[(16, 0.5)], false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("slot 16"), "{err}");
+        let err = NodeCommand::descend("n", "a7", &[(0, 1.01)], false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not in [0, 1]"), "{err}");
+        assert!(NodeCommand::descend("n", "a7", &[(0, f64::NAN)], false).is_err());
+    }
+
+    #[test]
+    fn descend_levels_are_rounded_so_a_frame_never_carries_float_noise() {
+        let c = NodeCommand::descend("n", "a7", &[(1, 1.0 / 3.0)], false).unwrap();
+        assert_eq!(c.args["m"][0][1], json!(0.333));
+    }
 
     #[test]
     fn parses_a_received_frame() {

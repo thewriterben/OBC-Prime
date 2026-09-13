@@ -22,9 +22,9 @@ pub mod expiry;
 pub mod heartbeat;
 pub mod journal;
 pub mod liveness;
+pub mod mushroom;
 pub mod notes;
 pub mod trajectory;
-pub mod vector;
 pub mod world;
 
 pub use heartbeat::HeartbeatStore;
@@ -727,5 +727,25 @@ mod search_tests {
         let hits = store.search_messages("spectrometer", 5).unwrap();
         assert_eq!(hits.len(), 1, "rebuilt from existing rows");
         assert_eq!(hits[0].session_title, "old");
+    }
+}
+
+#[cfg(test)]
+mod session_rows_tests {
+    use super::*;
+
+    #[test]
+    fn a_message_needs_its_session_row_and_create_with_id_is_idempotent() {
+        let store = MemoryStore::open_in_memory().unwrap();
+        // foreign_keys is on: no orphan messages.
+        assert!(store
+            .append_message("scheduled-brand-new", ChatRole::User, "hi")
+            .is_err());
+        store.create_session_with_id("scheduled-brand-new").unwrap();
+        store.create_session_with_id("scheduled-brand-new").unwrap();
+        store
+            .append_message("scheduled-brand-new", ChatRole::User, "hi")
+            .unwrap();
+        assert_eq!(store.load_messages("scheduled-brand-new").unwrap().len(), 1);
     }
 }

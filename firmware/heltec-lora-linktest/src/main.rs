@@ -32,9 +32,23 @@ use esp_idf_svc::hal::spi::SpiDeviceDriver;
 use esp_idf_svc::hal::uart::config::Config as UartConfig;
 use esp_idf_svc::hal::uart::UartDriver;
 use esp_idf_svc::hal::units::Hertz;
-use log::{info, warn};
+use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs, NvsDefault};
+use log::{error, info, warn};
 
-use spine::{Framed, LineFramer, SeenSet, SpineFrame};
+use spine::{CeilingStore, Framed, LineFramer, SeenSet, SeqCounter, SpineFrame, StoreError};
+
+/// The sequence ceiling in NVS (`spine/seq_ceil`, u32). See `SeqCounter` in
+/// `spine.rs` for why a ceiling and not a position.
+struct NvsCeiling(EspNvs<NvsDefault>);
+
+impl CeilingStore for NvsCeiling {
+    fn read(&mut self) -> Result<u32, StoreError> {
+        self.0.get_u32("seq_ceil").map(|v| v.unwrap_or(0)).map_err(|_| StoreError)
+    }
+    fn write(&mut self, ceiling: u32) -> Result<(), StoreError> {
+        self.0.set_u32("seq_ceil", ceiling).map_err(|_| StoreError)
+    }
+}
 use sx1262::Sx1262;
 
 const FREQ_HZ: u64 = 915_000_000;
@@ -42,6 +56,10 @@ const PIN_RST: i32 = 12;
 const PIN_BUSY: i32 = 13;
 const PIN_DIO1: i32 = 14;
 const KEEPALIVE_MS: u64 = 5_000;
+/// After originating a command from the console, the next keepalive waits at
+/// least this long — long enough for a node's reply to come back (see the
+/// note at the console-drain step).
+const KEEPALIVE_HOLDOFF_AFTER_CMD_MS: u64 = 3_000;
 /// Hop budget for flood-relay. A node that hears a *new* frame rebroadcasts it with
 /// ttl-1 until it reaches 0; the `SeenSet` de-dup stops it looping. 2 lets a frame
 /// reach nodes two hops out. (With two radios you'll see the rebroadcast and the
@@ -61,6 +79,9 @@ fn main() -> anyhow::Result<()> {
 
     info!("──────────────────────────────────────────────");
     info!("Heltec V3 OBC spine gateway — LoRa 915 MHz ⇄ UART1 (compute uplink)");
+    if cfg!(feature = "no-relay") {
+        info!("flood relay DISABLED (no-relay build): this station does not re-broadcast");
+    }
 
     // UART1 to the compute node: TX=GPIO4, RX=GPIO2.
     let uart = UartDriver::new(
@@ -148,7 +169,6 @@ fn main() -> anyhow::Result<()> {
         .ok();
 
     let mut seen = SeenSet::new();
-    let mut seq: u8 = 0;
     let mut buf: Vec<u8> = Vec::new();
     let mut last_keepalive = now_ms();
     let uart_read_timeout = TickType::new_millis(20).ticks();
@@ -156,13 +176,52 @@ fn main() -> anyhow::Result<()> {
     // discarded whole rather than transmitted as a prefix.
     let mut uart_framer = LineFramer::new();
 
-    // TX one spine frame originated by this node; advances + records seq.
+    // The frame counter, resumed from NVS so a reboot cannot reissue a seq
+    // the neighbours' de-dup rings still hold. If NVS is unusable this station
+    // receives and forwards but never transmits — fail closed, loudly, rather
+    // than run on a counter that repeats.
+    let mut ceiling = match EspDefaultNvsPartition::take()
+        .and_then(|p| EspNvs::new(p, "spine", true))
+    {
+        Ok(nvs) => Some(NvsCeiling(nvs)),
+        Err(e) => {
+            error!("NVS unavailable ({e}): seq counter has no backing — TRANSMIT DISABLED");
+            None
+        }
+    };
+    let mut counter = match ceiling.as_mut().map(SeqCounter::boot) {
+        Some(Ok(c)) => {
+            info!("seq counter resumed at {} (ceiling persisted)", c.count());
+            Some(c)
+        }
+        Some(Err(_)) => {
+            error!("seq ceiling could not be read/written — TRANSMIT DISABLED");
+            None
+        }
+        None => None,
+    };
+    // The last seq issued, for the log lines and the keepalive body.
+    let mut seq: u8 = counter.as_ref().map(|c| c.count() as u8).unwrap_or(0);
+
+    // TX one spine frame originated by this node; takes the next seq from the
+    // counter (fail closed if it has none) and records it as seen.
     macro_rules! send_spine {
         ($radio:expr, $seen:expr, $seq:expr, $buf:expr, $payload:expr) => {{
-            $seq = $seq.wrapping_add(1);
-            $seen.seen_or_insert(node, $seq);
-            SpineFrame { src: node, seq: $seq, ttl: SPINE_TTL, payload: $payload }.encode(&mut $buf);
-            $radio.transmit(&$buf)
+            match (counter.as_mut(), ceiling.as_mut()) {
+                (Some(c), Some(store)) => match c.next(store) {
+                    Ok(s) => {
+                        $seq = s;
+                        $seen.seen_or_insert(node, $seq);
+                        SpineFrame { src: node, seq: $seq, ttl: SPINE_TTL, payload: $payload }
+                            .encode(&mut $buf);
+                        $radio.transmit(&$buf)
+                    }
+                    Err(_) => Err(anyhow::anyhow!(
+                        "seq counter lost its NVS backing — transmit refused (fail closed)"
+                    )),
+                },
+                _ => Err(anyhow::anyhow!("no seq counter — transmit refused (fail closed)")),
+            }
         }};
     }
 
@@ -208,10 +267,21 @@ fn main() -> anyhow::Result<()> {
                 Ok(()) => info!("SPINE ► (console) seq={seq} ({} B) {cmd}", buf.len()),
                 Err(e) => info!("SPINE TX error: {e:#}"),
             }
+            // A station that has just asked a question stays quiet for the
+            // answer. The node replies 1–2 s after a command; a keepalive
+            // transmitted in that window makes this radio deaf for exactly
+            // the frame it is waiting for. Measured 2026-09-12: with
+            // continuous RX in place, the remaining reply losses each lined
+            // up with a base keepalive 1.1–1.9 s after the command.
+            last_keepalive = now_ms().saturating_sub(KEEPALIVE_MS) + KEEPALIVE_HOLDOFF_AFTER_CMD_MS;
         }
 
         // ── 2. Keepalive so the link is visible without a compute node wired. ──
-        if now_ms() - last_keepalive >= KEEPALIVE_MS {
+        // Saturating: the hold-off after a console command can put
+        // `last_keepalive` a little into the future in the first seconds of
+        // a boot, and a plain subtraction there wrapped to a huge value and
+        // fired a keepalive 120 ms after the command (bench, 2026-09-13).
+        if now_ms().saturating_sub(last_keepalive) >= KEEPALIVE_MS {
             last_keepalive = now_ms();
             let hb = format!("{{\"node_id\":\"gw-{node:02X}\",\"type\":\"gw_keepalive\",\"seq\":{}}}", seq.wrapping_add(1));
             match send_spine!(radio, seen, seq, buf, hb.as_bytes()) {
@@ -247,7 +317,7 @@ fn main() -> anyhow::Result<()> {
                         let _ = uart.write(b"\n");
                         // Flood-relay onward if hops remain. Keep the ORIGINAL src/seq
                         // so every node de-dups it identically — that's what stops loops.
-                        if f.ttl > 0 {
+                        if f.ttl > 0 && !cfg!(feature = "no-relay") {
                             SpineFrame { src: f.src, seq: f.seq, ttl: f.ttl - 1, payload: f.payload }
                                 .encode(&mut buf);
                             match radio.transmit(&buf) {

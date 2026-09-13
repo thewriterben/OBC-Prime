@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 230 artifacts).
+        also updates the generator app's mirrors (12 of the 232 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -193,8 +193,15 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-memory/src/journal.rs",
      "crates/obc-memory/src/journal.rs",
      None),
-    ("crates/obc-memory/src/vector.rs",
-     "crates/obc-memory/src/vector.rs",
+    # `vector.rs` (VectorStore, EmbeddingClient — zero callers since the tool
+    # impls were struck on 2026-07-30) was deleted upstream on 2026-09-12 and
+    # `mushroom.rs` arrived in the same change: the sparse-expansion memory
+    # over episode embeddings (FlyHash tag, fly Bloom-filter novelty, FlyModel
+    # compartments) that `trajectory.rs` now declares. `lib.rs` declares
+    # `mod mushroom;`, so vendoring that without this entry leaves a tree that
+    # cannot compile — the same reason `notes.rs` is listed.
+    ("crates/obc-memory/src/mushroom.rs",
+     "crates/obc-memory/src/mushroom.rs",
      None),
 
     # ── The planner ──────────────────────────────────────────────────────────
@@ -539,9 +546,12 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-movement/src/lib.rs",
      "crates/obc-movement/src/lib.rs",
      None),
-    ("crates/obc-movement/src/feedback.rs",
-     "crates/obc-movement/src/feedback.rs",
-     None),
+    # `feedback.rs` (PController, ClosedLoopServo — parked, never wired) was
+    # deleted upstream on 2026-09-13: the spinal tier put the closed loop on
+    # the node (`Condition::SensorSlot` + the `descend` command in
+    # `firmware/obc-esp32-s3/src/reflex.rs`), and a host-side controller
+    # chasing a position from world memory is the layer that change routed
+    # around.
 
     # ── Knowing where you are and how to get somewhere ───────────────────────
     # Vendored 2026-08-08, the fourteenth crate and the largest: Monte Carlo
@@ -1029,6 +1039,27 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-tools/src/builtin/browser.rs",
      "crates/obc-tools/src/builtin/browser.rs",
      None),
+    # Added upstream 2026-09-12. `builtin/mod.rs` declares `mod browser_cdp;`, so
+    # this is not optional. It is a protocol client rather than a Tool — one
+    # WebSocket command at a time against a tab's debugger URL — and carries no
+    # risk_class of its own for that reason.
+    #
+    # What it changes is `browser.rs`, which does hold the tools. Until this
+    # landed, `browser_click` / `browser_type` / `browser_scroll` logged the
+    # request and reported success without touching a page: upstream's own words
+    # are "a model that 'clicked' got told it had". They now really click and
+    # really type. **Neither file overrides `risk_class`**, so all of them still
+    # take `RiskClass::default()` — the same declaration they had when they were
+    # no-ops.
+    #
+    # `declarations` passes them, and defensibly: driving a browser actuates
+    # nothing physical, which is what that gate is about. Recorded here anyway
+    # because the capability moved and the declaration did not, and a real click
+    # on a real page can be as irreversible as a servo — a purchase, a send, a
+    # delete. Upstream's call to make; this notes that it is open.
+    ("crates/obc-tools/src/builtin/browser_cdp.rs",
+     "crates/obc-tools/src/builtin/browser_cdp.rs",
+     None),
     ("crates/obc-tools/src/builtin/comms.rs",
      "crates/obc-tools/src/builtin/comms.rs",
      None),
@@ -1076,6 +1107,47 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-tools/src/builtin/power.rs",
      "crates/obc-tools/src/builtin/power.rs",
+     None),
+    # Added upstream 2026-09-11 with obc-scheduler's `nl` module: the agent
+    # setting timers for itself. Vendored for the reason every other builtin is
+    # — `builtin/mod.rs` declares `mod schedule;` — and for one specific to it.
+    #
+    # This is the first vendored tool whose whole point is to act when nobody is
+    # watching: it stores a prompt and fires it later, optionally running another
+    # tool first, named by the model in `tool` with arbitrary `tool_args`.
+    #
+    # It declares `reversible: false, blast: Low, physical: false`, which reads
+    # alarming next to that — a tool that can arm `gpio_write` for 3am while
+    # calling itself non-physical. Traced upstream before vendoring, because the
+    # gate that acts on the declaration (`track0_authorize`) is in obc-agent,
+    # which this repository deliberately does not vendor, so nothing here could
+    # answer it:
+    #
+    #   scheduler fires -> scheduled::run_scheduled
+    #     -> AgentHandle::execute_tool_direct
+    #       -> Agent::execute_tool_direct -> execute_tool -> execute_tool_inner
+    #         -> track0_authorize(safety, auditor, name, tool.risk_class(), args)
+    #
+    # `execute_tool_inner` is upstream's own "execution chokepoint", and "direct"
+    # means it skips the LLM turn, not the gate. The fired tool is authorized at
+    # *fire* time against *its own* risk class, with the audit entry written
+    # before it runs. So the declaration is right: it describes arming a timer,
+    # and arming is all this tool does. A scheduled `gpio_write` is gated as
+    # `gpio_write`.
+    #
+    # Two things that trace turned up, neither a blocker, both upstream's:
+    #   * **Nothing tests it.** The property holds by construction; no test
+    #     asserts that a scheduled physical action meets the gate. A refactor
+    #     giving the scheduler its own execution path would remove Track 0 from
+    #     every deferred action silently.
+    #   * **`taint` is None on this path.** Justified upstream as "a standalone
+    #     call has no prior in-run external content to be tainted by", which was
+    #     written for the gateway's POST endpoint. A scheduled call's args were
+    #     authored in an earlier turn that may well have held external content,
+    #     so the taint pool does not cross the scheduling boundary. The safety
+    #     gate and the audit still run; it is the scanning layer that does not.
+    ("crates/obc-tools/src/builtin/schedule.rs",
+     "crates/obc-tools/src/builtin/schedule.rs",
      None),
     # Added upstream in #142 (streaming); `builtin/mod.rs` declares `mod
     # search;`, so vendoring that without this entry leaves a tree that cannot
@@ -1208,6 +1280,17 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-scheduler/src/lib.rs",
      "crates/obc-scheduler/src/lib.rs",
+     None),
+    # Added upstream 2026-09-11. `lib.rs` declares `mod nl;`, so this is not a
+    # choice: vendoring the crate without it leaves a tree that cannot compile,
+    # and the vendored crates here are built and tested rather than only hashed.
+    #
+    # What it does is turn "every weekday at 8" into a schedule with no second
+    # model call — deterministically, so the same phrase always yields the same
+    # timer and the result can be tested. That property is why it is a module
+    # and not a prompt, and it is worth keeping a copy that CI runs.
+    ("crates/obc-scheduler/src/nl.rs",
+     "crates/obc-scheduler/src/nl.rs",
      None),
 
     # ── The perception & reach gate ──────────────────────────────────────────
