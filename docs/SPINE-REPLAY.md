@@ -235,10 +235,19 @@ counter — and the receiver side, which looked like the expensive half, is not.
    home and would make replay rejections visible to reflexes and to `status`,
    which has some appeal: "this source is sending counters I have already seen"
    is exactly the kind of thing a person should be told about.
+   *Decided 2026-09-14* (DECISIONS.md): world memory, `spine.auth.<station>`
+   `{ctr, accepted, rejected, last_rejected}`, M = 1 — as built on 09-13.
 4. **What a rejection does beyond dropping the frame.** Silently discarding is
    correct for the wire. Whether it also raises a fact, escalates, or feeds
    `security/trust.rs` — which scores node behaviour and is already wired — is
    open, and 3 and 4 should probably be answered together.
+   *Decided 2026-09-14* (DECISIONS.md), on 4827 frames with zero rejections:
+   `BadTag` and `Replayed` open `spine.auth.<station>.alarm` (one per burst,
+   self-clearing after ten minutes) and `spine.auth.alarm_count`, which the
+   standard safing rule `safe-spine-forgery` escalates to System 2; `TooOld`
+   (the bounded post-reset gap) and `Unsigned` (old firmware) stay on the auth
+   fact and alarm nothing; `trust.rs` is not fed — the station is not the
+   actor, and a forger spoofs the victim's id.
 
 ---
 

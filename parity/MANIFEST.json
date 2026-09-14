@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-14T16:17:11+00:00",
+  "generated": "2026-09-14T16:26:55+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -388,8 +388,8 @@
       "bytes": 82574
     },
     "crates/obc-reflex/src/safing.rs": {
-      "sha256": "0a564703df858349c2eb4032a7882b5177712e86207edc58eb6ddf96046841fb",
-      "bytes": 39029
+      "sha256": "e1bb8c8bbd89bc01806ec5d6b7cafd611a1a1f2082e7acb2f1d58f3f9173173c",
+      "bytes": 41949
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -464,16 +464,16 @@
       "bytes": 5014
     },
     "crates/obc-spine/src/lora_gateway.rs": {
-      "sha256": "755bd8c00e9f75ce9b233390b76c74e33f427575122bcfc47e38800803974b22",
-      "bytes": 85941
+      "sha256": "9ab3b2fa13fd4f7e84dc73d4669e21df4d5a234bc9f59a665cff5d65da87927c",
+      "bytes": 99328
     },
     "crates/obc-spine/src/lora_mesh.rs": {
       "sha256": "3eedb40a620bf3fd9e72aea81e6d72dc0d99b37b9e42455b6b9822f3d9f91f01",
       "bytes": 29181
     },
     "crates/obc-spine/src/mesh_supervisor.rs": {
-      "sha256": "85f20447ce0c7f0a6ef976c909779aed56d173461c0faaa973f9a085dcaac6d8",
-      "bytes": 89596
+      "sha256": "15d6db59e17674699dc8faafaa51ccc0e716036e5a1f59b5d4527084f6e68a28",
+      "bytes": 89819
     },
     "crates/obc-spine/src/p2p.rs": {
       "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
