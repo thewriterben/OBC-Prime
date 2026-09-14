@@ -159,9 +159,13 @@ for the life of the process:
   a node gets the same frame four times; the gateway does not retry
   anything it was asked to send while down. It drops the command, fails the
   send, and the caller decides.
-- **The startup refusal.** `[descending]` enabled with no gateway at start
-  is still a hard error. A misconfiguration at boot and a lost port at
-  runtime are different things and get different answers.
+- **The startup refusal** — *narrowed on 2026-09-14* (DECISIONS.md). As
+  written here, `[descending]` enabled with no gateway at start was a hard
+  error. It bit three times in a day, twice for a busy port and once for an
+  unplugged bench, so a port that is *absent* at boot is now an outage from
+  t = 0 (the supervisor starts in `lost`), and the refusal is kept only for
+  what is actually misconfiguration: no `[lora_gateway]`, no `hardware`
+  feature, or no world memory to supervise with.
 - **`mesh_command`'s reply-awaited retry.** Unchanged; it reads replies from
   world memory and will simply see none.
 

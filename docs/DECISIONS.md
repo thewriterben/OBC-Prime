@@ -5,6 +5,87 @@ New entries go at the top.
 
 ---
 
+## 2026-09-14 — A replay or a bad tag is an incident, not a log line; a post-reset gap is neither
+
+Closes SPINE-REPLAY.md §5, items 3 and 4, which the 2026-09-13 build left
+open: where the host keeps its per-source anti-replay state, and what a
+rejected frame does beyond being dropped.
+
+**What the evidence says.** Since host-side verification shipped
+(2026-09-13 12:46) the brain has judged **4827 frames from the bridge and
+rejected none** — through a base power-cycle, forty station resets and a
+poisoned NVS. The only rejections ever recorded were the ones the bench
+manufactured: four `BadTag` from a wrong-root build, three `TooOld` at a
+station after a reboot gap. The SX1262 drops CRC failures in hardware, so
+a bad tag that reaches the host is never corruption in flight: it is a
+wrong root or a forgery. On this mesh a rejection is signal.
+
+**Decision.**
+
+*Item 3 — state lives in world memory*, as built: `spine.auth.<station>`
+holds `{ctr, accepted, rejected, last_rejected}` with M = 1, written on
+every frame. Recorded here so it stops being an open item.
+
+*Item 4 — three kinds of rejection, two responses.* `BadTag` and
+`Replayed` raise `spine.auth.<station>.alarm` — a fact derived from the
+auth fact, one per burst, carrying the reason, the counter and the RSSI —
+and the standard safing rule set escalates it to System 2 the way
+`mesh.escalated_count` drives `safe-mesh-node-lost`. The alarm clears
+itself after ten minutes without a further rejection from that station,
+so a burst is one incident with a start and an end. `TooOld` and
+`Unsigned` do **not** alarm: `TooOld` is the bounded post-reset gap §3
+chose, in the safe direction, and is expected after every station reboot;
+`Unsigned` is a station on pre-step-4 firmware — a provisioning error the
+auth fact already shows, not an attack.
+
+**Options not taken.** *Feed `security/trust.rs`* — it scores actuating
+nodes by command latency and success and gates their physical actions; a
+station is not the actor, and a forger spoofs the victim's `src`, so the
+penalty would land on the one being impersonated. *Alarm on every
+rejection* — a station reboot would then page a person for the gap the
+design deliberately accepts. *Alarm on a rate rather than the first
+`BadTag`* — the first one is already never legitimate here; a threshold
+would only delay the page. *Silence (leave it on the fact)* — "this
+source is sending counters I have already seen" is exactly what §5.3 said
+a person should be told about.
+
+**Consequences.** One more entity per station in world memory and one
+more standard safing rule; a wrong-root station plugged into the bench
+will now wake System 2 once, which is the point. What a rejection does on
+the *station* (its own console line) is unchanged — the station has no
+one to tell.
+
+## 2026-09-14 — A port that is not there at boot is an outage, not a misconfiguration
+
+Reverses one line of the 2026-09-13 SPINE-LOSS entry below, which kept
+the startup refusal: *"a misconfiguration at boot and a port that
+vanishes at runtime are different things."* They are, and a port that is
+absent at boot is the second kind. It bit three times in one day: twice
+because a bench script held COM3 when the task restarted, and at 09:10
+the next morning because the bench was simply unplugged when the machine
+came back — the brain exited, and stayed down until someone looked.
+
+**Decision.** The first open is still tried synchronously, so the common
+case starts verified from the first frame. When it fails and world
+memory is on, the gateway supervisor starts *in* the outage: `spine.gateway`
+is `lost` with the open error from t = 0, the nodes read unobservable, the
+command sink refuses with the same words, and the port is taken the
+moment it appears, on the same 1 → 30 s backoff. `[descending]` refuses
+to start only when nothing could ever produce a sink: no `[lora_gateway]`,
+no `hardware` feature, or no world memory (a link nobody can record cannot
+be supervised, and that body keeps the old rule).
+
+**Options not taken.** *Keep the refusal and document the restart* — that
+is the state that failed three times. *Drop the `[descending]` refusal
+entirely* — a body with the policy on and no gateway configured is still
+misconfigured, and should still say so at boot.
+
+**Consequences.** A brain started with the bench unplugged now comes up,
+records why it cannot hear the mesh, and hears it when the cable is in.
+`status` shows the link line from the first second. The distinction the
+09-13 entry drew survives in narrower form: configuration errors are
+fatal, absences are outages.
+
 ## 2026-09-13 — Rules survive a node's reboot; limits do not, and the host puts them back
 
 A node's host-pushed reflex rules and its Track 0 limits both lived only in
