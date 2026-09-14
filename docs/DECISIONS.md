@@ -5,6 +5,290 @@ New entries go at the top.
 
 ---
 
+## 2026-09-14 — A replay or a bad tag is an incident, not a log line; a post-reset gap is neither
+
+Closes SPINE-REPLAY.md §5, items 3 and 4, which the 2026-09-13 build left
+open: where the host keeps its per-source anti-replay state, and what a
+rejected frame does beyond being dropped.
+
+**What the evidence says.** Since host-side verification shipped
+(2026-09-13 12:46) the brain has judged **4827 frames from the bridge and
+rejected none** — through a base power-cycle, forty station resets and a
+poisoned NVS. The only rejections ever recorded were the ones the bench
+manufactured: four `BadTag` from a wrong-root build, three `TooOld` at a
+station after a reboot gap. The SX1262 drops CRC failures in hardware, so
+a bad tag that reaches the host is never corruption in flight: it is a
+wrong root or a forgery. On this mesh a rejection is signal.
+
+**Decision.**
+
+*Item 3 — state lives in world memory*, as built: `spine.auth.<station>`
+holds `{ctr, accepted, rejected, last_rejected}` with M = 1, written on
+every frame. Recorded here so it stops being an open item.
+
+*Item 4 — three kinds of rejection, two responses.* `BadTag` and
+`Replayed` raise `spine.auth.<station>.alarm` — a fact derived from the
+auth fact, one per burst, carrying the reason, the counter and the RSSI —
+and the standard safing rule set escalates it to System 2 the way
+`mesh.escalated_count` drives `safe-mesh-node-lost`. The alarm clears
+itself after ten minutes without a further rejection from that station,
+so a burst is one incident with a start and an end. `TooOld` and
+`Unsigned` do **not** alarm: `TooOld` is the bounded post-reset gap §3
+chose, in the safe direction, and is expected after every station reboot;
+`Unsigned` is a station on pre-step-4 firmware — a provisioning error the
+auth fact already shows, not an attack.
+
+**Options not taken.** *Feed `security/trust.rs`* — it scores actuating
+nodes by command latency and success and gates their physical actions; a
+station is not the actor, and a forger spoofs the victim's `src`, so the
+penalty would land on the one being impersonated. *Alarm on every
+rejection* — a station reboot would then page a person for the gap the
+design deliberately accepts. *Alarm on a rate rather than the first
+`BadTag`* — the first one is already never legitimate here; a threshold
+would only delay the page. *Silence (leave it on the fact)* — "this
+source is sending counters I have already seen" is exactly what §5.3 said
+a person should be told about.
+
+**Consequences.** One more entity per station in world memory and one
+more standard safing rule; a wrong-root station plugged into the bench
+will now wake System 2 once, which is the point. What a rejection does on
+the *station* (its own console line) is unchanged — the station has no
+one to tell.
+
+## 2026-09-14 — A port that is not there at boot is an outage, not a misconfiguration
+
+Reverses one line of the 2026-09-13 SPINE-LOSS entry below, which kept
+the startup refusal: *"a misconfiguration at boot and a port that
+vanishes at runtime are different things."* They are, and a port that is
+absent at boot is the second kind. It bit three times in one day: twice
+because a bench script held COM3 when the task restarted, and at 09:10
+the next morning because the bench was simply unplugged when the machine
+came back — the brain exited, and stayed down until someone looked.
+
+**Decision.** The first open is still tried synchronously, so the common
+case starts verified from the first frame. When it fails and world
+memory is on, the gateway supervisor starts *in* the outage: `spine.gateway`
+is `lost` with the open error from t = 0, the nodes read unobservable, the
+command sink refuses with the same words, and the port is taken the
+moment it appears, on the same 1 → 30 s backoff. `[descending]` refuses
+to start only when nothing could ever produce a sink: no `[lora_gateway]`,
+no `hardware` feature, or no world memory (a link nobody can record cannot
+be supervised, and that body keeps the old rule).
+
+**Options not taken.** *Keep the refusal and document the restart* — that
+is the state that failed three times. *Drop the `[descending]` refusal
+entirely* — a body with the policy on and no gateway configured is still
+misconfigured, and should still say so at boot.
+
+**Consequences.** A brain started with the bench unplugged now comes up,
+records why it cannot hear the mesh, and hears it when the cable is in.
+`status` shows the link line from the first second. The distinction the
+09-13 entry drew survives in narrower form: configuration errors are
+fatal, absences are outages.
+
+## 2026-09-13 — Rules survive a node's reboot; limits do not, and the host puts them back
+
+A node's host-pushed reflex rules and its Track 0 limits both lived only in
+RAM. On 2026-08-22 the boot posture became deny-all so a reset could never
+*widen* policy, and the node was made to announce its boot so a host could
+notice. Nobody built the noticing. On 2026-09-13 the brain's first live
+posture (`descend`, novelty 0.372 → slot 0 = 0.15) arrived at a node whose
+die-temperature rules had died in a power cycle hours earlier: 154 reflex
+reports that afternoon, every one `safe-link-offline`, the LED rule gone
+and nothing saying so. The SPINE-LOSS entry below deferred the question to
+the WILD port; this decides it.
+
+**Decision.** The two halves are treated differently because they are
+different things.
+
+*Limits stay RAM-only and deny-all at boot.* They are actuator authority.
+The host holds them (`[[safety.limits]]`), and the mesh supervisor
+re-pushes them whenever a node names a boot the host has not pushed
+against — `boot_id` on the boot announcement, on every beacon (with
+`policy: "deny-all"` until a push lands), and on every reply — retrying
+while the beacon still says deny-all. A `set_limits` fits a mesh frame.
+
+*Rules persist on the node, in NVS,* tagged with firmware version and
+schema, restored at boot through the same validation a push gets, and
+cleared with a one-boot announcement (`stale` / `corrupt`) when they do
+not pass. They carry no authority — every write a rule fires still goes
+through the gate — and they do not fit a mesh frame (one rule is 330 bytes
+against 228), so the host *cannot* put them back in the field. A rule set
+that survives its own node's reboot is System 1 keeping its promise: "keeps
+reacting when the host is unreachable" includes just after a reboot.
+
+When limits land, the reflex engine *rearms*: a new policy is a new world,
+and a standing condition whose write the old gate refused fires once more.
+
+**Options not taken.** *Persist limits too* — reverses 08-22 for
+convenience; a stale allow-list surviving a reflash is exactly the widening
+that decision exists to prevent. *Re-push rules from the host* — requires a
+chunked mesh push that does not exist, for a payload the census showed does
+not fit; and the base station could not even carry a `set_limits` until
+this work (its console read from a 128-byte FIFO — a claim in a census is
+not evidence, only the air is). *A host heartbeat to nodes* — decided
+against for now: a mesh node's "host link" means "commanded recently" and
+is not read as a fault by anything; airtime spent to make a rule feel
+better. *Rules re-pushed on USB only* — that is the state that failed.
+
+**Consequences.** A node reset now ends with the node whole — rules from
+its own flash within a second, limits from the host within a minute — with
+nobody touching it; measured end to end on the bench
+(`bench_rules_persist.py --live`, 62 s). The stored record's wire form is
+now something a firmware version bump must consider (schema constant in
+`rules_store`). Filed with the WILD port thread: `Oh-Ben-Claw/docs/WILD-2026-09.md`.
+
+## 2026-09-13 — A lost spine is recorded, not survived silently, and never fatal
+
+The first evening the brain ran with the mushroom body, the posture policy
+and an authenticated LoRa gateway all live, the gateway's serial port went
+away eleven minutes in (`os error 22`, the surprise-removal kind). The I/O
+thread returned, the RX loop ended, one `WARN` was written, and the brain
+ran for fourteen more minutes believing two healthy nodes were lost —
+the mesh supervisor escalated both at 120 s — while a posture send failed
+with "serial I/O thread has exited". An operator restart fixed it in
+seconds. Design in [SPINE-LOSS.md](SPINE-LOSS.md).
+
+**Decision.** The brain does not stop, and it does not pretend. Three
+things, in order of value: a `spine.gateway` fact in world memory that
+says whether the host can hear the mesh, written on every transition;
+`MeshHealth::Unobservable`, so that while the gateway is down every node
+is *unobservable* rather than *offline*, no escalation fires and the
+offline clock does not run; and a reopen loop around `open_split`, 1 s
+doubling to 30 s, forever, behind a writer the existing command sink swaps
+in place so the sink handed out at startup survives the outage. The auth
+window resumes from its persisted ceiling; no new auth state.
+
+**Options not taken.** *Refuse to keep running without the spine when
+`[descending]` is enabled* — consistent with the startup refusal, and
+wrong: a misconfiguration at boot and a port that vanishes at runtime are
+different things, and killing Telegram, memory and the episode record over
+a USB hub blinking turns one lost link into a lost body. *Retry the failed
+`descend` from inside the gateway* — the posture policy already retries on
+the next turn and records the failure on the node's fact; a second retry
+loop for the same idempotent command is how a node gets the same frame
+four times. *A bounded number of reopen attempts* — a body meant to run
+unattended does not give up on its own spine at 3 a.m. because the count
+ran out.
+
+**Consequences.** `decide` gains an input (the gateway state) and a fourth
+health value, which every consumer of `mesh.<node>.health` must accept.
+The 2026-09-12 entry below — *a check that could not run must not fail
+like a check that did* — now applies to the mesh supervisor, which had
+been the largest remaining place it did not. Two questions surfaced the
+same evening are recorded in SPINE-LOSS.md §6 and deliberately not decided
+here: whether the host owes the node a heartbeat (the node declares the
+host lost 30 s after its last command, by design), and whether the host
+should re-push RAM-only rules when it hears a node's boot beacon. Both
+belong with the WILD port, and both are the mirror image of this one.
+Nothing is built yet; this entry precedes the code, which is not the
+usual order here, because the decision was needed to know what to build.
+
+## 2026-09-13 — No language model on a node, and what would reopen it
+
+The question was whether the ESP32 nodes should run a language model of their
+own, so that a node cut off from the gateway could still reason. The survey
+is `EDGE-LM-2026-09.md`; this records what it settled.
+
+On the S3 N16R8 boards on the bench, nobody has demonstrated a model that
+follows an instruction at a usable speed. The demonstrated points are a
+sub-1M dense core writing children's stories at ~10 tok/s, and a real 135M
+instruct model at forty-five minutes per answer. The one measured runtime
+(slvDev, 2026-07-21) is PSRAM-bandwidth-bound at 60.7 MB/s with no vector
+unit to speak of; its author says the lever is bytes-per-token, not compute,
+and that his 28.9M parameter count is "never a capability multiple". The
+vendor's own agent framework, ESP-Claw, runs rules and memory on the chip
+and calls out for reasoning — which is the shape this repo already has.
+
+**Decision.** The spinal tier stays what upstream `CONNECTOME-2026-09.md` §2.2 describes:
+local reflex rules that run whether or not the gateway is reachable, and a
+descending command that is a small modulation vector. Reasoning lives on the
+gateway, and on the SBC edge loop when one is present (`edge.rs`). No node
+firmware carries a language model, and no roadmap item assumes one.
+
+**Options not taken.** *A tiny model on the S3* — the demonstrated ones cannot
+follow an instruction, and a node that generates prose it cannot act on is
+a heater. *An instruct model streamed from SD* — demonstrated at 45 minutes
+per answer, which is not a reflex tier at any definition. *The ESP32-P4* —
+the only board with a demonstrated instruction-follower (a 180M ternary MoE
+at ~9 tok/s, tool-calling described by its own author as unreliable, and
+unmeasured by anyone else). The P4 has no radio on-chip, so a P4 node is a
+P4 plus a radio MCU plus a UART between them — the unauthenticated serial
+wire the entry below already flags for the bridge, now on every node. That
+is a different node design, not a faster one, and it would have to be
+decided on its own terms before a board is bought.
+
+**What would reopen this.** Not a bigger model on a newer chip, and — 
+corrected the same day, after reading `obc-reflex` and `posture.rs` rather
+than the survey — not a bandwidth benchmark either. A `descend` is at most
+sixteen levels in `[0, 1]`; a node-side policy that produced them from its
+own sensor snapshot would be a map of a few dozen weights, which fits an S3
+without a single trick from the survey. Compute was never the question. What
+is missing is a **metric** for what a better posture is and **data** on
+which the current one-bit policy (novel → cautious) has been scored, and
+the one-bit policy has not yet run live at all. So: the harness
+`crates/obc-memory/tests/posture_real_effect.rs` (upstream) reads the
+`descending.*` and `mesh.<node>.reflex` facts the brain already records and
+prints three candidate metrics — whether posture is mechanically live at
+all, whether caution buys Track 0 refusals, and the lost-frame natural
+experiment on outcomes. When it has run against weeks rather than hours,
+and one metric has been chosen and recorded here, a learned policy has
+something to beat. That would be its own ADR. A language model still would
+not be the object under discussion.
+
+**Consequences.** The int8 wake-word spotter in V2-IMPLEMENTATION is
+unaffected; it is TinyML, not a language model, and this decision does not
+touch it. `V2-STRATEGY.md` §F's "small-model reflex tier" is confirmed as
+an SBC feature and should not drift toward the MCU in later revisions. A
+node that loses the gateway degrades to its rules, and says so in its
+announcement, which is the behaviour the safety model already assumes.
+
+## 2026-09-13 — The stations hold the root secret, and there is no permissive mode
+
+SPINE-AUTH.md §3.1 provisions each *node* with only its own derived key, so
+a captured node cannot impersonate a sibling. Step 4 put the tag on the wire
+between the two Heltec stations, and the first question was which key a
+station carries.
+
+A station is not a node. It is the infrastructure that verifies every frame
+on the air, from every source — the base verifies the bridge, the bridge
+verifies the base, and a third station would verify both. A station holding
+only its own key can sign and cannot check, which is the half of
+authentication that catches nothing. It needs every source's key, and every
+source's key is, by construction, the root.
+
+**Decision.** Each Heltec station is built with the deployment's root
+(`OBC_SPINE_ROOT`, a build-time environment variable; a build without it
+fails and says what to set) and derives `HKDF(root, "gw-XX")` for any `src`
+on first hearing it. The root never enters the repository; the boot log
+prints two bytes of its SHA-256 so two boards can be compared without
+printing it.
+
+**Options not taken.** *A key table per station* (each peer's derived key
+flashed in, no root) is the same secret material in a different shape: a
+table of every derived key lets an attacker sign as every station, exactly
+as the root does, and it has to be regenerated and reflashed on every
+station whenever a station is added. *Asymmetric keys* (§5.1) would let a
+station verify without being able to sign as anyone — the real fix — and
+cost 64 bytes per frame on a 240-byte radio budget. Still the right answer
+for MQTT; still disqualified on LoRa by arithmetic.
+
+**Consequences.** Extracting the root from a station's flash is the "cloned
+node" threat of SPINE-REPLAY.md §4, one station wider: the attacker can
+sign as any station, not just one. That widening is accepted because the
+stations are the same physical class as the nodes and are deployed the
+same way, and because the alternative was a scheme that verifies nothing.
+Revocation is reflash-everything, as §3.1 already said. Nodes on the far
+side of a station's UART are outside this entirely — the bridge signs what
+it forwards, and the node ↔ bridge serial wire is unauthenticated.
+
+**And no permissive mode.** §4 asked for a strict-by-default config key
+with a migration window; the built form has no key and no v1 path. The
+fleet is two stations on one desk; a migration window with nobody in it is
+a fallback with only one user, and §4 names who that is. If a third station
+arrives running v1 it will be rejected loudly, one line per frame, which is
+the correct thing to happen to a station that has not been provisioned.
+
 ## 2026-09-12 — A check that could not run must not fail like a check that did
 
 `parity`'s `peer` job compares the 12 generator mirrors against the generator's

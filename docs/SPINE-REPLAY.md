@@ -1,6 +1,49 @@
 # The replay counter
 
-A design, not a decision, and deliberately **unbuilt**. Step 3 of
+> **Built in half, 2026-09-13.** §2's ceiling scheme is running on the Heltec
+> stations' existing 8-bit `seq` — not yet on the u32 counter the tag will
+> carry — because the bench found the exact failure this document predicts,
+> one layer down: a base station reset (a serial port opened with DTR was
+> enough) restarted its `seq` at 0, and the bridge's 32-entry de-dup ring
+> dropped its next commands as duplicates. Four recorded runs "sent" frames
+> that never left the ring. `SeqCounter` in upstream's
+> `firmware/heltec-lora-linktest/src/spine.rs` persists the ceiling in NVS
+> (`spine/seq_ceil`), reserve 32 tied to the ring size by a test, fail-closed
+> when NVS is unusable; six host tests pin §2's properties including a
+> reboot never landing in a neighbour's ring across the 256 wrap. §6 steps
+> 1–3 were run on the bench with DTR resets (unclean): 7 boots, counts
+> strictly increasing, every gap 31 ≤ 32.
+>
+> **Finished the same evening, with SPINE-AUTH step 4.** The u32 counter
+> rides on that `SeqCounter` unchanged (`seq` is its low byte), and §3 is
+> built as written: `ReplayWindow` — 64-bit bitmap, per source, persisted as
+> a ceiling `h + M` with **M = 8** — replaced the de-dup ring, which is
+> deleted. **N stays 32.** Measured on a bridge reset
+> (`scripts/bench_spine_auth.py reboot-gap`): the bridge's counter resumed 25
+> above the last the base had accepted, the base accepted its first frames,
+> and the bridge re-accepted the base after **3 skipped frames** — the
+> bounded silence §3 promises, in the safe direction. One correction to §3
+> found by the host tests: a window that resumes at its ceiling must resume
+> with its bitmap *full*, not empty; empty accepts the replay of everything
+> in the 64 below the ceiling, which is the hole the ceiling exists to
+> close. §5.3–4 (what a rejection does beyond a console line) remain open.
+>
+> **Steps 4–5 run 2026-09-13 evening** (upstream `b3243fa`, walkthrough
+> §A5o, `scripts/bench_seq_wear.py`, on the bridge). Step 4: 40 host-driven
+> resets at 2–4 s — the counter resumed **exactly N = 32 higher on every
+> boot**, one ceiling write per boot, never a repeat. Flash consumption was
+> *not* measured: `nvs_get_stats().free_entries` (now on the boot line)
+> stayed at 624 through 40 writes, so it does not see a rewrite of an
+> existing key; wear stays inferred (one entry write per boot). Step 5,
+> with the store poisoned at the `CeilingStore` boundary (a bench feature,
+> not a corrupted partition): the station sent the 20 numbers it was
+> already authorised, refused the next extension, went silent; the host
+> read it offline at 94.6 s and presumed it lost 120 s later; a reset
+> resumed at the last ceiling persisted before the fault. Step 6 still
+> needs a third radio. The rest of this document is unchanged.
+
+A design, not a decision, and deliberately **unbuilt** for the authenticated
+counter it describes. Step 3 of
 [`SPINE-AUTH.md`](SPINE-AUTH.md) — the counter that makes the tag from step 2
 mean something over time — is the first item in that plan whose central claim
 cannot be checked without a board. "The counter never goes backwards across a
@@ -192,10 +235,19 @@ counter — and the receiver side, which looked like the expensive half, is not.
    home and would make replay rejections visible to reflexes and to `status`,
    which has some appeal: "this source is sending counters I have already seen"
    is exactly the kind of thing a person should be told about.
+   *Decided 2026-09-14* (DECISIONS.md): world memory, `spine.auth.<station>`
+   `{ctr, accepted, rejected, last_rejected}`, M = 1 — as built on 09-13.
 4. **What a rejection does beyond dropping the frame.** Silently discarding is
    correct for the wire. Whether it also raises a fact, escalates, or feeds
    `security/trust.rs` — which scores node behaviour and is already wired — is
    open, and 3 and 4 should probably be answered together.
+   *Decided 2026-09-14* (DECISIONS.md), on 4827 frames with zero rejections:
+   `BadTag` and `Replayed` open `spine.auth.<station>.alarm` (one per burst,
+   self-clearing after ten minutes) and `spine.auth.alarm_count`, which the
+   standard safing rule `safe-spine-forgery` escalates to System 2; `TooOld`
+   (the bounded post-reset gap) and `Unsigned` (old firmware) stay on the auth
+   fact and alarm nothing; `trust.rs` is not fed — the station is not the
+   actor, and a forger spoofs the victim's id.
 
 ---
 
