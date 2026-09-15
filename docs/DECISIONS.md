@@ -5,6 +5,71 @@ New entries go at the top.
 
 ---
 
+## 2026-09-15 — A frame the station refuses is invisible to the brain, and the fix is a weaker signal, not a louder one
+
+Found while preparing the bench for the alarm the entry below decided. The
+bench could not be run as conceived, and the reason is worth more than the
+bench was.
+
+**What the code says.** A station verifies every frame at the radio and
+forwards nothing it refuses — `heltec-lora-linktest/src/main.rs`: *"Order
+matters: the tag first, so an attacker cannot move a window with a frame
+they cannot sign … Nothing unverified reaches the UART, the log line the
+host parses, or the relay."* A refusal becomes one console line,
+`SPINE ◄ REJECTED src=… ctr=… : bad tag …`, which carries no `seq=`; the
+host's `parse_gateway_line` requires `seq=` and returns `None`. So the
+line is printed, read off the wire by the host, and discarded.
+
+**The consequence, stated plainly.** `spine.auth.<station>.alarm` fires
+only when the host refuses a frame *the station accepted*, which happens
+only when the station forwarding to the host holds a different root than
+the host — a replaced or mis-provisioned base station. That is the threat
+`lora_gateway.rs` documents ("the host trusts the station's radio, not its
+console") and it is the one the 09-13 bench exercised: the four `BadTag`
+in the entry below came from a wrong-root *build*, not from a third party
+on the air. **A stranger transmitting forged frames at an honest station
+produces no fact, no alarm and no escalation — `status` stays clean.**
+That is the inverse of which threat is likely.
+
+**Decision.** The host learns to read the refusal line the station already
+prints, and raises a **separate and deliberately weaker** signal:
+`spine.air.<station>.refused` `{kind, count, since_ms, last_ms}`,
+burst-shaped like the auth alarm (one fact per burst, the count travelling
+on the clear), driving a new standard rule at lower severity than
+`safe-spine-forgery`. Only `BadTag` counts: `Seen` cannot distinguish a
+relay duplicate from a replay at the station and is normal traffic,
+`Runt`/`SeqMismatch` are RF and foreign protocols, and `TooOld`/`Store`
+are the station's own local conditions.
+
+The weakness is the point and must not be papered over: **this signal is
+asserted by the station over an unauthenticated console**, so anyone who
+can write to that serial line can fabricate it — the same wire
+`DECISIONS.md` 2026-09-13 already flags for the bridge. It therefore
+advises and must never safe the mesh, and it does not touch
+`spine.auth.<station>`, whose meaning stays exactly what the entry below
+gave it: *the host refused a frame*, cryptographically, on its own
+evidence.
+
+**Options not taken.** *Have the station forward refused frames to the
+host* — it would hand an unauthenticated stranger a write into the host's
+parser, which is the one thing the radio-side check exists to prevent.
+*Raise the existing `spine.auth` alarm from the refusal line* — it would
+let console access manufacture an incident indistinguishable from a
+cryptographic one, destroying the fact's meaning to gain a signal.
+*Escalate at the same severity* — a forgeable input must not be able to
+page a person at the same volume as an unforgeable one. *Report
+`Runt`/`SeqMismatch` too* — that is a jamming and noise-floor signal,
+which may be worth having, but runts are also just RF; revisit if the
+bench shows a useful rate.
+
+**Consequences.** One more entity per station and a ninth standard rule.
+On-air forgery becomes visible for the first time, at a severity that says
+how much the evidence is worth. Two distinct benches now exist where one
+was thought to: a wrong-root board *in front of the host* fires the
+authenticated alarm (never run — the alarm postdates the 09-13 rejections
+that motivated it), and a wrong-root board *transmitting at an honest
+station* fires the new advisory.
+
 ## 2026-09-14 — A replay or a bad tag is an incident, not a log line; a post-reset gap is neither
 
 Closes SPINE-REPLAY.md §5, items 3 and 4, which the 2026-09-13 build left

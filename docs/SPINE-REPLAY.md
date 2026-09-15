@@ -248,6 +248,21 @@ counter — and the receiver side, which looked like the expensive half, is not.
    (the bounded post-reset gap) and `Unsigned` (old firmware) stay on the auth
    fact and alarm nothing; `trust.rs` is not fed — the station is not the
    actor, and a forger spoofs the victim's id.
+5. **Whether the host is told about frames the *station* refused.** Opened and
+   closed 2026-09-15, while building the bench for item 4 — which could not be
+   run as conceived, because a station forwards nothing it refuses and the
+   host's parser drops the `SPINE ◄ REJECTED` line. So item 4's alarm is
+   reachable only by a station that disagrees with the host about the root,
+   never by a stranger transmitting forgeries at an honest station: on-air
+   forgery produced no fact, no escalation, and a clean `status`.
+   *Decided 2026-09-15* (DECISIONS.md): the host reads the refusal line the
+   station already prints and raises a separate, weaker signal —
+   `spine.air.<station>.refused` and the rule `safe-spine-on-air`, at
+   `Warning` where `safe-spine-forgery` is `Critical`, because the evidence is
+   the station's word over an unauthenticated console rather than the host's
+   own cryptography. Only `BadTag` counts: `Seen` cannot be told from a relay
+   duplicate at the station, and the rest is RF or the station's own
+   bookkeeping.
 
 ---
 
@@ -279,4 +294,32 @@ have to re-derive what "it works" means.
    would have failed under the strict high-water-mark reading of §3.2, and it
    needs the third radio that Phase B's 3-hop relay item is also waiting on.
 
-Steps 1–5 need one node. Step 6 needs three.
+7. **A wrong root is caught, and by which of the two signals.** Added
+   2026-09-15 with §5 item 5; the alarm and the advisory have different
+   reachability and the bench has to exercise both, because each is invisible
+   to the other's threat.
+
+   *7a — the forger on the air.* Flash **the board that is not plugged into
+   the host** with `bench-low-power,bench-wrong-root` and leave the host's
+   station honest. Expect: `SPINE ◄ REJECTED … bad tag` on the honest
+   station's console; one `spine.air.<station>.refused` fact for the burst
+   with a climbing `count`, **not** one per frame; `spine.air.refused_count`
+   1; `safe-spine-on-air` waking System 2 at `Warning`;
+   `spine.auth.<station>.alarm` **absent**, because the host refused nothing;
+   and — the assertion that matters most — genuine traffic from the honest
+   station still arriving throughout. Then stop transmitting and confirm the
+   burst closes after ten minutes and the count returns to zero.
+
+   *7b — the replaced station.* Flash **both** boards `bench-wrong-root`, so
+   they agree with each other and disagree with the host. Expect the mirror
+   image: the stations accept each other on the air and print no refusals,
+   the host refuses every forwarded frame as `BadTag`, one
+   `spine.auth.<station>.alarm` for the burst, `spine.auth.alarm_count` 1, and
+   `safe-spine-forgery` at `Critical`. This is the path the four `BadTag` of
+   2026-09-13 came down, before the alarm existed to be tested.
+
+   Reflash both boards to the field feature set afterwards. A
+   `bench-wrong-root` board carries no deployment secret, so it is safe in a
+   drawer, but it is also completely deaf and mute on the real mesh.
+
+Steps 1–5 and 7 need one node (7 needs both stations). Step 6 needs three.
