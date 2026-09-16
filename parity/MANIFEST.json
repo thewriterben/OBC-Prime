@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-14T16:26:55+00:00",
+  "generated": "2026-09-16T00:40:30+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -84,8 +84,8 @@
       "bytes": 15977
     },
     "crates/obc-memory/src/trajectory.rs": {
-      "sha256": "523000d3cd56019ed5db01844dc138e3d28b903b410ce75375f9ef48487c62d8",
-      "bytes": 37227
+      "sha256": "d5269f99aaeccd39fd4cec05e28b2ef12f695e5efc1f7d7608cd80473c29977b",
+      "bytes": 44385
     },
     "crates/obc-memory/src/embed.rs": {
       "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
@@ -388,8 +388,8 @@
       "bytes": 82574
     },
     "crates/obc-reflex/src/safing.rs": {
-      "sha256": "e1bb8c8bbd89bc01806ec5d6b7cafd611a1a1f2082e7acb2f1d58f3f9173173c",
-      "bytes": 41949
+      "sha256": "6058704f9b87a544ff0ac840801a7ec54330a00acfdb62503f2a8d487cc2e9ad",
+      "bytes": 47843
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -464,16 +464,16 @@
       "bytes": 5014
     },
     "crates/obc-spine/src/lora_gateway.rs": {
-      "sha256": "9ab3b2fa13fd4f7e84dc73d4669e21df4d5a234bc9f59a665cff5d65da87927c",
-      "bytes": 99328
+      "sha256": "7a7506c46bc0a9e8a8006d87cd2e6f9c71bd3fcaa0944a66045485cdf02154d3",
+      "bytes": 126927
     },
     "crates/obc-spine/src/lora_mesh.rs": {
       "sha256": "3eedb40a620bf3fd9e72aea81e6d72dc0d99b37b9e42455b6b9822f3d9f91f01",
       "bytes": 29181
     },
     "crates/obc-spine/src/mesh_supervisor.rs": {
-      "sha256": "15d6db59e17674699dc8faafaa51ccc0e716036e5a1f59b5d4527084f6e68a28",
-      "bytes": 89819
+      "sha256": "12e895bdb62ee8586413f744b15d769349047c51c096f721327c3661fd186730",
+      "bytes": 90264
     },
     "crates/obc-spine/src/p2p.rs": {
       "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
@@ -884,8 +884,8 @@
       "bytes": 44823
     },
     "firmware/heltec-lora-linktest/Cargo.toml": {
-      "sha256": "0ee6a0b69fac70c3a8a928ba5d8aa14ef4e8816c2c0628b327d7c2d863e13b5f",
-      "bytes": 2271
+      "sha256": "d6cc89d2c17520d0489bed857dd79661c1b15b257106a0d120828f3e869df0d4",
+      "bytes": 2871
     },
     "firmware/heltec-lora-linktest/build.rs": {
       "sha256": "2345abff7585266ff956fa54e596da21705d8b32ccc6014be8bc25a2d495d821",
@@ -904,8 +904,8 @@
       "bytes": 4732
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "f5f0134b420f3edef85ce5c3a665dac8ba71d97b149ddc1920343766260948e3",
-      "bytes": 32076
+      "sha256": "010077358f97e1414539365cba94fd989047fb0444d24b30d5fb91ba30e2b2cf",
+      "bytes": 33446
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
       "sha256": "e879dd5d92c657f6d763c84e202f4fc785a088e196ff699ca43a47966403c93f",
