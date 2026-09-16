@@ -299,16 +299,44 @@ have to re-derive what "it works" means.
    reachability and the bench has to exercise both, because each is invisible
    to the other's threat.
 
-   *7a — the forger on the air.* Flash **the board that is not plugged into
-   the host** with `bench-low-power,bench-wrong-root` and leave the host's
-   station honest. Expect: `SPINE ◄ REJECTED … bad tag` on the honest
-   station's console; one `spine.air.<station>.refused` fact for the burst
-   with a climbing `count`, **not** one per frame; `spine.air.refused_count`
-   1; `safe-spine-on-air` waking System 2 at `Warning`;
-   `spine.auth.<station>.alarm` **absent**, because the host refused nothing;
-   and — the assertion that matters most — genuine traffic from the honest
-   station still arriving throughout. Then stop transmitting and confirm the
-   burst closes after ten minutes and the count returns to zero.
+   *7a — the forger on the air.* **Run 2026-09-15; the notes below are what it
+   actually did, not what it was expected to do.** Flash **the board that is
+   not plugged into the host** with `bench-low-power,bench-wrong-root` and
+   leave the host's station honest. Expect: `SPINE ◄ REJECTED … bad tag` on
+   the honest station's console; one `spine.air.<claimed>.refused` fact for
+   the burst, **not** one per frame; `spine.air.refused_count` 1;
+   `safe-spine-on-air` waking System 2 at `Warning`; and
+   `spine.auth.<station>.alarm` **absent**, because the host refused nothing —
+   that absence is the point of 7a and is what distinguishes it from 7b.
+   Then stop the forger and confirm the burst closes after ten minutes with
+   the count on the clear.
+
+   Two corrections to an earlier draft of this step, both found by running it:
+
+   - **"Genuine traffic keeps flowing" cannot be asserted on two boards.** The
+     forger *was* the only other transmitter, so flashing it wrong-root leaves
+     the host with nothing legitimate to hear: verified ingests stop at the
+     flash and resume at the reflash. Showing that an attacker does not
+     interrupt honest traffic needs a third radio, exactly as step 6 does.
+   - **`safe-mesh-node-lost` fires as collateral**, at `Critical`, and that is
+     correct rather than noise: the station that went wrong-root genuinely did
+     stop being reachable. Expect it in the escalation history and do not read
+     it as a failure of 7a.
+
+   Also observed: the frame counter continued across the reflash (15401 forged
+   → 15431 honest), which is §6 step 1 holding through a firmware change and
+   not just a reboot.
+
+   **Result, 2026-09-15 — PASS on every assertion this topology can test.**
+   Ten forged frames over 105 s produced **one** open fact and **one** close
+   fact, never ten: `spine.air.gw-D8.refused` opened `refusing` at t=0 and
+   closed `quiet` with `count: 10` carried on the clear;
+   `spine.air.refused_count` went 1 → 0; `safe-spine-on-air` woke System 2 at
+   `Warning`; `spine.auth.gw-D8` stayed at `rejected: 0` throughout, so the
+   authenticated alarm never fired, which is exactly the separation the whole
+   design rests on. The clear ran 602.8 s against a 600 s window — the 2.8 s
+   is the sweep waiting for the next console line to tick the clock, which is
+   how it is built and not drift.
 
    *7b — the replaced station.* Flash **both** boards `bench-wrong-root`, so
    they agree with each other and disagree with the host. Expect the mirror
