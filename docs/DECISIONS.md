@@ -5,6 +5,75 @@ New entries go at the top.
 
 ---
 
+## 2026-09-16 — The board the brain is plugged into is not a node, and it is the one thing on the mesh it cannot hear
+
+Third variant of one root cause in a single evening, which is why it gets its own
+entry rather than a line in the one below.
+
+**The shape.** The host's model of the mesh is built from `SPINE ◄` lines on one
+station's console. Everything it knows arrives as a *received* frame. But the
+station at the end of that cable never receives its own frames — it transmits
+them, and a transmitted frame is a `SPINE ►` line. **The board the brain is wired
+to is structurally invisible to the brain.** Tonight that produced three separate
+failures, each of which looked like something else:
+
+1. *Frames the station refuses* → printed as `SPINE ◄ REJECTED`, dropped by the
+   parser for want of a `seq=`. On-air forgery was invisible. (Entry below.)
+2. *The node's uplink*, when the node is jumpered to that same station → wrapped
+   and transmitted, logged `SPINE ► (uart)`, dropped by category. The node looked
+   dead for a whole session while beaconing every 30.78 s.
+3. *The station's own liveness* → never heard at all, so the mesh supervisor
+   presumed it lost. `gw-40`, "offline for 43.5 hours", `escalated_count` pinned
+   at 1, `safe-mesh-node-lost` firing at Critical every tick until the System 2
+   wake budget swallowed it. The log shows `System 2: suppressed (wake budget)`
+   on repeat — a real node loss at that moment would have been indistinguishable
+   from the noise.
+
+**Why the existing guard missed it.** `snapshot` already refuses to invent nodes
+from entity names: a node exists only if its rollup carries `Origin::Observed`,
+which closed the 2026-07-17 phantom loop. `mesh.gw-40` passes that check
+honestly — it *was* heard on the air, for weeks, while it was the field bridge.
+Then the console cable moved to it and it went silent forever. The guard asks
+"was this ever real?", and the answer was yes. The question that needed asking is
+"can this still be heard?".
+
+**Decision.** Discovery is authoritative *and* liveness must be. The operator
+declares which board the console belongs to (`[lora_gateway] station`, recorded
+as the fact `spine.station`), and `snapshot` excludes it: a board that cannot be
+heard is not a node whose silence means anything. Its liveness already has a
+correct and separate signal — `spine.gateway`, the console link itself. Standing
+conclusions from before the declaration are *withdrawn* on the next tick with a
+reason, not merely dropped from the count: `escalated_count` recomputes from the
+views either way, but an "escalated" fact nobody will ever revisit is worse than
+the count it stopped feeding.
+
+**The claim is checked, not trusted.** The host cannot discover its own station —
+it never sees the boot banner, because the gateway deliberately holds DTR/RTS low
+so opening the port does not reset the board. So this is an operator's assertion,
+and it is stamped `source: "config"` to say so. But it is falsifiable: the host
+can never legitimately *receive* a frame whose `src` is its own station, so one
+arriving means the setting names the wrong board — or something is impersonating
+the board the brain is wired to. Either way the gateway says so at error level,
+naming the consequence (the supervisor is skipping that id on the strength of the
+setting).
+
+**Options not taken.** *Learn it from the banner* — the host never sees one, and
+resetting the station to provoke one trades a real outage for a label. *Exclude
+every `gw-` prefixed id from node escalation* — a lost **bridge** is real news
+and the mesh is partitioned; only the console's own board is unhearable.
+*Ingest the station's own `SPINE ►` lines* — they carry no `ctr=`/`mac=`, so
+`LoraAuth` would have nothing to verify and the host would be trusting a console,
+which is the boundary SPINE-AUTH exists to hold. *Leave it and let the operator
+ignore the escalation* — that is alarm fatigue written into the product, and it
+was already suppressing wakes tonight.
+
+**Consequences.** One optional config key; unset, behaviour is exactly as before
+and the gateway warns at startup that the console's board will be judged as a
+node. A bench whose stations swap roles needs the key updated — and will be told
+loudly if it is not, by the frame that proves it wrong. The deeper lesson is
+recorded in `BENCH-PINOUT-CARDS.md` Card 0, whose jumper block had named a board
+outright and so quietly became the failure mode when the boards swapped.
+
 ## 2026-09-15 — A frame the station refuses is invisible to the brain, and the fix is a weaker signal, not a louder one
 
 Found while preparing the bench for the alarm the entry below decided. The
