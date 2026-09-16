@@ -5,6 +5,75 @@ New entries go at the top.
 
 ---
 
+## 2026-09-16 — A node's name has to come from the chip, because the second board answered to the first one's
+
+The firmware carried `const NODE_ID: &str = "obc-esp32-s3-001"`, with a doc
+comment saying it "should be read from NVS in production". The comment had been
+right and ignored for months, which is the normal fate of a comment that names a
+problem instead of failing on it.
+
+Tonight the second XIAO was flashed for camera bring-up and booted announcing
+`Node ID: obc-esp32-s3-001` — the live mesh node's identity — and immediately
+began emitting `link_state` JSON under that name on its spine UART. The mesh
+supervisor keys everything on node id. Two boards sharing one is the same
+identity confusion the on-air forgery work exists to detect, except arriving from
+inside the fleet, where nothing is watching for it.
+
+Nothing reached the air, for one reason: that board's UART was not yet wired to a
+radio. **Step 4 of the plan was to wire it to one.**
+
+It nearly happened earlier and more stupidly, too. The step before was "flash the
+spare XIAO", and when the ports were enumerated the only ESP32-S3 attached was
+the live node. Both boards are the same model from the same batch; their MACs
+differ only in the last three bytes. Nothing on the desk or on the screen told
+them apart.
+
+**Identity now derives from the chip's factory MAC.** A small roster maps known
+MACs to readable names, so `obc-esp32-s3-001` stays attached to the board the
+host already has world memory, pushed limits and bench records for — renaming it
+would have been a large, pointless blast radius. An unrostered board self-names
+`obc-esp32-s3-<last three bytes>`.
+
+That fallback is ugly on purpose, and the ugliness is the design. **A fixed
+fallback is what caused this**, exactly as a default pin map let `camera.rs`
+claim the wrong board through two corrections. There is now no default to be
+wrong: a board either has a name someone wrote down against a measured MAC, or it
+has one no other board can hold.
+
+Rejected: **NVS provisioning**, which the old comment promised and whose
+machinery already exists. It buys renaming-without-reflash, which nothing needs,
+and it owes an answer for an unprovisioned board — the one question with no safe
+default. Revisit when a board must be renamed in the field. Rejected: a
+**build-time env var**, which is the cheapest code and can be set *wrong*
+silently, which is the failure being fixed.
+
+The fix created its own hazard, and it is the hazard this repo keeps re-learning:
+the roster now lives in three places — firmware, the host's peripheral registry,
+and the bench script that decides which port is safe to flash. `camera.rs`
+contradicted its own `Cargo.toml` two directories away for weeks *because nothing
+compared them*. So `tests/firmware_identity_roster.rs` compares all three and
+fails on drift, and the gate script moved into the repo to be comparable at all —
+a control that exists only on one bench machine is not a control.
+
+The mapping also moved into its own ESP-free module so the host test executes the
+real code, the same split as `sensor_math` / `sensors`. Behind an `esp_idf_svc`
+import it could never run, and a rule about fleet identity that nothing can
+execute is a rule on trust.
+
+### The transferable part
+
+Two things. First: a comment that says "in production this should be X" is a
+known defect with no due date, and it will be paid on the day a second unit
+exists. The cheap version of this fix was available for months.
+
+Second, and sharper — **the boot log now prints the MAC beside the name, always.**
+A name alone is an assertion. The collision was invisible because both boards
+asserted the same thing with equal confidence and nothing underneath it was
+visible. A shared name with the MAC beside it is a contradiction you can see in
+one board's log, instead of a fleet-wide comparison nobody runs.
+
+---
+
 ## 2026-09-16 — A cargo feature cannot isolate the camera build, and half of it can be isolated anyway
 
 Bringing up a camera node needs three things the default firmware build does not
