@@ -5,6 +5,82 @@ New entries go at the top.
 
 ---
 
+## 2026-09-16 — A cargo feature cannot isolate the camera build, and half of it can be isolated anyway
+
+Bringing up a camera node needs three things the default firmware build does not
+have: a pin map, PSRAM, and the `espressif/esp32-camera` IDF component. Only the
+first is a cargo feature. The other two are ESP-IDF-level and, as the tree stood,
+both were global — so building the camera changed what a *default* build of the
+tree produces, and the only thing stopping a wrong binary reaching the live mesh
+node `obc-esp32-s3-001` was me saying not to.
+
+That is the shape this project keeps finding: a rule that exists only as prose.
+It is the same failure as `camera.rs` claiming a board it had never been checked
+against. So the two halves were settled separately, and honestly.
+
+**PSRAM: isolable, mechanically.** `esp-idf-sys` 0.37.2 reads
+`ESP_IDF_SDKCONFIG_DEFAULTS` as a `;`-separated list (`build/config.rs:25-27`,
+`parse::list` at `config.rs:187-202`), later entries winning. The camera overlay
+now lives in its own `sdkconfig.defaults.camera`, and a camera build names both
+files in that variable. A default build does not set the variable and therefore
+cannot see the overlay. The isolation is the *absence* of an environment
+variable, not a promise in a document.
+
+Two sharp edges are recorded where they bite rather than here: the variable
+**replaces** the list instead of appending (`set_when_none`, `config.rs:139-144`),
+so omitting `sdkconfig.defaults` silently drops the 32 KB main-task stack that
+three crashes and a measurement bought on 2026-08-22 — a boot loop whose cause
+would look nothing like its origin. And the automatic `sdkconfig.defaults.<x>`
+suffix expansion (`common.rs:263-300`) cannot express "camera": `<x>` resolves
+from cargo's `PROFILE`, which is only ever `debug` or `release`
+(`common.rs:259-261`). That dead end is written into CAMERA.md so the next person
+does not spend the same hour on it.
+
+**The component: not isolable, and that was verified rather than assumed.**
+`extra_components` is passed to `try_from_env()` as an exclude
+(`cargo_driver/config.rs:72-74`); its doc comment says outright "This option is
+not available as an environment variable." And the `cargo metadata` invocation
+that reads it passes no feature flags (`config.rs:107-113`), while `CARGO_FEATURE_*`
+appears nowhere in esp-idf-sys's `build/`. The build script cannot observe the
+feature set of the build it is part of. With the block uncommented, a
+camera-feature-*off* build still downloads the component, compiles it into the
+IDF, and emits the bindings module.
+
+So there is no mechanism, and inventing one would mean a second firmware crate
+duplicating the command loop for a single board. **Chosen instead: the block stays
+commented on `main`; camera bring-up happens on a `camera-bringup` branch.** The
+containment is still social, but it is now *visible* — a tree that would flash the
+wrong binary to the live node is a branch name in the prompt rather than a
+paragraph nobody re-reads. Prose that you can see is not the same as prose that
+you must remember.
+
+Rejected, with triggers to revisit:
+
+- **A separate `obc-esp32-s3-camera` crate.** Clean isolation by construction, but
+  it duplicates the command loop and spine plumbing to serve one board, or forces
+  a shared-library split today for a node that has never booted. Revisit when a
+  *second* camera board needs a different component set, or when the camera node's
+  code diverges enough that the shared main is fiction.
+- **The optional-dependency seam.** `extra_components` is also collected from
+  direct dependencies (`cargo_driver/config.rs:283-297`), so an optional dep
+  carrying the block might drop out when its feature is off. The explore pass
+  flagged this as *unverified* — whether cargo's resolve graph actually omits an
+  unenabled optional dep there was not tested. One untested mechanism for one use
+  is speculative abstraction. Revisit only if the branch discipline actually
+  fails, and verify it before building on it.
+
+### The transferable part
+
+"Can this be gated?" is a question about someone else's build script, and the
+answer is in its source, not in its name or its README — that crate's own
+`BUILD-OPTIONS.md` is stale in three places against the code. Twenty minutes of
+reading turned one guess into one mechanism and one honest "no mechanism
+exists", and the honest no is worth more than a clever workaround would have
+been: it names what is protecting the live node, which is discipline, so the
+discipline could at least be made visible.
+
+---
+
 ## 2026-09-16 — The board the brain is plugged into is not a node, and it is the one thing on the mesh it cannot hear
 
 Third variant of one root cause in a single evening, which is why it gets its own
