@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-16T00:40:30+00:00",
+  "generated": "2026-09-16T02:45:29+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -464,16 +464,16 @@
       "bytes": 5014
     },
     "crates/obc-spine/src/lora_gateway.rs": {
-      "sha256": "7a7506c46bc0a9e8a8006d87cd2e6f9c71bd3fcaa0944a66045485cdf02154d3",
-      "bytes": 126927
+      "sha256": "4a54473a5cf30564f0b64e7685b09d2000d7147ae419f7196e665cfe63c7ad61",
+      "bytes": 129927
     },
     "crates/obc-spine/src/lora_mesh.rs": {
       "sha256": "3eedb40a620bf3fd9e72aea81e6d72dc0d99b37b9e42455b6b9822f3d9f91f01",
       "bytes": 29181
     },
     "crates/obc-spine/src/mesh_supervisor.rs": {
-      "sha256": "12e895bdb62ee8586413f744b15d769349047c51c096f721327c3661fd186730",
-      "bytes": 90264
+      "sha256": "93b5412fef4459429ed53a194ecdb063efce297b661bead19e704c063af7c09d",
+      "bytes": 96805
     },
     "crates/obc-spine/src/p2p.rs": {
       "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
