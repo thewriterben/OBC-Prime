@@ -123,6 +123,43 @@ wrong binary to the live node is a branch name in the prompt rather than a
 paragraph nobody re-reads. Prose that you can see is not the same as prose that
 you must remember.
 
+> ### Amendment, 2026-09-17: that last paragraph was wrong, twice, on the day it
+> ### was written.
+>
+> "A branch name in the prompt" failed the same afternoon, in two different ways,
+> and neither is a discipline problem that more discipline fixes.
+>
+> **One.** An hour of work went onto `main` in the belief it was the branch. The
+> `git switch main` that caused it was three tool calls earlier, for an unrelated
+> branch investigation, and nothing between then and the next edit mentioned it.
+> It surfaced only when a build failed for a reason that looked like something
+> else entirely (`no camera in sys`), and four calls were spent theorising about
+> stale bindings before anyone thought to ask which branch the tree was on.
+>
+> **Two.** `CARGO_TARGET_DIR` is shared across branches. Building on `main` — with
+> the block commented, correctly — made esp-idf-sys regenerate bindings *without*
+> the camera module, destroying what the branch depended on. Switching back did
+> not restore them, because that build script does not re-run on `Cargo.toml`
+> metadata changes; its own comment says to `cargo clean`, which would have cost
+> a 14 GB rebuild. The branch discipline and the build cache were quietly hostile
+> to each other, and nothing said so.
+>
+> The generalisation is the point, because it is the same shape as everything
+> else this file records. **A control that lives in a human's attention is not a
+> control.** A prompt protects a person at a terminal; it protects no automated
+> agent, no CI runner, and no distracted human either. It is prose wearing a
+> mechanism's clothes.
+>
+> `scripts/check_camera_component_gate.py` (upstream) makes it a comparison a
+> machine performs, enforced on `main` only — the bring-up branch is *supposed* to
+> carry the block, and a check permanently red on a working branch teaches people
+> to ignore red. Verified to fail before being trusted.
+>
+> The decision itself stands: the block still cannot be feature-gated and a
+> separate crate is still not worth one board. What changed is that the
+> containment is now checkable, and the original claim — that visibility was
+> enough — is recorded here as refuted rather than quietly edited away.
+
 Rejected, with triggers to revisit:
 
 - **A separate `obc-esp32-s3-camera` crate.** Clean isolation by construction, but
