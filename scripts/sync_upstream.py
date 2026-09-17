@@ -1441,7 +1441,22 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("firmware/obc-esp32-s3/src/dht.rs",
      "firmware/obc-esp32-s3/src/dht.rs",
      None),
-    ("firmware/obc-esp32-s3/src/main.rs",
+    # Added 2026-09-16. Upstream replaced `const NODE_ID` with a MAC-derived
+     # identity after a second board booted announcing the live node's name, and
+     # `main.rs` grew `mod identity;` + `mod identity_map;`. The vendored
+     # `main.rs` therefore declared two modules this list did not bring -- the
+     # same shape as `board.rs` on 2026-08-21, caught by the check written
+     # because of that.
+     ("firmware/obc-esp32-s3/src/identity.rs",
+      "firmware/obc-esp32-s3/src/identity.rs",
+      None),
+     # The ESP-free half, split out so a host test can execute the real mapping
+     # (tests/firmware_identity_roster.rs upstream). Same reason sensor_math.rs
+     # is separate from sensors.rs.
+     ("firmware/obc-esp32-s3/src/identity_map.rs",
+      "firmware/obc-esp32-s3/src/identity_map.rs",
+      None),
+     ("firmware/obc-esp32-s3/src/main.rs",
      "firmware/obc-esp32-s3/src/main.rs",
      None),
     ("firmware/obc-esp32-s3/src/reflex.rs",
