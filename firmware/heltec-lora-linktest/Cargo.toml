@@ -23,6 +23,38 @@ hmac = "0.12"
 sha2 = "0.10"
 hkdf = "0.12"
 
+[features]
+# Bench build: SX1262 TX at its minimum (-9 dBm) instead of +22. Two Heltecs
+# at arm's length on a desk read -8 to -20 dBm at full power, and above about
+# -35 the receiver overdrives: ~55 B keepalives pass while 120 B+ frames
+# vanish (BENCH-PINOUT-CARDS.md Card 0; measured again 2026-09-12 with the
+# spinal tier's 121 B replies arriving 1 in 5). 31 dB less puts the same desk
+# at ~-50. The boot log names the power so a bench build cannot be mistaken
+# for a field one.
+bench-low-power = []
+# Do not flood-relay received frames. For the base station, which is the sink:
+# it was re-broadcasting every frame it heard, deaf for the ~300 ms each relay
+# takes, and on 2026-09-12 that cost it about half of everything gw-40 sent —
+# the frame after any received frame, reliably. A relay is a role
+# (heltec-relay); a station with a host plugged in should not play it.
+no-relay = []
+# Bench only: the console line `{"bench":"nvs_fault"}` poisons the counter
+# store so every NVS read and write fails from then on — SPINE-REPLAY.md §6
+# step 5 ("NVS failure stops transmission") without corrupting a real
+# partition. The fault is at the `CeilingStore` boundary, which is where the
+# firmware decides to fail closed; a reset clears it. Never in a field build:
+# the boot log names it.
+bench-nvs-fault = []
+# Bench only: build with a root secret that is deliberately NOT the
+# deployment's, so every frame this station sends is refused by every station
+# and host that holds the real one — the forged-station half of
+# SPINE-REPLAY.md §6 step 7, and the only way to produce a `bad tag` on the air
+# on purpose. The `env!("OBC_SPINE_ROOT")` is cfg'd away, so such a board
+# carries no deployment secret at all and cannot be confused for a provisioned
+# station; it also builds without the secret set, which is the tell. The boot
+# log says so at error level. Never in a field build.
+bench-wrong-root = []
+
 [build-dependencies]
 embuild = "0.33"
 

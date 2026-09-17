@@ -103,13 +103,16 @@
 use esp_idf_svc::hal::peripherals::Peripherals;
 // Command I/O runs over the native USB-Serial-JTAG (the XIAO ESP32-S3's only USB
 // interface), not UART0 — UART0's GPIO43/44 aren't wired to the XIAO's USB port.
-use esp_idf_svc::hal::usb_serial::{UsbSerialConfig, UsbSerialDriver};
 use esp_idf_svc::hal::uart::UartDriver;
+use esp_idf_svc::hal::usb_serial::{UsbSerialConfig, UsbSerialDriver};
 use log::info;
 use serde::{Deserialize, Serialize};
 
 /// On-MCU reflex mirror (Phase 18, System 1 at the edge).
 mod reflex;
+
+/// Host-pushed reflex rules across a reboot (NVS-backed since 2026-09-13).
+mod rules_store;
 
 /// On-MCU safing mirror (Phase 18) — built-in battery self-protection.
 mod safing;
@@ -126,21 +129,37 @@ use board::ACTIVE as BOARD;
 /// On-MCU Track 0 safety gate — deterministic, host-pushable actuator limits.
 mod safety;
 
+/// Who this board is, derived from the chip's factory MAC rather than a
+/// constant. Read its header before changing anything about node identity.
+mod identity;
+
+/// The MAC → node id mapping, with no ESP dependencies, so
+/// `tests/firmware_identity_roster.rs` runs it on the host. Same split as
+/// `sensor_math` / `sensors`, for the same reason.
+mod identity_map;
+
 /// Pure decode and compensation arithmetic for the I2C sensors. No ESP
 /// dependencies, so `tests/firmware_sensor_math.rs` executes it on the host
 /// against the BME280 datasheet's own double-precision algorithm.
 mod sensor_math;
 
 /// Real I2C sensor drivers (MAX17048 fuel gauge, MPU6050 IMU).
-// Under `--features camera` the I2C bus is disabled (shared SCCB pins), so the
-// sensor constructor/probe paths are intentionally unused in that build.
+// Under `--features camera` the I2C bus is disabled, so the sensor
+// constructor/probe paths are intentionally unused in that build. NOT because of
+// shared SCCB pins — that reason died on 2026-08-21 when the default bus moved to
+// GPIO5/6, and was never true of the XIAO Sense (SCCB 40/39). The gate is a
+// conservative default; see camera.rs.
 #[cfg_attr(feature = "camera", allow(dead_code))]
 mod sensors;
 
 /// I2S microphone driver (loudness/RMS).
 // On the Waveshare 2.1 build the I2S init is compiled out (GPIO0 = DHT22,
-// GPIO1/2 = LCD), so the constructor path is intentionally unused there.
-#[cfg_attr(feature = "board-waveshare-21", allow(dead_code))]
+// GPIO1/2 = LCD), so the constructor path is intentionally unused there. Same on
+// the Lilygo T-CameraPlus-S3 V1.0/V1.1, where GPIO1/2 are the camera's SCCB.
+#[cfg_attr(
+    any(feature = "board-waveshare-21", feature = "board-lilygo-tcam-s3-v11"),
+    allow(dead_code)
+)]
 mod audio;
 
 /// DHT22/AM2302 single-wire temperature + humidity driver.
@@ -151,14 +170,48 @@ mod dht;
 mod camera;
 
 /// Maximum line length for incoming serial commands (bytes).
-const MAX_LINE_LEN: usize = 512;
+///
+/// 2048, up from 512 on 2026-09-13: a `set_reflex_rules` with the two
+/// slot-bound rules of the first real reflex (walkthrough §A5f) is ~620 bytes,
+/// and at 512 it was discarded — silently, because the overflow path cleared
+/// the buffer and said nothing, the same defect class as the 256-byte RX ring
+/// caught the day before. The USB ring is 4096, so this fits with a line to
+/// spare. An over-long line is now *answered*, not dropped (see the intake).
+const MAX_LINE_LEN: usize = 2048;
 
 /// Firmware version — must match the host-side `CARGO_PKG_VERSION`.
 const FIRMWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Node ID — set this to a unique identifier for each board in your fleet.
-/// In production, this should be read from NVS (non-volatile storage).
-const NODE_ID: &str = "obc-esp32-s3-001";
+// The node id used to be `const NODE_ID: &str = "obc-esp32-s3-001"` here, with a
+// comment saying it should come from NVS "in production". On 2026-09-16 a second
+// board was flashed and booted announcing the same identity as the live mesh
+// node. Identity now comes from the chip's factory MAC -- see `identity.rs`.
+// `identity::node_id()` replaces the const; it panics unless `identity::init()`
+// has run, which it does at the top of `app_main`.
+
+// ── The `#[cfg]`s and the board data must say the same thing ─────────────────
+//
+// `board.rs` exists so a host can be told what this node is; the `#[cfg]`s around
+// the driver init decide what it actually does. Nothing connected them until
+// 2026-09-16, when the Lilygo board was added: `BOARD.has_mic` was false while
+// the I2S init was gated only on "not the Waveshare", so the build would have
+// announced no microphone and then initialised one — on the camera's SCCB pins.
+//
+// These are const assertions, so a mismatch is a build failure rather than a
+// bench session. If you add a board, you will land here, and the fix is to make
+// the two agree rather than to widen the assertion.
+const _: () = assert!(
+    BOARD.has_mic
+        == cfg!(not(any(
+            feature = "board-waveshare-21",
+            feature = "board-lilygo-tcam-s3-v11"
+        ))),
+    "board.rs says has_mic but the I2S init cfg disagrees (or vice versa)"
+);
+const _: () = assert!(
+    BOARD.i2c.is_some() == cfg!(not(feature = "board-lilygo-tcam-s3-v11")),
+    "board.rs declares an I2C bus that the init cfg skips (or vice versa)"
+);
 
 /// JPEG quality range.
 const CAMERA_QUALITY_MIN: u64 = 1;
@@ -208,6 +261,10 @@ const OUTPUT_PINS: &[i32] = BOARD.output_pins;
 /// `(-1, -1)` is unreachable — the arm that reads this is
 /// `#[cfg(not(feature = "camera"))]`, and every board declares a bus. It exists
 /// because `board::Board::i2c` is an `Option` for boards that may not.
+// Measured 2026-09-16 on the first real camera build: with `--features camera`
+// the only reader of this const is compiled out, so it is genuinely dead there.
+// Same treatment as `mod sensors` above, and for the same reason.
+#[cfg_attr(feature = "camera", allow(dead_code))]
 const I2C_PINS: (i32, i32) = match BOARD.i2c {
     Some(pins) => pins,
     None => (-1, -1),
@@ -281,6 +338,46 @@ struct AgentState {
     /// is reused in between. `(monotonic ms of last read attempt, last reading)`.
     dht_last_read_ms: u64,
     dht_last: Option<(f32, f32)>,
+    /// The ESP32-S3's on-die temperature sensor. The one real, zero-wiring
+    /// quantity every node has: it tracks package temperature, which moves
+    /// with load and with the room, and it is what the first slot-bound rule
+    /// on the bench body watches (`sensor.die_temperature`, walkthrough §A5f).
+    /// `None` ⇒ the entity is absent from the snapshot, never stubbed — a
+    /// rule on a made-up temperature would be a made-up rule.
+    die_temp: Option<esp_idf_svc::hal::temp_sensor::TempSensorDriver<'static>>,
+    /// Where host-pushed reflex rules live across a reboot (NVS, namespace
+    /// `reflex`). `None` when the partition could not be opened: rules then
+    /// live in RAM as they did before 2026-09-13, and `set_reflex_rules` says
+    /// so in its reply (`persisted: false`).
+    rules_store: Option<NvsRules>,
+}
+
+/// The NVS behind `rules_store::Store`.
+struct NvsRules(esp_idf_svc::nvs::EspNvs<esp_idf_svc::nvs::NvsDefault>);
+
+impl rules_store::Store for NvsRules {
+    fn load(&mut self) -> Option<Vec<u8>> {
+        let mut buf = vec![0u8; rules_store::MAX_BYTES];
+        match self.0.get_blob(rules_store::KEY, &mut buf) {
+            Ok(Some(bytes)) => Some(bytes.to_vec()),
+            Ok(None) => None,
+            Err(e) => {
+                log::warn!("rules store: read failed ({e}); starting with built-in rules only");
+                None
+            }
+        }
+    }
+    fn save(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.0
+            .set_blob(rules_store::KEY, bytes)
+            .map_err(|e| e.to_string())
+    }
+    fn clear(&mut self) -> Result<(), String> {
+        self.0
+            .remove(rules_store::KEY)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
 }
 
 impl AgentState {
@@ -296,7 +393,17 @@ impl AgentState {
             audio: None,
             dht_last_read_ms: 0,
             dht_last: None,
+            die_temp: None,
+            rules_store: None,
         }
+    }
+
+    /// Package temperature in °C from the on-die sensor, if it is running.
+    fn die_temperature(&self) -> Option<f64> {
+        self.die_temp
+            .as_ref()
+            .and_then(|d| d.get_celsius().ok())
+            .map(f64::from)
     }
 
     /// Append a message to history, evicting the oldest entry if needed.
@@ -414,6 +521,12 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
+    // Before anything else that could name this board. `identity::node_id()`
+    // panics until this has run, so an ordering mistake here is a loud crash at
+    // boot rather than a node quietly answering to the wrong name.
+    let (node_id, mac) = identity::init();
+    log::debug!("identity resolved: {node_id} from MAC {mac}");
+
     let peripherals = Peripherals::take()?;
     let pins = peripherals.pins;
 
@@ -427,7 +540,20 @@ fn main() -> anyhow::Result<()> {
         // TX buffer defaults to 256 B — too small for multi-rule `reflex_tick`
         // and `capabilities` replies, which then truncate. Bump it so whole
         // responses fit and go out in one write.
-        &UsbSerialConfig::new().tx_buffer_size(4096),
+        //
+        // RX had the same default and the same problem, found on the bench
+        // 2026-09-13 (`scripts/probe_linelen.py`): every command line over
+        // 256 bytes got no reply *and took the next command with it* — the
+        // overflowed tail has no newline, so it fuses with the following line
+        // and both fail to parse, and a parse failure answers nothing. A
+        // `set_reflex_rules` with one slot-bound rule is ~300 bytes. The
+        // walkthrough's A5 rule was 250 with a two-character id, which is why
+        // it always worked and A5b never did. `MAX_LINE_LEN` is 512; the ring
+        // has to hold at least a whole line plus whatever arrives while the
+        // main loop is mid-tick.
+        &UsbSerialConfig::new()
+            .tx_buffer_size(4096)
+            .rx_buffer_size(4096),
     )?;
 
     // Optional spine uplink (Phase B): mirror autonomous status/reflex JSON out
@@ -446,14 +572,23 @@ fn main() -> anyhow::Result<()> {
         Option::<esp_idf_svc::hal::gpio::AnyIOPin>::None,
         Option::<esp_idf_svc::hal::gpio::AnyIOPin>::None,
         &esp_idf_svc::hal::uart::config::Config::new()
-            .baudrate(esp_idf_svc::hal::units::Hertz(115_200)),
+            .baudrate(esp_idf_svc::hal::units::Hertz(115_200))
+            // The driver's RX ring, up from the 256-byte default: the bridge
+            // forwards every frame it hears down this wire, and a command
+            // must survive whatever else arrives while the main loop is
+            // busy for a moment.
+            .rx_fifo_size(2048),
     )
     .ok();
     #[cfg(feature = "board-waveshare-21")]
     let mut spine_uart: Option<UartDriver<'static>> = None;
     match &spine_uart {
-        Some(_) => info!("Spine uplink: UART1 ready — mirroring status/reflex out D6 (GPIO43) @115200."),
-        None => log::warn!("Spine uplink: UART1 init FAILED — no LoRa mirror (check pin/peripheral)."),
+        Some(_) => {
+            info!("Spine uplink: UART1 ready — mirroring status/reflex out D6 (GPIO43) @115200.")
+        }
+        None => {
+            log::warn!("Spine uplink: UART1 init FAILED — no LoRa mirror (check pin/peripheral).")
+        }
     }
 
     // Configure output pins via raw ESP-IDF sys API.
@@ -488,7 +623,15 @@ fn main() -> anyhow::Result<()> {
     }
 
     info!("Oh-Ben-Claw ESP32-S3 firmware v{} ready", FIRMWARE_VERSION);
-    info!("Node ID: {}", NODE_ID);
+    // Both values, always: a node id with no MAC beside it is an assertion, and
+    // the whole reason this module exists is that an unbacked assertion about
+    // identity went unnoticed. Printing the MAC makes a collision visible in the
+    // boot log of either board rather than only in a fleet-wide comparison.
+    info!(
+        "Node ID: {}  (MAC {})",
+        identity::node_id(),
+        identity::mac()
+    );
     log::warn!(
         "Track 0 gate: DENY-ALL until a host pushes limits. No pin can be \
          driven -- including by the built-in safing rules -- until set_limits \
@@ -505,7 +648,54 @@ fn main() -> anyhow::Result<()> {
     info!("Stack headroom after init: {} bytes", stack_headroom());
 
     let mut agent_state = AgentState::new();
-    info!("Stack headroom after AgentState: {} bytes", stack_headroom());
+    info!(
+        "Stack headroom after AgentState: {} bytes",
+        stack_headroom()
+    );
+
+    // Host-pushed reflex rules come back from NVS (see `rules_store` for why
+    // rules persist and limits do not). Built-in safing rules are always
+    // present; a restored set is merged after them exactly as a push is.
+    let restored = {
+        let store = esp_idf_svc::nvs::EspDefaultNvsPartition::take()
+            .and_then(|p| esp_idf_svc::nvs::EspNvs::new(p, rules_store::NAMESPACE, true));
+        match store {
+            Ok(nvs) => {
+                let mut nvs = NvsRules(nvs);
+                let loaded = rules_store::boot(&mut nvs, FIRMWARE_VERSION);
+                agent_state.rules_store = Some(nvs);
+                loaded
+            }
+            Err(e) => {
+                log::warn!("rules store: NVS unavailable ({e}); rules will not survive a reboot");
+                rules_store::Loaded::None
+            }
+        }
+    };
+    let host_rules = match &restored {
+        rules_store::Loaded::Rules(r) => r.clone(),
+        _ => Vec::new(),
+    };
+    // The built-ins bind no slots, so this cannot fail; a restored set already
+    // passed `validate` in `rules_store::boot`. If it ever does fail, a node
+    // with no self-protection must not boot quietly.
+    agent_state
+        .reflex
+        .set_rules(safing::with_defaults(host_rules))
+        .expect("built-in safing rules validate");
+    log::info!(
+        "on-MCU reflex rules loaded: {} total, {} restored from {} ({})",
+        agent_state.reflex.rule_count(),
+        restored.count(),
+        restored.source(),
+        match &restored {
+            rules_store::Loaded::Stale {
+                firmware_version, ..
+            } => format!("stored by firmware {firmware_version}; cleared"),
+            rules_store::Loaded::Corrupt(why) => format!("{why}; cleared"),
+            _ => String::new(),
+        }
+    );
 
     // Say, on the wire and not only in the log, that this node has no policy.
     //
@@ -513,17 +703,24 @@ fn main() -> anyhow::Result<()> {
     // has no other way to learn that the node is not. Failing closed without
     // saying so is still a host and a node disagreeing about what is enforced,
     // which is the disagreement this whole exercise exists to remove.
+    //
+    // `rules` says what came back from NVS — `nvs` with a count, `none`,
+    // `stale` or `corrupt` — so the host can tell "restored" from "started
+    // empty" without asking.
     {
         let announcement = format!(
             concat!(
                 r#"{{"type":"policy_state","node_id":"{}","boot_id":{},"#,
                 r#""policy":"deny-all","reason":"boot","#,
+                r#""rules":{{"source":"{}","loaded":{}}},"#,
                 r#""detail":"no pin can be driven until set_limits arrives"}}"#
             ),
-            NODE_ID,
-            boot_id()
+            identity::node_id(),
+            boot_id(),
+            restored.source(),
+            restored.count()
         );
-        send_line(&mut usb, &announcement);
+        send_line(&mut usb, &announcement, LineKind::Report);
         mirror_spine(&mut spine_uart, &announcement);
     }
     // Real I2C sensor bus. Default (XIAO): SDA=GPIO5, SCL=GPIO6 — the pads the
@@ -546,7 +743,14 @@ fn main() -> anyhow::Result<()> {
     // has a camera — `camera.rs` describes an FPC connector on the Waveshare
     // while the old comment here said that board has none. That wants a bench
     // and a datasheet, not a guess.
-    #[cfg(not(feature = "camera"))]
+    // Also skipped on any board that declares no sensor bus. The Lilygo
+    // T-CameraPlus-S3 V1.0/V1.1's only exposed I2C is GPIO1/2 -- the camera's
+    // SCCB, shared with the CST816S touch controller and the SY6970 PMIC -- so
+    // `BOARD.i2c` is `None` there. Without this arm the non-camera build would
+    // have opened a bus on GPIO5/6, which on that board are HREF and camera D7,
+    // while `capabilities` announced `(-1, -1)`. The const assertion below keeps
+    // this cfg and `BOARD.i2c` from drifting apart.
+    #[cfg(all(not(feature = "camera"), not(feature = "board-lilygo-tcam-s3-v11")))]
     {
         use esp_idf_svc::hal::i2c::config::Config as I2cConfig;
         use esp_idf_svc::hal::i2c::I2cDriver;
@@ -572,10 +776,16 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    // OV2640 camera (opt-in). Owns the SCCB on GPIO4/5 and the parallel data bus.
+    // Camera (opt-in). Owns the SCCB and the parallel data bus; the pins are the
+    // board's, see camera.rs. The sensor part is whatever is fitted -- the XIAO
+    // Sense has an OV2640, the Lilygo T-CameraPlus-S3 an OV5640 (both measured
+    // 2026-09-16). This comment used to say "OV2640" and "GPIO4/5", which were
+    // the unverified map's numbers and were never this board's.
     #[cfg(feature = "camera")]
     match camera::init() {
-        Ok(()) => info!("OV2640 camera initialised"),
+        // Not "OV2640 camera initialised": that line printed on a board with an
+        // OV5640 in it, two lines after the driver logged `Camera PID=0x5640`.
+        Ok(()) => info!("camera initialised"),
         Err(e) => log::warn!("camera init failed ({e}); camera_capture falls back to stub"),
     }
     // I2S microphone (SCK=GPIO0, WS=GPIO1, SD=GPIO2). Falls back to the stub RMS if
@@ -583,20 +793,24 @@ fn main() -> anyhow::Result<()> {
     //
     // Disabled on the Waveshare 2.1 build: GPIO0 is the DHT22 there and GPIO1/2
     // are LCD lines — no mic is wirable; `audio_sample` serves the stub RMS.
-    #[cfg(not(feature = "board-waveshare-21"))]
+    // Not on the Lilygo T-CameraPlus-S3 V1.0/V1.1: this init takes GPIO0/1/2, and
+    // on that board GPIO1/2 are the camera's SCCB. It runs *after* `camera::init`,
+    // so it would have reassigned the sensor's control bus out from under a
+    // camera that had just reported success -- a failure that would have looked
+    // like anything but an I2S driver. `BOARD.has_mic` is false there and the
+    // const assertion below makes the two agree.
+    #[cfg(not(any(feature = "board-waveshare-21", feature = "board-lilygo-tcam-s3-v11")))]
     {
         use esp_idf_svc::hal::i2s::{config, I2sDriver};
-        let i2s_cfg = config::StdConfig::philips(
-            audio::SAMPLE_RATE_HZ,
-            config::DataBitWidth::Bits32,
-        );
+        let i2s_cfg =
+            config::StdConfig::philips(audio::SAMPLE_RATE_HZ, config::DataBitWidth::Bits32);
         match I2sDriver::new_std_rx(
             peripherals.i2s0,
             &i2s_cfg,
-            pins.gpio0,                                            // BCLK / SCK
-            pins.gpio2,                                            // DIN / SD
-            Option::<esp_idf_svc::hal::gpio::AnyIOPin>::None,      // no MCLK
-            pins.gpio1,                                            // WS / LRCLK
+            pins.gpio0,                                       // BCLK / SCK
+            pins.gpio2,                                       // DIN / SD
+            Option::<esp_idf_svc::hal::gpio::AnyIOPin>::None, // no MCLK
+            pins.gpio1,                                       // WS / LRCLK
         ) {
             Ok(drv) => {
                 agent_state.audio = Some(audio::AudioMic::new(drv));
@@ -605,10 +819,31 @@ fn main() -> anyhow::Result<()> {
             Err(e) => log::warn!("I2S mic init failed ({e}); audio_sample falls back to stub"),
         }
     }
+    // On-die temperature sensor: no wiring, real signal. The default range
+    // (−10…80 °C) is the accurate one for a bench and a room; the driver
+    // trades accuracy for range outside it.
+    {
+        use esp_idf_svc::hal::temp_sensor::{TempSensorConfig, TempSensorDriver};
+        match TempSensorDriver::new(&TempSensorConfig::new(), peripherals.temp_sensor)
+            .and_then(|mut d| d.enable().map(|()| d))
+        {
+            Ok(d) => {
+                agent_state.die_temp = Some(d);
+                match agent_state.die_temperature() {
+                    Some(t) => info!("die temperature sensor ready: {t:.1} °C"),
+                    None => log::warn!("die temperature sensor enabled but the first read failed"),
+                }
+            }
+            Err(e) => log::warn!(
+                "die temperature sensor init failed ({e}); sensor.die_temperature absent from reflex snapshots"
+            ),
+        }
+    }
     // Load the built-in safing rules so the node self-protects from boot, even
     // before (or without) any host-pushed rule set or spine connection.
-    agent_state.reflex.set_rules(safing::default_safing_rules());
-    log::info!("on-MCU safing rules loaded ({} built-in)", agent_state.reflex.rule_count());
+    // (The reflex rules — built-in safing plus whatever NVS restored — were
+    // loaded before the boot announcement above, so the announcement could
+    // say what came back.)
     // System prompt prepended to every LLM request.
     agent_state.push_message(
         "system",
@@ -634,8 +869,9 @@ fn main() -> anyhow::Result<()> {
     // means lost. Kept well under the host `stale_ms` (set stale_ms ≥ ~3× this).
     const BEACON_INTERVAL_MS: u64 = 30_000;
     let mut last_beacon_ms: u64 = 0;
-    // Link watchdog: time of last host contact. If the host goes silent past the
-    // safing timeout, the built-in `safe-link-offline` rule fires (on-MCU offline
+    // Link watchdog: time of last host contact on *either* link — a USB byte or a
+    // mesh command addressed to us. If the host goes silent past the safing
+    // timeout, the built-in `safe-link-offline` rule fires (on-MCU offline
     // safing), independent of battery safing.
     let mut last_host_contact_ms: u64 = now_ms();
     // Emit link/power status only when it *changes* (not every tick), so the serial
@@ -645,6 +881,10 @@ fn main() -> anyhow::Result<()> {
     let mut last_power_mode: Option<safing::PowerMode> = None;
     // Line buffer for commands arriving over the spine UART (LoRa return path).
     let mut uart_line: Vec<u8> = Vec::new();
+    // The USB line outgrew `MAX_LINE_LEN`: the rest of it is discarded and the
+    // line is answered with an error at its newline, rather than the tail
+    // fusing with the next command and both vanishing.
+    let mut usb_line_overflowed = false;
 
     loop {
         // `Ok(0)` is a read timeout (no host data) — fall through to the reflex
@@ -655,20 +895,47 @@ fn main() -> anyhow::Result<()> {
                 last_host_contact_ms = now_ms(); // any host byte ⇒ link is alive
                 for &b in &buf[..n] {
                     if b == b'\n' || b == b'\r' {
-                        if !line.is_empty() {
-                            if let Ok(line_str) = std::str::from_utf8(&line) {
-                                if let Ok(resp) = handle_request(line_str, &mut agent_state) {
-                                    let out = serde_json::to_string(&resp).unwrap_or_default();
-                                    send_line(&mut usb, &out);
-                                }
-                            }
+                        if usb_line_overflowed {
+                            usb_line_overflowed = false;
+                            line.clear();
+                            send_line(
+                                &mut usb,
+                                &serde_json::json!({
+                                    "ok": false,
+                                    "error": format!("command line longer than {MAX_LINE_LEN} bytes — discarded whole"),
+                                })
+                                .to_string(),
+                                LineKind::Reply,
+                            );
+                        } else if !line.is_empty() {
+                            // A line that cannot be handled is answered too: a
+                            // command with no reply is indistinguishable from a
+                            // dead wire (bench, 2026-09-13).
+                            let answer = match std::str::from_utf8(&line) {
+                                Ok(line_str) => match handle_request(line_str, &mut agent_state) {
+                                    Ok(resp) => serde_json::to_string(&resp).unwrap_or_default(),
+                                    Err(e) => serde_json::json!({
+                                        "ok": false,
+                                        "error": format!("request not understood: {e}"),
+                                    })
+                                    .to_string(),
+                                },
+                                Err(_) => serde_json::json!({
+                                    "ok": false,
+                                    "error": "request is not UTF-8",
+                                })
+                                .to_string(),
+                            };
+                            send_line(&mut usb, &answer, LineKind::Reply);
                             line.clear();
                         }
-                    } else {
+                    } else if usb_line_overflowed {
+                        // Discarding the rest of an over-long line.
+                    } else if line.len() < MAX_LINE_LEN {
                         line.push(b);
-                        if line.len() > MAX_LINE_LEN {
-                            line.clear();
-                        }
+                    } else {
+                        usb_line_overflowed = true;
+                        line.clear();
                     }
                 }
             }
@@ -693,6 +960,21 @@ fn main() -> anyhow::Result<()> {
                                 if let Ok(s) = std::str::from_utf8(&uart_line) {
                                     if command_targets_us(s) {
                                         if let Ok(resp) = handle_request(s, &mut agent_state) {
+                                            // A command that reached us over the mesh is host
+                                            // contact. Until 2026-09-13 only USB bytes counted
+                                            // (above), so a node with USB closed, commanded
+                                            // over the authenticated LoRa link, measured
+                                            // silence from boot and reported "host link lost"
+                                            // — the detector was wired to one of its two
+                                            // inputs. Counted here, on a line that parsed as
+                                            // a request, and not at `command_targets_us`: the
+                                            // bridge forwards *every* verified frame to this
+                                            // UART, the base's own 5 s `gw_keepalive` included,
+                                            // and that has no `to`, so it "targets us" — it is
+                                            // station liveness, not the host, and counting it
+                                            // meant the node never went offline at all
+                                            // (bench_link_contact, 2026-09-13, first attempt).
+                                            last_host_contact_ms = now_ms();
                                             // Stamp the reply with identity so the host
                                             // bridge keys it as `mesh.<node>.cmd_result`
                                             // (correlatable by the echoed `id`), not a
@@ -700,8 +982,14 @@ fn main() -> anyhow::Result<()> {
                                             let mut v = serde_json::to_value(&resp)
                                                 .unwrap_or(serde_json::Value::Null);
                                             if let serde_json::Value::Object(ref mut m) = v {
-                                                m.insert("type".into(), serde_json::json!("cmd_result"));
-                                                m.insert("node_id".into(), serde_json::json!(NODE_ID));
+                                                m.insert(
+                                                    "type".into(),
+                                                    serde_json::json!("cmd_result"),
+                                                );
+                                                m.insert(
+                                                    "node_id".into(),
+                                                    serde_json::json!(identity::node_id()),
+                                                );
                                             }
                                             let out = v.to_string();
                                             let _ = u.write(out.as_bytes());
@@ -727,6 +1015,11 @@ fn main() -> anyhow::Result<()> {
         {
             last_reflex_ms = now;
             let mut snapshot = read_sensor_snapshot(&mut agent_state.sensors);
+            // The package temperature: real on every node, absent rather than
+            // stubbed when the sensor is not running.
+            if let Some(t) = agent_state.die_temperature() {
+                snapshot.insert(DIE_TEMPERATURE_ENTITY.to_string(), t);
+            }
             // DHT22 environment (single-wire, off the I2C bus): read at most once
             // per ~2 s (the sensor's minimum) and reuse the last good value in
             // between. Overrides the stubbed sensor.temperature with a real reading
@@ -745,19 +1038,20 @@ fn main() -> anyhow::Result<()> {
             // rule can fire, and self-report the link state.
             let silence_ms = now.saturating_sub(last_host_contact_ms);
             snapshot.insert(safing::LINK_SILENCE_ENTITY.to_string(), silence_ms as f64);
-            let link_offline = safing::link_offline(silence_ms as f64, safing::DEFAULT_LINK_TIMEOUT_MS as f64);
+            let link_offline =
+                safing::link_offline(silence_ms as f64, safing::DEFAULT_LINK_TIMEOUT_MS as f64);
             // Report link state only on a change (online↔offline).
             if last_link_offline != Some(link_offline) {
                 last_link_offline = Some(link_offline);
                 let link_report = serde_json::json!({
                     "type": "link_state",
-                    "node_id": NODE_ID,
+                    "node_id": identity::node_id(),
                     "state": if link_offline { "offline" } else { "online" },
                     "silence_ms": silence_ms,
                     "ts_ms": now,
                 });
                 let spine_msg = link_report.to_string();
-                send_line(&mut usb, &spine_msg);
+                send_line(&mut usb, &spine_msg, LineKind::Report);
                 mirror_spine(&mut spine_uart, &spine_msg);
             }
             // Self-report the derived power mode when a battery reading is present —
@@ -773,13 +1067,13 @@ fn main() -> anyhow::Result<()> {
                     last_power_mode = Some(mode);
                     let report = serde_json::json!({
                         "type": "power_mode",
-                        "node_id": NODE_ID,
+                        "node_id": identity::node_id(),
                         "mode": mode.as_str(),
                         "soc_pct": soc,
                         "ts_ms": now,
                     });
                     let spine_msg = report.to_string();
-                    send_line(&mut usb, &spine_msg);
+                    send_line(&mut usb, &spine_msg, LineKind::Report);
                     mirror_spine(&mut spine_uart, &spine_msg);
                 }
             }
@@ -793,17 +1087,34 @@ fn main() -> anyhow::Result<()> {
                         Err(e) => error = Some(e.to_string()),
                     }
                 }
-                let report = serde_json::json!({
+                // `ev`/`bl`: what the rule fired on — the readings of the
+                // entities it reads and the baselines it compares against, by
+                // position in the rule (see `reflex::FiredReflex`). This is the
+                // transition log a later vetting stage trains on; it rides in
+                // every report from the day the rule does, and costs ~12 bytes
+                // a value against the 228-byte line
+                // (`tests/spine_payload_budget.rs` measures the two built-in
+                // shapes).
+                let mut report = serde_json::json!({
                     "type": "reflex",
-                    "node_id": NODE_ID,
+                    "node_id": identity::node_id(),
                     "rule_id": fired.rule_id,
                     "action": serde_json::to_value(&fired.action).unwrap_or(serde_json::Value::Null),
                     "applied": applied,
-                    "error": error,
                     "ts_ms": now,
+                    "ev": fired.ev,
                 });
+                // `error` only when there is one: `"error":null` was 13 bytes of
+                // every report, and with the evidence aboard the escalate shape
+                // sat 7 bytes under the line (`spine_payload_budget`).
+                if let Some(e) = error {
+                    report["error"] = serde_json::json!(e);
+                }
+                if !fired.bl.is_empty() {
+                    report["bl"] = serde_json::json!(fired.bl);
+                }
                 let spine_msg = report.to_string();
-                send_line(&mut usb, &spine_msg);
+                send_line(&mut usb, &spine_msg, LineKind::Report);
                 mirror_spine(&mut spine_uart, &spine_msg);
             }
         }
@@ -815,13 +1126,25 @@ fn main() -> anyhow::Result<()> {
         // mirrored the same way as state reports so it rides the mesh home.
         if now.saturating_sub(last_beacon_ms) >= BEACON_INTERVAL_MS {
             last_beacon_ms = now;
-            let beacon = serde_json::json!({
+            // `boot_id` on every beacon, and `policy: "deny-all"` on every beacon
+            // sent before a host has pushed limits. The boot announcement is one
+            // frame, and on 2026-09-13 both of a bench's boot announcements were
+            // lost to the air while the first `link_state` a second later
+            // arrived; a host that hydrates limits on boot (the supervisor) then
+            // never learned there was a boot. Saying "still deny-all" every 30 s
+            // until told is the node keeping its side of that bargain: it costs
+            // ~40 bytes on a ~60-byte frame and stops the moment limits land.
+            let mut beacon = serde_json::json!({
                 "type": "beacon",
-                "node_id": NODE_ID,
+                "node_id": identity::node_id(),
                 "ts_ms": now,
+                "boot_id": boot_id(),
             });
+            if !agent_state.safety.told() {
+                beacon["policy"] = serde_json::json!("deny-all");
+            }
             let spine_msg = beacon.to_string();
-            send_line(&mut usb, &spine_msg);
+            send_line(&mut usb, &spine_msg, LineKind::Report);
             mirror_spine(&mut spine_uart, &spine_msg);
         }
     }
@@ -841,6 +1164,10 @@ fn main() -> anyhow::Result<()> {
 /// second: `boot_id` rides on every `set_limits` reply and on `capabilities`,
 /// and a `policy_state` line is emitted at startup. A host that remembers the
 /// `boot_id` it pushed against can detect the reset without polling for it.
+///
+/// For 22 days no host did. `capabilities` also did not carry it — this comment
+/// said it did — which the first host code to listen (the supervisor's limits
+/// hydration, 2026-09-13) found on its first bench run. Both are true now.
 static BOOT_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
 fn boot_id() -> u32 {
@@ -873,278 +1200,356 @@ fn handle_request(line: &str, state: &mut AgentState) -> anyhow::Result<Response
     // commands (e.g. a Track 0 safety denial) would send no reply at all.
     let result: anyhow::Result<String> = (|| {
         match req.cmd.as_str() {
-        // The whole reply is built in `board.rs`, which has no ESP
-        // dependencies, so `tests/firmware_node_selfreport.rs` asserts every
-        // board's answer under the ordinary workspace `cargo test` — including
-        // the board this build is not. Nothing in CI can compile this crate, so
-        // that shim is the only place any of this is checked.
-        "capabilities" | "announce" => {
-            // Headroom either side of the one reply known to overflow the main
-            // task stack. `capabilities` is ~1170 bytes of JSON built with
-            // `json!` and then serialised, and on 2026-08-22 it killed the node
-            // on roughly every other call -- truncating at ~1088 bytes, printing
-            // the stack-overflow banner, and rebooting. The stack was raised
-            // from 8192 to 16384 earlier the same day by picking a number; that
-            // moved the line without crossing it. These two logs make the next
-            // number a measurement instead.
-            let before = stack_headroom();
-            let body = board::describe_json(
-                &BOARD,
-                cfg!(feature = "camera"),
-                NODE_ID,
-                FIRMWARE_VERSION,
-            );
-            let after = stack_headroom();
-            log::info!(
-                "capabilities: {} bytes, headroom {} -> {} (used {})",
-                body.len(),
-                before,
-                after,
-                before.saturating_sub(after)
-            );
-            Ok(body)
-        }
-
-        "gpio_read" => {
-            let pin = req.args.get("pin").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let value = gpio_read(pin)?;
-            Ok(value.to_string())
-        }
-
-        "gpio_write" => {
-            let pin = req.args.get("pin").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let value = req.args.get("value").and_then(|v| v.as_u64()).unwrap_or(0);
-            gpio_write(&mut state.safety, pin, value, now_ms())?;
-            Ok("done".into())
-        }
-
-        // Track 0: host pushes this node's deterministic actuator limits (mirror of
-        // the host `[[safety.limits]]` set). Retained on `obc/nodes/{id}/limits`.
-        // Tightens the boot default-deny policy in the field with no reflash.
-        "set_limits" => {
-            // Measured 2026-08-22: this arm crashed the node on 5 of 6 calls,
-            // where `gpio_read` and `gpio_write` never did. Three stack-hungry
-            // steps stacked on a main task with ~2 KB of headroom: cloning the
-            // `limits` Value, deserialising it recursively, and then building
-            // the reply with `json!` and serialising that. `capabilities` had
-            // already been fixed the same way; this is the same bug, and it is
-            // the more damaging one -- crashing *while being told the safety
-            // policy* is what silently reverted the node to deny-all in the
-            // middle of a bench run and made a working gate look broken.
-            //
-            // The clone is gone (the args are owned here), and the reply is
-            // formatted straight into a String.
-            let before = stack_headroom();
-            use core::fmt::Write as _;
-            let limits: Vec<safety::SafetyLimit> = match req.args.get_mut("limits") {
-                Some(v) => serde_json::from_value(v.take())?,
-                None => Vec::new(),
-            };
-            let applied = state.safety.apply_pushed(limits, NODE_ID);
-            let policy = state.safety.policy();
-
-            let mut out = String::with_capacity(160);
-            out.push_str(if applied {
-                r#"{"applied":true,"allowed_pins":"#
-            } else {
-                r#"{"applied":false,"allowed_pins":"#
-            });
-            match &policy.allowed_pins {
-                Some(pins) => {
-                    out.push('[');
-                    for (i, p) in pins.iter().enumerate() {
-                        if i > 0 {
-                            out.push(',');
-                        }
-                        let _ = write!(out, "{p}");
-                    }
-                    out.push(']');
-                }
-                None => out.push_str("null"),
+            // The whole reply is built in `board.rs`, which has no ESP
+            // dependencies, so `tests/firmware_node_selfreport.rs` asserts every
+            // board's answer under the ordinary workspace `cargo test` — including
+            // the board this build is not. Nothing in CI can compile this crate, so
+            // that shim is the only place any of this is checked.
+            "capabilities" | "announce" => {
+                // Headroom either side of the one reply known to overflow the main
+                // task stack. `capabilities` is ~1170 bytes of JSON built with
+                // `json!` and then serialised, and on 2026-08-22 it killed the node
+                // on roughly every other call -- truncating at ~1088 bytes, printing
+                // the stack-overflow banner, and rebooting. The stack was raised
+                // from 8192 to 16384 earlier the same day by picking a number; that
+                // moved the line without crossing it. These two logs make the next
+                // number a measurement instead.
+                let before = stack_headroom();
+                let body = board::describe_json(
+                    &BOARD,
+                    cfg!(feature = "camera"),
+                    identity::node_id(),
+                    FIRMWARE_VERSION,
+                    boot_id(),
+                );
+                let after = stack_headroom();
+                log::info!(
+                    "capabilities: {} bytes, headroom {} -> {} (used {})",
+                    body.len(),
+                    before,
+                    after,
+                    before.saturating_sub(after)
+                );
+                Ok(body)
             }
-            let _ = write!(
-                out,
-                r#","value_min":{},"value_max":{},"min_interval_ms":{},"boot_id":{}}}"#,
-                OptNum(policy.value_min),
-                OptNum(policy.value_max),
-                OptNum(policy.min_interval_ms.map(|v| v as i64)),
-                boot_id(),
-            );
-            log::info!(
-                "set_limits: headroom {} -> {} (used {})",
-                before,
-                stack_headroom(),
-                before.saturating_sub(stack_headroom())
-            );
-            Ok(out)
-        }
 
-        // Phase 18: host pushes this node's reflex rule set (mirror of the host
-        // engine). Retained on `obc/nodes/{id}/reflex_rules` once the spine lands.
-        "set_reflex_rules" => {
-            let rules: Vec<reflex::ReflexRule> = serde_json::from_value(
-                req.args.get("rules").cloned().unwrap_or(serde_json::json!([])),
-            )?;
-            let n = rules.len();
-            // Keep the built-in safing rules in front of host-pushed rules so a
-            // node never loses self-protection when the host replaces its set.
-            let merged = safing::with_defaults(rules);
-            let total = merged.len();
-            state.reflex.set_rules(merged);
-            Ok(serde_json::json!({ "loaded": n, "total": total, "builtin_safing": total - n }).to_string())
-        }
-
-        // Phase 18: evaluate reflexes against a sensor snapshot. Fired
-        // `gpio_write` actions are actuated locally through the Track 0 safety
-        // gate; the fired set is the `obc/nodes/{id}/reflex` report payload.
-        "reflex_tick" => {
-            let mut snapshot: std::collections::HashMap<String, f64> =
-                std::collections::HashMap::new();
-            if let Some(obj) = req.args.get("snapshot").and_then(|v| v.as_object()) {
-                for (k, v) in obj {
-                    if let Some(f) = v.as_f64() {
-                        snapshot.insert(k.clone(), f);
-                    }
-                }
+            "gpio_read" => {
+                let pin = req.args.get("pin").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let value = gpio_read(pin)?;
+                Ok(value.to_string())
             }
-            // The injected `now_ms` arg is intentionally ignored: reflex_tick now
-            // evaluates against an isolated scratch pass (no shared debounce state),
-            // so a bench tick reports exactly what this snapshot would trigger
-            // without contending with the autonomous loop. Any resulting actuation
-            // is gated with the real monotonic clock below.
-            let gate_now = now_ms();
-            let fired = state.reflex.evaluate_scratch(&snapshot);
 
-            let mut reports = Vec::with_capacity(fired.len());
-            for f in &fired {
-                let mut applied = false;
-                let mut error: Option<String> = None;
-                if let reflex::Action::GpioWrite { pin, value, .. } = &f.action {
-                    match gpio_write(&mut state.safety, *pin as i32, *value as u64, gate_now) {
-                        Ok(()) => applied = true,
-                        Err(e) => error = Some(e.to_string()),
-                    }
-                }
-                reports.push(serde_json::json!({
-                    "rule_id": f.rule_id,
-                    "action": serde_json::to_value(&f.action).unwrap_or(serde_json::Value::Null),
-                    "applied": applied,
-                    "error": error,
-                }));
+            "gpio_write" => {
+                let pin = req.args.get("pin").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let value = req.args.get("value").and_then(|v| v.as_u64()).unwrap_or(0);
+                gpio_write(&mut state.safety, pin, value, now_ms())?;
+                Ok("done".into())
             }
-            Ok(serde_json::json!({ "node_id": NODE_ID, "fired": reports }).to_string())
-        }
 
-        "camera_capture" => {
-            let quality = req
-                .args
-                .get("quality")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(CAMERA_QUALITY_DEFAULT)
-                .clamp(CAMERA_QUALITY_MIN, CAMERA_QUALITY_MAX) as u8;
-            let format = req
-                .args
-                .get("format")
-                .and_then(|v| v.as_str())
-                .unwrap_or("jpeg")
-                .to_string();
-            camera_capture(quality, &format)
-        }
-
-        "audio_sample" => {
-            let duration_ms = req
-                .args
-                .get("duration_ms")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(AUDIO_DURATION_DEFAULT_MS)
-                .clamp(AUDIO_DURATION_MIN_MS, AUDIO_DURATION_MAX_MS);
-            let raw = req
-                .args
-                .get("raw")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            audio_sample(&mut state.audio, duration_ms, raw)
-        }
-
-        "sensor_read" => {
-            let sensor = req
-                .args
-                .get("sensor")
-                .and_then(|v| v.as_str())
-                .unwrap_or("bme280")
-                .to_string();
-            let field = req
-                .args
-                .get("field")
-                .and_then(|v| v.as_str())
-                .unwrap_or("temperature")
-                .to_string();
-            if sensor == "dht22" {
-                // Not on the I2C bus — its own single-wire GPIO (D10). ~5 ms read.
-                let (t, h) = dht::read_dht22(DHT22_GPIO)?;
-                let v = match field.as_str() {
-                    "temperature" => t,
-                    "humidity" => h,
-                    other => anyhow::bail!("unknown dht22 field: {other}"),
+            // Track 0: host pushes this node's deterministic actuator limits (mirror of
+            // the host `[[safety.limits]]` set). Retained on `obc/nodes/{id}/limits`.
+            // Tightens the boot default-deny policy in the field with no reflash.
+            "set_limits" => {
+                // Measured 2026-08-22: this arm crashed the node on 5 of 6 calls,
+                // where `gpio_read` and `gpio_write` never did. Three stack-hungry
+                // steps stacked on a main task with ~2 KB of headroom: cloning the
+                // `limits` Value, deserialising it recursively, and then building
+                // the reply with `json!` and serialising that. `capabilities` had
+                // already been fixed the same way; this is the same bug, and it is
+                // the more damaging one -- crashing *while being told the safety
+                // policy* is what silently reverted the node to deny-all in the
+                // middle of a bench run and made a working gate look broken.
+                //
+                // The clone is gone (the args are owned here), and the reply is
+                // formatted straight into a String.
+                let before = stack_headroom();
+                use core::fmt::Write as _;
+                let limits: Vec<safety::SafetyLimit> = match req.args.get_mut("limits") {
+                    Some(v) => serde_json::from_value(v.take())?,
+                    None => Vec::new(),
                 };
-                return Ok(format!("{v:.1}"));
-            }
-            read_sensor(&mut state.sensors, &sensor, &field).map(|v| v.to_string())
-        }
+                let applied = state.safety.apply_pushed(limits, identity::node_id());
+                if applied {
+                    // A new policy is a new world for the rules: a standing
+                    // condition whose write the old gate refused gets to fire
+                    // once more under the new one (see `ReflexEngine::rearm`).
+                    state.reflex.rearm();
+                }
+                let policy = state.safety.policy();
 
-        // Bench diagnostic: list every I2C address that ACKs on the bus, so a
-        // non-responding sensor can be told apart from wiring/address problems.
-        "i2c_scan" => {
-            let addrs: Vec<String> = match &mut state.sensors {
-                Some(bus) => bus.scan().iter().map(|a| format!("0x{a:02X}")).collect(),
-                None => Vec::new(),
-            };
-            Ok(serde_json::json!({
-                "node_id": NODE_ID,
-                "count": addrs.len(),
-                "addresses": addrs,
-            })
-            .to_string())
-        }
-
-        // ── Edge-Native Agent Commands ─────────────────────────────────────
-        "agent_config" => {
-            if let Some(ssid) = req.args.get("wifi_ssid").and_then(|v| v.as_str()) {
-                state.wifi_ssid = ssid.to_string();
+                let mut out = String::with_capacity(160);
+                out.push_str(if applied {
+                    r#"{"applied":true,"allowed_pins":"#
+                } else {
+                    r#"{"applied":false,"allowed_pins":"#
+                });
+                match &policy.allowed_pins {
+                    Some(pins) => {
+                        out.push('[');
+                        for (i, p) in pins.iter().enumerate() {
+                            if i > 0 {
+                                out.push(',');
+                            }
+                            let _ = write!(out, "{p}");
+                        }
+                        out.push(']');
+                    }
+                    None => out.push_str("null"),
+                }
+                let _ = write!(
+                    out,
+                    r#","value_min":{},"value_max":{},"min_interval_ms":{},"boot_id":{}}}"#,
+                    OptNum(policy.value_min),
+                    OptNum(policy.value_max),
+                    OptNum(policy.min_interval_ms.map(|v| v as i64)),
+                    boot_id(),
+                );
+                log::info!(
+                    "set_limits: headroom {} -> {} (used {})",
+                    before,
+                    stack_headroom(),
+                    before.saturating_sub(stack_headroom())
+                );
+                Ok(out)
             }
-            if let Some(pwd) = req.args.get("wifi_password").and_then(|v| v.as_str()) {
-                state.wifi_password = pwd.to_string();
-            }
-            if let Some(key) = req.args.get("llm_api_key").and_then(|v| v.as_str()) {
-                state.llm.api_key = key.to_string();
-            }
-            if let Some(url) = req.args.get("llm_base_url").and_then(|v| v.as_str()) {
-                state.llm.base_url = url.to_string();
-            }
-            if let Some(model) = req.args.get("llm_model").and_then(|v| v.as_str()) {
-                state.llm.model = model.to_string();
-            }
-            Ok("agent config updated".to_string())
-        }
 
-        "agent_clear" => {
-            // Retain only the system message.
-            state.history.retain(|m| m.role == "system");
-            Ok("history cleared".to_string())
-        }
+            // Phase 18: host pushes this node's reflex rule set (mirror of the host
+            // engine). Retained on `obc/nodes/{id}/reflex_rules` once the spine lands.
+            "set_reflex_rules" => {
+                let rules: Vec<reflex::ReflexRule> = serde_json::from_value(
+                    req.args
+                        .get("rules")
+                        .cloned()
+                        .unwrap_or(serde_json::json!([])),
+                )?;
+                let n = rules.len();
+                // Keep the built-in safing rules in front of host-pushed rules so a
+                // node never loses self-protection when the host replaces its set.
+                let merged = safing::with_defaults(rules.clone());
+                let total = merged.len();
+                state
+                    .reflex
+                    .set_rules(merged)
+                    .map_err(|e| anyhow::anyhow!("set_reflex_rules refused: {e}"))?;
+                // Applied, and now kept: the host's rules survive this node's next
+                // reboot (`rules_store`). Only the host's — the built-ins are code.
+                // A store that refuses is reported, not hidden: `persisted: false`
+                // with the reason means "these rules die with the next reset".
+                let persisted = match state.rules_store.as_mut() {
+                    Some(store) => rules_store::encode(FIRMWARE_VERSION, &rules)
+                        .and_then(|bytes| rules_store::Store::save(store, &bytes)),
+                    None => Err("NVS unavailable at boot".to_string()),
+                };
+                let mut reply = serde_json::json!({
+                    "loaded": n,
+                    "total": total,
+                    "builtin_safing": total - n,
+                    "persisted": persisted.is_ok(),
+                });
+                if let Err(why) = persisted {
+                    log::warn!("set_reflex_rules: applied but not persisted: {why}");
+                    reply["persist_error"] = serde_json::json!(why);
+                }
+                Ok(reply.to_string())
+            }
 
-        "agent_chat" => {
-            let message = req
-                .args
-                .get("message")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("agent_chat requires 'message' argument"))?
-                .to_string();
+            // The spinal tier: the brain modulates this node's reflexes rather than
+            // naming its actuators. `{"m":[[slot,level],...]}` — levels in [0, 1],
+            // sparse (only the slots being changed), all-or-nothing. Whatever a
+            // modulated rule then does still passes the Track 0 gate. Levels are
+            // RAM-only: a reboot returns every rule to its own default.
+            "descend" => {
+                // `{"clear":true}` first drops every level (defaults), then any
+                // pairs in the same message are applied on top.
+                if req.args.get("clear").and_then(|v| v.as_bool()) == Some(true) {
+                    state.reflex.clear_modulations();
+                }
+                let pairs: Vec<(u8, f64)> = match req.args.get_mut("m") {
+                    Some(v) => serde_json::from_value(v.take())?,
+                    None => Vec::new(),
+                };
+                let applied = state
+                    .reflex
+                    .descend(&pairs)
+                    .map_err(|e| anyhow::anyhow!("descend refused: {e}"))?;
+                let active = state.reflex.modulations().active();
+                Ok(serde_json::json!({ "applied": applied, "active": active }).to_string())
+            }
 
-            agent_chat(&message, state)
-        }
+            // Phase 18: evaluate reflexes against a sensor snapshot. Fired
+            // `gpio_write` actions are actuated locally through the Track 0 safety
+            // gate; the fired set is the `obc/nodes/{id}/reflex` report payload.
+            "reflex_tick" => {
+                let mut snapshot: std::collections::HashMap<String, f64> =
+                    std::collections::HashMap::new();
+                if let Some(obj) = req.args.get("snapshot").and_then(|v| v.as_object()) {
+                    for (k, v) in obj {
+                        if let Some(f) = v.as_f64() {
+                            snapshot.insert(k.clone(), f);
+                        }
+                    }
+                }
+                // The injected `now_ms` arg is intentionally ignored: reflex_tick now
+                // evaluates against an isolated scratch pass (no shared debounce state),
+                // so a bench tick reports exactly what this snapshot would trigger
+                // without contending with the autonomous loop. Any resulting actuation
+                // is gated with the real monotonic clock below.
+                let gate_now = now_ms();
+                let fired = state.reflex.evaluate_scratch(&snapshot);
 
-        unknown => Err(anyhow::anyhow!("Unknown command: {}", unknown)),
+                let mut reports = Vec::with_capacity(fired.len());
+                for f in &fired {
+                    let mut applied = false;
+                    let mut error: Option<String> = None;
+                    if let reflex::Action::GpioWrite { pin, value, .. } = &f.action {
+                        match gpio_write(&mut state.safety, *pin as i32, *value as u64, gate_now) {
+                            Ok(()) => applied = true,
+                            Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    let mut report = serde_json::json!({
+                        "rule_id": f.rule_id,
+                        "action": serde_json::to_value(&f.action).unwrap_or(serde_json::Value::Null),
+                        "applied": applied,
+                        "ev": f.ev,
+                    });
+                    if let Some(e) = error {
+                        report["error"] = serde_json::json!(e);
+                    }
+                    if !f.bl.is_empty() {
+                        report["bl"] = serde_json::json!(f.bl);
+                    }
+                    reports.push(report);
+                }
+                Ok(
+                    serde_json::json!({ "node_id": identity::node_id(), "fired": reports })
+                        .to_string(),
+                )
+            }
+
+            "camera_capture" => {
+                let quality =
+                    req.args
+                        .get("quality")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(CAMERA_QUALITY_DEFAULT)
+                        .clamp(CAMERA_QUALITY_MIN, CAMERA_QUALITY_MAX) as u8;
+                let format = req
+                    .args
+                    .get("format")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("jpeg")
+                    .to_string();
+                camera_capture(quality, &format)
+            }
+
+            "audio_sample" => {
+                let duration_ms = req
+                    .args
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(AUDIO_DURATION_DEFAULT_MS)
+                    .clamp(AUDIO_DURATION_MIN_MS, AUDIO_DURATION_MAX_MS);
+                let raw = req
+                    .args
+                    .get("raw")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                audio_sample(&mut state.audio, duration_ms, raw)
+            }
+
+            "sensor_read" => {
+                let sensor = req
+                    .args
+                    .get("sensor")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("bme280")
+                    .to_string();
+                let field = req
+                    .args
+                    .get("field")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("temperature")
+                    .to_string();
+                if sensor == "dht22" {
+                    // Not on the I2C bus — its own single-wire GPIO (D10). ~5 ms read.
+                    let (t, h) = dht::read_dht22(DHT22_GPIO)?;
+                    let v = match field.as_str() {
+                        "temperature" => t,
+                        "humidity" => h,
+                        other => anyhow::bail!("unknown dht22 field: {other}"),
+                    };
+                    return Ok(format!("{v:.1}"));
+                }
+                if sensor == "esp32" {
+                    // The chip's own sensors. Read live, never stubbed: an absent
+                    // sensor is an error the caller sees, not a plausible number.
+                    return match field.as_str() {
+                        "die_temperature" => state
+                            .die_temperature()
+                            .map(|t| format!("{t:.1}"))
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("die temperature sensor is not running")
+                            }),
+                        other => anyhow::bail!("unknown esp32 field: {other}"),
+                    };
+                }
+                read_sensor(&mut state.sensors, &sensor, &field).map(|v| v.to_string())
+            }
+
+            // Bench diagnostic: list every I2C address that ACKs on the bus, so a
+            // non-responding sensor can be told apart from wiring/address problems.
+            "i2c_scan" => {
+                let addrs: Vec<String> = match &mut state.sensors {
+                    Some(bus) => bus.scan().iter().map(|a| format!("0x{a:02X}")).collect(),
+                    None => Vec::new(),
+                };
+                Ok(serde_json::json!({
+                    "node_id": identity::node_id(),
+                    "count": addrs.len(),
+                    "addresses": addrs,
+                })
+                .to_string())
+            }
+
+            // ── Edge-Native Agent Commands ─────────────────────────────────────
+            "agent_config" => {
+                if let Some(ssid) = req.args.get("wifi_ssid").and_then(|v| v.as_str()) {
+                    state.wifi_ssid = ssid.to_string();
+                }
+                if let Some(pwd) = req.args.get("wifi_password").and_then(|v| v.as_str()) {
+                    state.wifi_password = pwd.to_string();
+                }
+                if let Some(key) = req.args.get("llm_api_key").and_then(|v| v.as_str()) {
+                    state.llm.api_key = key.to_string();
+                }
+                if let Some(url) = req.args.get("llm_base_url").and_then(|v| v.as_str()) {
+                    state.llm.base_url = url.to_string();
+                }
+                if let Some(model) = req.args.get("llm_model").and_then(|v| v.as_str()) {
+                    state.llm.model = model.to_string();
+                }
+                Ok("agent config updated".to_string())
+            }
+
+            "agent_clear" => {
+                // Retain only the system message.
+                state.history.retain(|m| m.role == "system");
+                Ok("history cleared".to_string())
+            }
+
+            "agent_chat" => {
+                let message = req
+                    .args
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("agent_chat requires 'message' argument"))?
+                    .to_string();
+
+                agent_chat(&message, state)
+            }
+
+            unknown => Err(anyhow::anyhow!("Unknown command: {}", unknown)),
         }
     })();
 
@@ -1215,7 +1620,11 @@ fn camera_capture(quality: u8, format: &str) -> anyhow::Result<String> {
     #[cfg(not(feature = "camera"))]
     {
         // Built without the `camera` feature — return the placeholder (see CAMERA.md).
-        log::info!("camera_capture stub: quality={}, format={}", quality, format);
+        log::info!(
+            "camera_capture stub: quality={}, format={}",
+            quality,
+            format
+        );
         Ok(format!(
             "STUB:camera_capture:quality={quality}:format={format}:base64_jpeg_data_here"
         ))
@@ -1290,7 +1699,7 @@ fn sensor_read_stub(sensor: &str, field: &str) -> anyhow::Result<f64> {
 fn command_targets_us(line: &str) -> bool {
     match serde_json::from_str::<serde_json::Value>(line.trim()) {
         Ok(v) => match v.get("to").and_then(|t| t.as_str()) {
-            Some(to) => to == NODE_ID,
+            Some(to) => to == identity::node_id(),
             None => true,
         },
         Err(_) => false,
@@ -1306,35 +1715,164 @@ fn mirror_spine(uart: &mut Option<UartDriver<'static>>, line: &str) {
     }
 }
 
-fn send_line(usb: &mut UsbSerialDriver, line: &str) {
-    let payload = format!("{line}\n");
-    let bytes = payload.as_bytes();
+/// Why a line is being written, which decides how long the node is willing to
+/// wait for the USB TX ring to drain.
+///
+/// The distinction is the whole fix. Both kinds used one budget until
+/// 2026-09-16, and that budget was tuned for the kind that must never block.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LineKind {
+    /// An answer to a command the host just sent. A reader is present *by
+    /// construction* — it wrote to us a moment ago and is now waiting.
+    Reply,
+    /// Something the node said on its own: a beacon, a reflex report, safing.
+    /// Nobody may be listening, so this must be dropped rather than waited on.
+    Report,
+}
+
+/// Stall budget in 10 ms rounds. A "stall" is one `write` returning `Ok(0)`.
+///
+/// `REPORT` stays at the value measured into place on 2026-09-13: ~50 ms. It
+/// used to be ~2 s and that made the node DEAF TO THE MESH whenever its USB
+/// cable was plugged in with nothing reading it — every report parked the main
+/// loop, the UART intake between them starved, and mesh commands the bridge had
+/// delivered were never answered. A mesh node must never wait on its USB.
+const STALL_BUDGET_REPORT: u32 = 4;
+/// ~500 ms. Ten times `REPORT`, still a quarter of the value that caused the
+/// deafness, and only reachable when a host has just spoken to us.
+const STALL_BUDGET_REPLY: u32 = 50;
+
+const _: () = assert!(
+    STALL_BUDGET_REPLY > STALL_BUDGET_REPORT,
+    "a command reply has a host waiting for it; it must be more patient than an \
+     autonomous report, not less"
+);
+
+/// Largest slice handed to `UsbSerialDriver::write` in one call.
+///
+/// Measured 2026-09-16: passing the whole 6766-byte reply at once wrote **zero**
+/// bytes and returned immediately — not a stall, a refusal. The TX ring is 4096,
+/// and a single write larger than it does not partially fill; it fails. The
+/// silent-drop fix made this visible within minutes of shipping, which is the
+/// argument for that fix in one line.
+///
+/// A quarter of the ring, so a chunk always fits with the ring part-drained.
+const USB_WRITE_CHUNK: usize = 1024;
+
+/// Write as much of `bytes` as the ring will take within `max_stalls`.
+/// Returns how many bytes actually went out, and whether the driver errored.
+fn write_budgeted(usb: &mut UsbSerialDriver, bytes: &[u8], max_stalls: u32) -> (usize, bool) {
     let mut off = 0;
     let mut stalls = 0u32;
+    let mut errored = false;
     while off < bytes.len() {
-        match usb.write(&bytes[off..], 100) {
+        // Never hand the driver more than the ring can hold in one go.
+        let end = (off + USB_WRITE_CHUNK).min(bytes.len());
+        match usb.write(&bytes[off..end], 10) {
             Ok(0) => {
-                // No progress this round (tx buffer full / host draining). Retry a
-                // bounded number of times so large replies (e.g. `capabilities`)
-                // get out, but give up after ~2 s if the host has truly gone.
                 stalls += 1;
-                if stalls > 20 {
-                    return;
+                if stalls > max_stalls {
+                    break;
                 }
             }
             Ok(n) => {
                 off += n;
                 stalls = 0;
             }
-            Err(_) => return,
+            Err(_) => {
+                errored = true;
+                break;
+            }
         }
     }
+    (off, errored)
 }
+
+/// Write one newline-terminated line, and **say so if it does not all fit**.
+///
+/// The silence was the bug. On 2026-09-16 a working camera produced a 6697-byte
+/// reply, this function abandoned it after ~50 ms, and the host saw nothing at
+/// all — which read as "no frame" and cost three sessions of hunting pin maps,
+/// PSRAM modes and ribbon seating on hardware that was fine. A node that cannot
+/// send its answer must be able to say that, or the absence of an answer gets
+/// attributed to whatever the answer was about.
+fn send_line(usb: &mut UsbSerialDriver, line: &str, kind: LineKind) {
+    let payload = format!("{line}\n");
+    let bytes = payload.as_bytes();
+    let budget = match kind {
+        LineKind::Reply => STALL_BUDGET_REPLY,
+        LineKind::Report => STALL_BUDGET_REPORT,
+    };
+    let (sent, errored) = write_budgeted(usb, bytes, budget);
+    if sent == bytes.len() {
+        return;
+    }
+
+    // Dropped. A partial line is already on the wire and the host cannot parse
+    // it, so terminate it and follow with a whole, parseable line saying what
+    // happened. Best-effort on the report budget: if the ring is so wedged that
+    // even this will not go, nothing else would have either.
+    let why = if errored {
+        "driver error"
+    } else {
+        "ring stayed full"
+    };
+    log::warn!(
+        "send_line: dropped after {sent}/{} B ({}); {why}",
+        bytes.len(),
+        match kind {
+            LineKind::Reply => "reply",
+            LineKind::Report => "report",
+        }
+    );
+    if kind == LineKind::Reply {
+        let notice = format!(
+            "\n{{\"type\":\"reply_dropped\",\"sent\":{sent},\"total\":{},\
+             \"reason\":\"{why} - the answer exists but did not fit\"}}\n",
+            bytes.len()
+        );
+        let _ = write_budgeted(usb, notice.as_bytes(), STALL_BUDGET_REPORT);
+    }
+}
+// ── MEASURED 2026-09-16: this function silently eats `camera_capture` ─────────
+//
+// On the Lilygo T-CameraPlus-S3 the camera works. It produced a real 5020-byte
+// QVGA JPEG (`capture: frame len=5020 B, 320x240, format=4`), base64-encoded to
+// 6696 B, and then the host received NOTHING -- no reply, no error, no log --
+// while `gpio_read` answered normally on either side of it. Three sessions were
+// spent suspecting pin maps, PSRAM, buffer counts, ribbon seating and the sensor
+// itself. The camera was never the problem for that board.
+//
+// The payload is 6697 bytes and the TX ring is 4096. When the ring fills,
+// `write` returns `Ok(0)`; after five of those (about 50 ms of patience) the
+// loop above `return`s and **abandons the rest of the line without telling
+// anyone**. The caller cannot tell a sent reply from a dropped one, and neither
+// can the host: it just waits.
+//
+// The small stall budget is deliberate and the comment above explains why -- a
+// ~2 s wait once made the node deaf to the mesh, which is a worse failure. So
+// this is a real tension, not an oversight: autonomous reports SHOULD be dropped
+// rather than block System 1. But a command reply is different in kind. A host
+// is synchronously waiting for it, and dropping it silently converts "your
+// camera works" into "your camera is broken" -- which is exactly what happened.
+//
+// NOT FIXED HERE. The fix is a protocol decision and deserves an ADR:
+//   * report the drop instead of returning silently (right regardless, small);
+//   * give command replies a longer patience budget than autonomous reports,
+//     since a reader is known to be present for them;
+//   * chunk large replies across lines -- the only thing that actually makes
+//     images work, and it changes the wire format, so the host changes too.
+// Until then, `camera_capture` cannot return an image over USB on any board,
+// and that is a property of this function rather than of any camera.
 
 /// Monotonic milliseconds since boot (ESP timer), for reflex valid-time + debounce.
 fn now_ms() -> u64 {
     (unsafe { esp_idf_svc::sys::esp_timer_get_time() } / 1000) as u64
 }
+
+/// Reflex-snapshot entity for the on-die temperature (°C). Named for what it
+/// is — the package, not the room — so a rule cannot mistake it for ambient.
+const DIE_TEMPERATURE_ENTITY: &str = "sensor.die_temperature";
 
 /// Build a reflex snapshot from the node's local sensors. Entity keys follow the
 /// host world-memory convention (`sensor.{quantity}`) so a rule authored against

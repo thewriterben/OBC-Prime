@@ -193,8 +193,11 @@ SELFTEST = [
      "pin map from `docs/BENCH-PINOUT-CARDS.md` Card 2", False),
     ("a path that is genuinely here",
      "the gate lives in `scripts/check_counts.py` and runs in CI", True),
+    # `src/feedback.rs` played this part until 2026-09-13, when it was deleted
+    # upstream; a selftest fixture that cites a real file is a fixture that
+    # can stop being true.
     ("crate-relative, one match",
-     "**`src/feedback.rs` (269 LOC) is parked** and wired to nothing", True),
+     "**`src/mushroom.rs` is the sparse-expansion memory** over episode embeddings", True),
     ("attributed to the generator",
      "The generator's `tests/reference-bodies.test.ts` enforces it", True),
     ("a basename, not a path",

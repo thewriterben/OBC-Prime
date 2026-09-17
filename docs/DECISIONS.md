@@ -5,6 +5,767 @@ New entries go at the top.
 
 ---
 
+## 2026-09-17 — The node captures greyscale and only greyscale, because the driver bakes the format into its buffers
+
+`docs/VISION-DETECTOR-2026-09.md` ends with a design question and says it wants
+an ADR: the frame-difference detector needs pixels, the camera is configured
+`PIXFORMAT_JPEG`, and decoding a JPEG on the node to difference it is silly. The
+obvious shape was **two capture modes** — greyscale to decide, JPEG when there is
+something worth showing — and the obvious implementation was to flip the sensor
+between them.
+
+That implementation does not exist. This was settled by reading the pinned
+component rather than by trying it.
+
+### What the driver actually does
+
+`espressif/esp32-camera` **v2.0.7** (pinned in `firmware/obc-esp32-s3/Cargo.toml`).
+
+The pixel format is not a sensor setting the driver observes. It is an input to
+the driver's own geometry, consumed once, at init:
+
+* `driver/cam_hal.c`, `cam_config()` — `cam_obj->jpeg_mode = config->pixel_format
+  == PIXFORMAT_JPEG`, and the frame-buffer size branches on it: JPEG gets
+  `width * height / 5`, everything else `width * height * fb_bytes_per_pixel`.
+  For QVGA that is **15,360 bytes for JPEG against 76,800 for greyscale** — and
+  15,360 is exactly what this node's boot log has been printing (`Allocating
+  15360 Byte frame buffer in PSRAM`).
+* `target/esp32s3/ll_cam.c`, `ll_cam_set_sample_mode()` — sets
+  `in_bytes_per_pixel` / `fb_bytes_per_pixel` from the same config field.
+* `cam_config()` calls `cam_dma_config()`, which allocates the frame buffers and
+  the DMA descriptors against those numbers.
+
+`cam_config()` is called from exactly one place: `esp_camera_init()`. Nothing
+re-runs it.
+
+The sensor-side call — `s->set_pixformat()` — only writes sensor registers.
+`esp_camera_init()` calls it *after* `cam_config()`, which is why it works there
+and nowhere else.
+
+**So a runtime format switch leaves the driver describing the old format while
+the sensor emits the new one, and the failure is specific.** Flip a
+JPEG-initialised driver to greyscale and `jpeg_mode` is still true, so
+`cam_hal.c` runs `cam_verify_jpeg_soi()` over raw pixels, finds no start marker,
+stops the capture; `cam_take()` then finds no end marker, logs `NO-EOI`, and
+**recurses** with the remaining timeout until it returns NULL. The symptom is
+"the camera stopped producing frames". The cause is four function calls away.
+
+Upstream invites this mistake: `esp_camera_load_from_nvs()` calls
+`s->set_pixformat(s, pf)` with no reconfiguration at all. A vendor API doing the
+unsafe thing is not permission to do it.
+
+The only supported way to change format is `esp_camera_deinit()` +
+`esp_camera_init()`.
+
+### Decision
+
+**One capture mode: `PIXFORMAT_GRAYSCALE`. Pictures for humans are produced by
+encoding that grey frame in software, on demand, via the component's own
+`fmt2jpg_cb`.**
+
+The node therefore never switches modes, and the detector is never blind.
+
+### Why not deinit/reinit per switch
+
+It works, it is the supported path, and its cost is not the one that matters.
+Tearing down re-probes SCCB, resets the sensor and re-allocates the buffers —
+tolerable. What is not tolerable is what the sensor does next.
+
+The fixture already measured this. `baseline_still` frame 000, immediately after
+a reset, scores `raw` 80.6 with 87% of pixels changed against a steady-state max
+of 4.61 — **17× the quiet floor, with nothing happening**, because auto-exposure
+is converging. Every mode switch manufactures that frame.
+
+So in a two-mode design, every "show me a picture" blinds the detector for
+several frames afterwards, and the blindness looks exactly like a major event.
+The detector would need to know about the camera's state machine and suppress
+itself around it — which is a detector that lies by omission at precisely the
+moment someone was interested enough to ask for a picture.
+
+Rejected for that reason, not for latency.
+
+### Why not keep JPEG and detect on compressed size
+
+A JPEG's length does track scene complexity, it is free, and it needs no format
+change at all. It is also a single scalar, and the one thing the fixture
+established is that **a single scalar cannot separate the three events**: a lamp
+switch, a camera nudge and a person all move a large fraction of the frame. That
+is the entire finding. Rejected.
+
+### What greyscale costs, and what has not been measured
+
+Two of these are facts read from the source; the third is not measured and must
+be before this decision is believed.
+
+**The two bench sensors behave differently, and this is the part that will bite.**
+`ll_cam_set_sample_mode()` special-cases the OV5640 (with the OV3660, NT99141,
+SC031GS, BF20A6, GC0308): those sensors send **Y8**, one byte per pixel. Every
+other sensor — including the **OV2640 on the XIAO** — sends YU/YV at two bytes
+per pixel, and `ll_cam_memcpy()` strides through it keeping every other byte.
+So the Lilygo's greyscale costs 76,800 bytes across the DVP bus and the XIAO's
+costs 153,600 for the same picture. **Thresholds measured on one of these boards
+are not evidence about the other**, over and above the JPEG-round-trip caveat
+`VISION-DETECTOR-2026-09.md` already carries.
+
+**Non-JPEG mode allocates its DMA buffer differently.** JPEG mode takes a fixed
+16 KiB of internal DMA-capable RAM (`ll_cam_dma_sizes`, `dma_half_buffer_cnt =
+16`, 1024 bytes each). Greyscale goes through `ll_cam_calc_rgb_dma()` and sizes
+itself from `CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX`, whose configured value in this
+build has **not** been read. It is larger. `ll_cam_calc_rgb_dma()` can also fail
+outright with `Resolution too high` if a single line exceeds half the buffer; at
+QVGA a line is 320 or 640 bytes, so that is not a risk here and would be at
+higher resolutions.
+
+**The software JPEG encode is unmeasured.** `conversions/to_jpg.cpp`,
+`convert_image()` handles `PIXFORMAT_GRAYSCALE` as `num_channels = 1`,
+`jpge::Y_ONLY`, one `memcpy` per scanline — so the path exists and is a
+one-channel encode. How long `jpge` takes over 76,800 pixels on an ESP32-S3 is
+not known, and nobody should quote a number for it until it is on the bench.
+
+Use `fmt2jpg_cb`, **not** `fmt2jpg`. `fmt2jpg` mallocs a hardcoded 128 KiB
+(`//todo: allocate proper buffer` in the source) and its `memory_stream::put_buf`
+silently clamps on overflow — the warning that would have told you is commented
+out. That is a silent degradation, in a codebase whose rule is that degradation
+appears in the result. The callback form lets the caller own the buffer and count
+the bytes.
+
+### The price, stated plainly
+
+**Pictures off this node are now monochrome.** That is a real loss and it is the
+reason to revisit: colour costs a second mode, and a second mode costs the
+detector's continuity. If colour turns out to matter more than uninterrupted
+detection, deinit/reinit is still there and this entry is the argument to weigh
+against.
+
+It is, for now, a cheaper loss than it looks. The colour this node has produced
+so far is a heavy magenta cast that survived a large lighting change unchanged
+(`camera.rs`, the IR-cut note) and is still unexplained. We are giving up a
+colour channel we cannot yet vouch for.
+
+### An observation that is not a diagnosis
+
+`cam_config()` sets `cam_obj->psram_mode = (config->xclk_freq_hz == 16000000)` on
+every target except the original ESP32. This firmware runs XCLK at 20 MHz, so
+**`psram_mode` is false on both bench boards** — despite `fb_location =
+CAMERA_FB_IN_PSRAM`, which is a different thing entirely (it chooses where the
+frame buffer is malloc'd, not whether DMA writes into it directly). Both boards
+have therefore always been on the copy-through-internal-RAM path.
+
+Nobody in this tree knew that. It is recorded because it is true and because the
+XIAO's null-frame fault lives on that path — but the Lilygo captures fine on the
+same path at the same frequency, so this is **not** an explanation of that fault
+and must not be cited as one.
+
+### The transferable part
+
+The question "can I change this at runtime?" was answered by four function calls
+of reading, and the answer was no in a way that would have presented as an
+intermittent camera fault — this project's most expensive failure mode, and one
+it has already paid for twice on this exact peripheral. A configuration struct
+field is not a setting; it is whatever the callee did with it once.
+
+---
+
+## 2026-09-16 — A node's name has to come from the chip, because the second board answered to the first one's
+
+The firmware carried `const NODE_ID: &str = "obc-esp32-s3-001"`, with a doc
+comment saying it "should be read from NVS in production". The comment had been
+right and ignored for months, which is the normal fate of a comment that names a
+problem instead of failing on it.
+
+Tonight the second XIAO was flashed for camera bring-up and booted announcing
+`Node ID: obc-esp32-s3-001` — the live mesh node's identity — and immediately
+began emitting `link_state` JSON under that name on its spine UART. The mesh
+supervisor keys everything on node id. Two boards sharing one is the same
+identity confusion the on-air forgery work exists to detect, except arriving from
+inside the fleet, where nothing is watching for it.
+
+Nothing reached the air, for one reason: that board's UART was not yet wired to a
+radio. **Step 4 of the plan was to wire it to one.**
+
+It nearly happened earlier and more stupidly, too. The step before was "flash the
+spare XIAO", and when the ports were enumerated the only ESP32-S3 attached was
+the live node. Both boards are the same model from the same batch; their MACs
+differ only in the last three bytes. Nothing on the desk or on the screen told
+them apart.
+
+**Identity now derives from the chip's factory MAC.** A small roster maps known
+MACs to readable names, so `obc-esp32-s3-001` stays attached to the board the
+host already has world memory, pushed limits and bench records for — renaming it
+would have been a large, pointless blast radius. An unrostered board self-names
+`obc-esp32-s3-<last three bytes>`.
+
+That fallback is ugly on purpose, and the ugliness is the design. **A fixed
+fallback is what caused this**, exactly as a default pin map let `camera.rs`
+claim the wrong board through two corrections. There is now no default to be
+wrong: a board either has a name someone wrote down against a measured MAC, or it
+has one no other board can hold.
+
+Rejected: **NVS provisioning**, which the old comment promised and whose
+machinery already exists. It buys renaming-without-reflash, which nothing needs,
+and it owes an answer for an unprovisioned board — the one question with no safe
+default. Revisit when a board must be renamed in the field. Rejected: a
+**build-time env var**, which is the cheapest code and can be set *wrong*
+silently, which is the failure being fixed.
+
+The fix created its own hazard, and it is the hazard this repo keeps re-learning:
+the roster now lives in three places — firmware, the host's peripheral registry,
+and the bench script that decides which port is safe to flash. `camera.rs`
+contradicted its own `Cargo.toml` two directories away for weeks *because nothing
+compared them*. So `tests/firmware_identity_roster.rs` compares all three and
+fails on drift, and the gate script moved into the repo to be comparable at all —
+a control that exists only on one bench machine is not a control.
+
+The mapping also moved into its own ESP-free module so the host test executes the
+real code, the same split as `sensor_math` / `sensors`. Behind an `esp_idf_svc`
+import it could never run, and a rule about fleet identity that nothing can
+execute is a rule on trust.
+
+### The transferable part
+
+Two things. First: a comment that says "in production this should be X" is a
+known defect with no due date, and it will be paid on the day a second unit
+exists. The cheap version of this fix was available for months.
+
+Second, and sharper — **the boot log now prints the MAC beside the name, always.**
+A name alone is an assertion. The collision was invisible because both boards
+asserted the same thing with equal confidence and nothing underneath it was
+visible. A shared name with the MAC beside it is a contradiction you can see in
+one board's log, instead of a fleet-wide comparison nobody runs.
+
+---
+
+## 2026-09-16 — A cargo feature cannot isolate the camera build, and half of it can be isolated anyway
+
+Bringing up a camera node needs three things the default firmware build does not
+have: a pin map, PSRAM, and the `espressif/esp32-camera` IDF component. Only the
+first is a cargo feature. The other two are ESP-IDF-level and, as the tree stood,
+both were global — so building the camera changed what a *default* build of the
+tree produces, and the only thing stopping a wrong binary reaching the live mesh
+node `obc-esp32-s3-001` was me saying not to.
+
+That is the shape this project keeps finding: a rule that exists only as prose.
+It is the same failure as `camera.rs` claiming a board it had never been checked
+against. So the two halves were settled separately, and honestly.
+
+**PSRAM: isolable, mechanically.** `esp-idf-sys` 0.37.2 reads
+`ESP_IDF_SDKCONFIG_DEFAULTS` as a `;`-separated list (`build/config.rs:25-27`,
+`parse::list` at `config.rs:187-202`), later entries winning. The camera overlay
+now lives in its own `sdkconfig.defaults.camera`, and a camera build names both
+files in that variable. A default build does not set the variable and therefore
+cannot see the overlay. The isolation is the *absence* of an environment
+variable, not a promise in a document.
+
+Two sharp edges are recorded where they bite rather than here: the variable
+**replaces** the list instead of appending (`set_when_none`, `config.rs:139-144`),
+so omitting `sdkconfig.defaults` silently drops the 32 KB main-task stack that
+three crashes and a measurement bought on 2026-08-22 — a boot loop whose cause
+would look nothing like its origin. And the automatic `sdkconfig.defaults.<x>`
+suffix expansion (`common.rs:263-300`) cannot express "camera": `<x>` resolves
+from cargo's `PROFILE`, which is only ever `debug` or `release`
+(`common.rs:259-261`). That dead end is written into CAMERA.md so the next person
+does not spend the same hour on it.
+
+**The component: not isolable, and that was verified rather than assumed.**
+`extra_components` is passed to `try_from_env()` as an exclude
+(`cargo_driver/config.rs:72-74`); its doc comment says outright "This option is
+not available as an environment variable." And the `cargo metadata` invocation
+that reads it passes no feature flags (`config.rs:107-113`), while `CARGO_FEATURE_*`
+appears nowhere in esp-idf-sys's `build/`. The build script cannot observe the
+feature set of the build it is part of. With the block uncommented, a
+camera-feature-*off* build still downloads the component, compiles it into the
+IDF, and emits the bindings module.
+
+So there is no mechanism, and inventing one would mean a second firmware crate
+duplicating the command loop for a single board. **Chosen instead: the block stays
+commented on `main`; camera bring-up happens on a `camera-bringup` branch.** The
+containment is still social, but it is now *visible* — a tree that would flash the
+wrong binary to the live node is a branch name in the prompt rather than a
+paragraph nobody re-reads. Prose that you can see is not the same as prose that
+you must remember.
+
+> ### Amendment, 2026-09-17: that last paragraph was wrong, twice, on the day it
+> ### was written.
+>
+> "A branch name in the prompt" failed the same afternoon, in two different ways,
+> and neither is a discipline problem that more discipline fixes.
+>
+> **One.** An hour of work went onto `main` in the belief it was the branch. The
+> `git switch main` that caused it was three tool calls earlier, for an unrelated
+> branch investigation, and nothing between then and the next edit mentioned it.
+> It surfaced only when a build failed for a reason that looked like something
+> else entirely (`no camera in sys`), and four calls were spent theorising about
+> stale bindings before anyone thought to ask which branch the tree was on.
+>
+> **Two.** `CARGO_TARGET_DIR` is shared across branches. Building on `main` — with
+> the block commented, correctly — made esp-idf-sys regenerate bindings *without*
+> the camera module, destroying what the branch depended on. Switching back did
+> not restore them, because that build script does not re-run on `Cargo.toml`
+> metadata changes; its own comment says to `cargo clean`, which would have cost
+> a 14 GB rebuild. The branch discipline and the build cache were quietly hostile
+> to each other, and nothing said so.
+>
+> The generalisation is the point, because it is the same shape as everything
+> else this file records. **A control that lives in a human's attention is not a
+> control.** A prompt protects a person at a terminal; it protects no automated
+> agent, no CI runner, and no distracted human either. It is prose wearing a
+> mechanism's clothes.
+>
+> `scripts/check_camera_component_gate.py` (upstream) makes it a comparison a
+> machine performs, enforced on `main` only — the bring-up branch is *supposed* to
+> carry the block, and a check permanently red on a working branch teaches people
+> to ignore red. Verified to fail before being trusted.
+>
+> The decision itself stands: the block still cannot be feature-gated and a
+> separate crate is still not worth one board. What changed is that the
+> containment is now checkable, and the original claim — that visibility was
+> enough — is recorded here as refuted rather than quietly edited away.
+
+Rejected, with triggers to revisit:
+
+- **A separate `obc-esp32-s3-camera` crate.** Clean isolation by construction, but
+  it duplicates the command loop and spine plumbing to serve one board, or forces
+  a shared-library split today for a node that has never booted. Revisit when a
+  *second* camera board needs a different component set, or when the camera node's
+  code diverges enough that the shared main is fiction.
+- **The optional-dependency seam.** `extra_components` is also collected from
+  direct dependencies (`cargo_driver/config.rs:283-297`), so an optional dep
+  carrying the block might drop out when its feature is off. The explore pass
+  flagged this as *unverified* — whether cargo's resolve graph actually omits an
+  unenabled optional dep there was not tested. One untested mechanism for one use
+  is speculative abstraction. Revisit only if the branch discipline actually
+  fails, and verify it before building on it.
+
+### The transferable part
+
+"Can this be gated?" is a question about someone else's build script, and the
+answer is in its source, not in its name or its README — that crate's own
+`BUILD-OPTIONS.md` is stale in three places against the code. Twenty minutes of
+reading turned one guess into one mechanism and one honest "no mechanism
+exists", and the honest no is worth more than a clever workaround would have
+been: it names what is protecting the live node, which is discipline, so the
+discipline could at least be made visible.
+
+---
+
+## 2026-09-16 — The board the brain is plugged into is not a node, and it is the one thing on the mesh it cannot hear
+
+Third variant of one root cause in a single evening, which is why it gets its own
+entry rather than a line in the one below.
+
+**The shape.** The host's model of the mesh is built from `SPINE ◄` lines on one
+station's console. Everything it knows arrives as a *received* frame. But the
+station at the end of that cable never receives its own frames — it transmits
+them, and a transmitted frame is a `SPINE ►` line. **The board the brain is wired
+to is structurally invisible to the brain.** Tonight that produced three separate
+failures, each of which looked like something else:
+
+1. *Frames the station refuses* → printed as `SPINE ◄ REJECTED`, dropped by the
+   parser for want of a `seq=`. On-air forgery was invisible. (Entry below.)
+2. *The node's uplink*, when the node is jumpered to that same station → wrapped
+   and transmitted, logged `SPINE ► (uart)`, dropped by category. The node looked
+   dead for a whole session while beaconing every 30.78 s.
+3. *The station's own liveness* → never heard at all, so the mesh supervisor
+   presumed it lost. `gw-40`, "offline for 43.5 hours", `escalated_count` pinned
+   at 1, `safe-mesh-node-lost` firing at Critical every tick until the System 2
+   wake budget swallowed it. The log shows `System 2: suppressed (wake budget)`
+   on repeat — a real node loss at that moment would have been indistinguishable
+   from the noise.
+
+**Why the existing guard missed it.** `snapshot` already refuses to invent nodes
+from entity names: a node exists only if its rollup carries `Origin::Observed`,
+which closed the 2026-07-17 phantom loop. `mesh.gw-40` passes that check
+honestly — it *was* heard on the air, for weeks, while it was the field bridge.
+Then the console cable moved to it and it went silent forever. The guard asks
+"was this ever real?", and the answer was yes. The question that needed asking is
+"can this still be heard?".
+
+**Decision.** Discovery is authoritative *and* liveness must be. The operator
+declares which board the console belongs to (`[lora_gateway] station`, recorded
+as the fact `spine.station`), and `snapshot` excludes it: a board that cannot be
+heard is not a node whose silence means anything. Its liveness already has a
+correct and separate signal — `spine.gateway`, the console link itself. Standing
+conclusions from before the declaration are *withdrawn* on the next tick with a
+reason, not merely dropped from the count: `escalated_count` recomputes from the
+views either way, but an "escalated" fact nobody will ever revisit is worse than
+the count it stopped feeding.
+
+**The claim is checked, not trusted.** The host cannot discover its own station —
+it never sees the boot banner, because the gateway deliberately holds DTR/RTS low
+so opening the port does not reset the board. So this is an operator's assertion,
+and it is stamped `source: "config"` to say so. But it is falsifiable: the host
+can never legitimately *receive* a frame whose `src` is its own station, so one
+arriving means the setting names the wrong board — or something is impersonating
+the board the brain is wired to. Either way the gateway says so at error level,
+naming the consequence (the supervisor is skipping that id on the strength of the
+setting).
+
+**Options not taken.** *Learn it from the banner* — the host never sees one, and
+resetting the station to provoke one trades a real outage for a label. *Exclude
+every `gw-` prefixed id from node escalation* — a lost **bridge** is real news
+and the mesh is partitioned; only the console's own board is unhearable.
+*Ingest the station's own `SPINE ►` lines* — they carry no `ctr=`/`mac=`, so
+`LoraAuth` would have nothing to verify and the host would be trusting a console,
+which is the boundary SPINE-AUTH exists to hold. *Leave it and let the operator
+ignore the escalation* — that is alarm fatigue written into the product, and it
+was already suppressing wakes tonight.
+
+**Consequences.** One optional config key; unset, behaviour is exactly as before
+and the gateway warns at startup that the console's board will be judged as a
+node. A bench whose stations swap roles needs the key updated — and will be told
+loudly if it is not, by the frame that proves it wrong. The deeper lesson is
+recorded in `BENCH-PINOUT-CARDS.md` Card 0, whose jumper block had named a board
+outright and so quietly became the failure mode when the boards swapped.
+
+## 2026-09-15 — A frame the station refuses is invisible to the brain, and the fix is a weaker signal, not a louder one
+
+Found while preparing the bench for the alarm the entry below decided. The
+bench could not be run as conceived, and the reason is worth more than the
+bench was.
+
+**What the code says.** A station verifies every frame at the radio and
+forwards nothing it refuses — `heltec-lora-linktest/src/main.rs`: *"Order
+matters: the tag first, so an attacker cannot move a window with a frame
+they cannot sign … Nothing unverified reaches the UART, the log line the
+host parses, or the relay."* A refusal becomes one console line,
+`SPINE ◄ REJECTED src=… ctr=… : bad tag …`, which carries no `seq=`; the
+host's `parse_gateway_line` requires `seq=` and returns `None`. So the
+line is printed, read off the wire by the host, and discarded.
+
+**The consequence, stated plainly.** `spine.auth.<station>.alarm` fires
+only when the host refuses a frame *the station accepted*, which happens
+only when the station forwarding to the host holds a different root than
+the host — a replaced or mis-provisioned base station. That is the threat
+`lora_gateway.rs` documents ("the host trusts the station's radio, not its
+console") and it is the one the 09-13 bench exercised: the four `BadTag`
+in the entry below came from a wrong-root *build*, not from a third party
+on the air. **A stranger transmitting forged frames at an honest station
+produces no fact, no alarm and no escalation — `status` stays clean.**
+That is the inverse of which threat is likely.
+
+**Decision.** The host learns to read the refusal line the station already
+prints, and raises a **separate and deliberately weaker** signal:
+`spine.air.<station>.refused` `{kind, count, since_ms, last_ms}`,
+burst-shaped like the auth alarm (one fact per burst, the count travelling
+on the clear), driving a new standard rule at lower severity than
+`safe-spine-forgery`. Only `BadTag` counts: `Seen` cannot distinguish a
+relay duplicate from a replay at the station and is normal traffic,
+`Runt`/`SeqMismatch` are RF and foreign protocols, and `TooOld`/`Store`
+are the station's own local conditions.
+
+The weakness is the point and must not be papered over: **this signal is
+asserted by the station over an unauthenticated console**, so anyone who
+can write to that serial line can fabricate it — the same wire
+`DECISIONS.md` 2026-09-13 already flags for the bridge. It therefore
+advises and must never safe the mesh, and it does not touch
+`spine.auth.<station>`, whose meaning stays exactly what the entry below
+gave it: *the host refused a frame*, cryptographically, on its own
+evidence.
+
+**Options not taken.** *Have the station forward refused frames to the
+host* — it would hand an unauthenticated stranger a write into the host's
+parser, which is the one thing the radio-side check exists to prevent.
+*Raise the existing `spine.auth` alarm from the refusal line* — it would
+let console access manufacture an incident indistinguishable from a
+cryptographic one, destroying the fact's meaning to gain a signal.
+*Escalate at the same severity* — a forgeable input must not be able to
+page a person at the same volume as an unforgeable one. *Report
+`Runt`/`SeqMismatch` too* — that is a jamming and noise-floor signal,
+which may be worth having, but runts are also just RF; revisit if the
+bench shows a useful rate.
+
+**Consequences.** One more entity per station and a ninth standard rule.
+On-air forgery becomes visible for the first time, at a severity that says
+how much the evidence is worth. Two distinct benches now exist where one
+was thought to: a wrong-root board *in front of the host* fires the
+authenticated alarm (never run — the alarm postdates the 09-13 rejections
+that motivated it), and a wrong-root board *transmitting at an honest
+station* fires the new advisory.
+
+## 2026-09-14 — A replay or a bad tag is an incident, not a log line; a post-reset gap is neither
+
+Closes SPINE-REPLAY.md §5, items 3 and 4, which the 2026-09-13 build left
+open: where the host keeps its per-source anti-replay state, and what a
+rejected frame does beyond being dropped.
+
+**What the evidence says.** Since host-side verification shipped
+(2026-09-13 12:46) the brain has judged **4827 frames from the bridge and
+rejected none** — through a base power-cycle, forty station resets and a
+poisoned NVS. The only rejections ever recorded were the ones the bench
+manufactured: four `BadTag` from a wrong-root build, three `TooOld` at a
+station after a reboot gap. The SX1262 drops CRC failures in hardware, so
+a bad tag that reaches the host is never corruption in flight: it is a
+wrong root or a forgery. On this mesh a rejection is signal.
+
+**Decision.**
+
+*Item 3 — state lives in world memory*, as built: `spine.auth.<station>`
+holds `{ctr, accepted, rejected, last_rejected}` with M = 1, written on
+every frame. Recorded here so it stops being an open item.
+
+*Item 4 — three kinds of rejection, two responses.* `BadTag` and
+`Replayed` raise `spine.auth.<station>.alarm` — a fact derived from the
+auth fact, one per burst, carrying the reason, the counter and the RSSI —
+and the standard safing rule set escalates it to System 2 the way
+`mesh.escalated_count` drives `safe-mesh-node-lost`. The alarm clears
+itself after ten minutes without a further rejection from that station,
+so a burst is one incident with a start and an end. `TooOld` and
+`Unsigned` do **not** alarm: `TooOld` is the bounded post-reset gap §3
+chose, in the safe direction, and is expected after every station reboot;
+`Unsigned` is a station on pre-step-4 firmware — a provisioning error the
+auth fact already shows, not an attack.
+
+**Options not taken.** *Feed `security/trust.rs`* — it scores actuating
+nodes by command latency and success and gates their physical actions; a
+station is not the actor, and a forger spoofs the victim's `src`, so the
+penalty would land on the one being impersonated. *Alarm on every
+rejection* — a station reboot would then page a person for the gap the
+design deliberately accepts. *Alarm on a rate rather than the first
+`BadTag`* — the first one is already never legitimate here; a threshold
+would only delay the page. *Silence (leave it on the fact)* — "this
+source is sending counters I have already seen" is exactly what §5.3 said
+a person should be told about.
+
+**Consequences.** One more entity per station in world memory and one
+more standard safing rule; a wrong-root station plugged into the bench
+will now wake System 2 once, which is the point. What a rejection does on
+the *station* (its own console line) is unchanged — the station has no
+one to tell.
+
+## 2026-09-14 — A port that is not there at boot is an outage, not a misconfiguration
+
+Reverses one line of the 2026-09-13 SPINE-LOSS entry below, which kept
+the startup refusal: *"a misconfiguration at boot and a port that
+vanishes at runtime are different things."* They are, and a port that is
+absent at boot is the second kind. It bit three times in one day: twice
+because a bench script held COM3 when the task restarted, and at 09:10
+the next morning because the bench was simply unplugged when the machine
+came back — the brain exited, and stayed down until someone looked.
+
+**Decision.** The first open is still tried synchronously, so the common
+case starts verified from the first frame. When it fails and world
+memory is on, the gateway supervisor starts *in* the outage: `spine.gateway`
+is `lost` with the open error from t = 0, the nodes read unobservable, the
+command sink refuses with the same words, and the port is taken the
+moment it appears, on the same 1 → 30 s backoff. `[descending]` refuses
+to start only when nothing could ever produce a sink: no `[lora_gateway]`,
+no `hardware` feature, or no world memory (a link nobody can record cannot
+be supervised, and that body keeps the old rule).
+
+**Options not taken.** *Keep the refusal and document the restart* — that
+is the state that failed three times. *Drop the `[descending]` refusal
+entirely* — a body with the policy on and no gateway configured is still
+misconfigured, and should still say so at boot.
+
+**Consequences.** A brain started with the bench unplugged now comes up,
+records why it cannot hear the mesh, and hears it when the cable is in.
+`status` shows the link line from the first second. The distinction the
+09-13 entry drew survives in narrower form: configuration errors are
+fatal, absences are outages.
+
+## 2026-09-13 — Rules survive a node's reboot; limits do not, and the host puts them back
+
+A node's host-pushed reflex rules and its Track 0 limits both lived only in
+RAM. On 2026-08-22 the boot posture became deny-all so a reset could never
+*widen* policy, and the node was made to announce its boot so a host could
+notice. Nobody built the noticing. On 2026-09-13 the brain's first live
+posture (`descend`, novelty 0.372 → slot 0 = 0.15) arrived at a node whose
+die-temperature rules had died in a power cycle hours earlier: 154 reflex
+reports that afternoon, every one `safe-link-offline`, the LED rule gone
+and nothing saying so. The SPINE-LOSS entry below deferred the question to
+the WILD port; this decides it.
+
+**Decision.** The two halves are treated differently because they are
+different things.
+
+*Limits stay RAM-only and deny-all at boot.* They are actuator authority.
+The host holds them (`[[safety.limits]]`), and the mesh supervisor
+re-pushes them whenever a node names a boot the host has not pushed
+against — `boot_id` on the boot announcement, on every beacon (with
+`policy: "deny-all"` until a push lands), and on every reply — retrying
+while the beacon still says deny-all. A `set_limits` fits a mesh frame.
+
+*Rules persist on the node, in NVS,* tagged with firmware version and
+schema, restored at boot through the same validation a push gets, and
+cleared with a one-boot announcement (`stale` / `corrupt`) when they do
+not pass. They carry no authority — every write a rule fires still goes
+through the gate — and they do not fit a mesh frame (one rule is 330 bytes
+against 228), so the host *cannot* put them back in the field. A rule set
+that survives its own node's reboot is System 1 keeping its promise: "keeps
+reacting when the host is unreachable" includes just after a reboot.
+
+When limits land, the reflex engine *rearms*: a new policy is a new world,
+and a standing condition whose write the old gate refused fires once more.
+
+**Options not taken.** *Persist limits too* — reverses 08-22 for
+convenience; a stale allow-list surviving a reflash is exactly the widening
+that decision exists to prevent. *Re-push rules from the host* — requires a
+chunked mesh push that does not exist, for a payload the census showed does
+not fit; and the base station could not even carry a `set_limits` until
+this work (its console read from a 128-byte FIFO — a claim in a census is
+not evidence, only the air is). *A host heartbeat to nodes* — decided
+against for now: a mesh node's "host link" means "commanded recently" and
+is not read as a fault by anything; airtime spent to make a rule feel
+better. *Rules re-pushed on USB only* — that is the state that failed.
+
+**Consequences.** A node reset now ends with the node whole — rules from
+its own flash within a second, limits from the host within a minute — with
+nobody touching it; measured end to end on the bench
+(`bench_rules_persist.py --live`, 62 s). The stored record's wire form is
+now something a firmware version bump must consider (schema constant in
+`rules_store`). Filed with the WILD port thread: `Oh-Ben-Claw/docs/WILD-2026-09.md`.
+
+## 2026-09-13 — A lost spine is recorded, not survived silently, and never fatal
+
+The first evening the brain ran with the mushroom body, the posture policy
+and an authenticated LoRa gateway all live, the gateway's serial port went
+away eleven minutes in (`os error 22`, the surprise-removal kind). The I/O
+thread returned, the RX loop ended, one `WARN` was written, and the brain
+ran for fourteen more minutes believing two healthy nodes were lost —
+the mesh supervisor escalated both at 120 s — while a posture send failed
+with "serial I/O thread has exited". An operator restart fixed it in
+seconds. Design in [SPINE-LOSS.md](SPINE-LOSS.md).
+
+**Decision.** The brain does not stop, and it does not pretend. Three
+things, in order of value: a `spine.gateway` fact in world memory that
+says whether the host can hear the mesh, written on every transition;
+`MeshHealth::Unobservable`, so that while the gateway is down every node
+is *unobservable* rather than *offline*, no escalation fires and the
+offline clock does not run; and a reopen loop around `open_split`, 1 s
+doubling to 30 s, forever, behind a writer the existing command sink swaps
+in place so the sink handed out at startup survives the outage. The auth
+window resumes from its persisted ceiling; no new auth state.
+
+**Options not taken.** *Refuse to keep running without the spine when
+`[descending]` is enabled* — consistent with the startup refusal, and
+wrong: a misconfiguration at boot and a port that vanishes at runtime are
+different things, and killing Telegram, memory and the episode record over
+a USB hub blinking turns one lost link into a lost body. *Retry the failed
+`descend` from inside the gateway* — the posture policy already retries on
+the next turn and records the failure on the node's fact; a second retry
+loop for the same idempotent command is how a node gets the same frame
+four times. *A bounded number of reopen attempts* — a body meant to run
+unattended does not give up on its own spine at 3 a.m. because the count
+ran out.
+
+**Consequences.** `decide` gains an input (the gateway state) and a fourth
+health value, which every consumer of `mesh.<node>.health` must accept.
+The 2026-09-12 entry below — *a check that could not run must not fail
+like a check that did* — now applies to the mesh supervisor, which had
+been the largest remaining place it did not. Two questions surfaced the
+same evening are recorded in SPINE-LOSS.md §6 and deliberately not decided
+here: whether the host owes the node a heartbeat (the node declares the
+host lost 30 s after its last command, by design), and whether the host
+should re-push RAM-only rules when it hears a node's boot beacon. Both
+belong with the WILD port, and both are the mirror image of this one.
+Nothing is built yet; this entry precedes the code, which is not the
+usual order here, because the decision was needed to know what to build.
+
+## 2026-09-13 — No language model on a node, and what would reopen it
+
+The question was whether the ESP32 nodes should run a language model of their
+own, so that a node cut off from the gateway could still reason. The survey
+is `EDGE-LM-2026-09.md`; this records what it settled.
+
+On the S3 N16R8 boards on the bench, nobody has demonstrated a model that
+follows an instruction at a usable speed. The demonstrated points are a
+sub-1M dense core writing children's stories at ~10 tok/s, and a real 135M
+instruct model at forty-five minutes per answer. The one measured runtime
+(slvDev, 2026-07-21) is PSRAM-bandwidth-bound at 60.7 MB/s with no vector
+unit to speak of; its author says the lever is bytes-per-token, not compute,
+and that his 28.9M parameter count is "never a capability multiple". The
+vendor's own agent framework, ESP-Claw, runs rules and memory on the chip
+and calls out for reasoning — which is the shape this repo already has.
+
+**Decision.** The spinal tier stays what upstream `CONNECTOME-2026-09.md` §2.2 describes:
+local reflex rules that run whether or not the gateway is reachable, and a
+descending command that is a small modulation vector. Reasoning lives on the
+gateway, and on the SBC edge loop when one is present (`edge.rs`). No node
+firmware carries a language model, and no roadmap item assumes one.
+
+**Options not taken.** *A tiny model on the S3* — the demonstrated ones cannot
+follow an instruction, and a node that generates prose it cannot act on is
+a heater. *An instruct model streamed from SD* — demonstrated at 45 minutes
+per answer, which is not a reflex tier at any definition. *The ESP32-P4* —
+the only board with a demonstrated instruction-follower (a 180M ternary MoE
+at ~9 tok/s, tool-calling described by its own author as unreliable, and
+unmeasured by anyone else). The P4 has no radio on-chip, so a P4 node is a
+P4 plus a radio MCU plus a UART between them — the unauthenticated serial
+wire the entry below already flags for the bridge, now on every node. That
+is a different node design, not a faster one, and it would have to be
+decided on its own terms before a board is bought.
+
+**What would reopen this.** Not a bigger model on a newer chip, and — 
+corrected the same day, after reading `obc-reflex` and `posture.rs` rather
+than the survey — not a bandwidth benchmark either. A `descend` is at most
+sixteen levels in `[0, 1]`; a node-side policy that produced them from its
+own sensor snapshot would be a map of a few dozen weights, which fits an S3
+without a single trick from the survey. Compute was never the question. What
+is missing is a **metric** for what a better posture is and **data** on
+which the current one-bit policy (novel → cautious) has been scored, and
+the one-bit policy has not yet run live at all. So: the harness
+`crates/obc-memory/tests/posture_real_effect.rs` (upstream) reads the
+`descending.*` and `mesh.<node>.reflex` facts the brain already records and
+prints three candidate metrics — whether posture is mechanically live at
+all, whether caution buys Track 0 refusals, and the lost-frame natural
+experiment on outcomes. When it has run against weeks rather than hours,
+and one metric has been chosen and recorded here, a learned policy has
+something to beat. That would be its own ADR. A language model still would
+not be the object under discussion.
+
+**Consequences.** The int8 wake-word spotter in V2-IMPLEMENTATION is
+unaffected; it is TinyML, not a language model, and this decision does not
+touch it. `V2-STRATEGY.md` §F's "small-model reflex tier" is confirmed as
+an SBC feature and should not drift toward the MCU in later revisions. A
+node that loses the gateway degrades to its rules, and says so in its
+announcement, which is the behaviour the safety model already assumes.
+
+## 2026-09-13 — The stations hold the root secret, and there is no permissive mode
+
+SPINE-AUTH.md §3.1 provisions each *node* with only its own derived key, so
+a captured node cannot impersonate a sibling. Step 4 put the tag on the wire
+between the two Heltec stations, and the first question was which key a
+station carries.
+
+A station is not a node. It is the infrastructure that verifies every frame
+on the air, from every source — the base verifies the bridge, the bridge
+verifies the base, and a third station would verify both. A station holding
+only its own key can sign and cannot check, which is the half of
+authentication that catches nothing. It needs every source's key, and every
+source's key is, by construction, the root.
+
+**Decision.** Each Heltec station is built with the deployment's root
+(`OBC_SPINE_ROOT`, a build-time environment variable; a build without it
+fails and says what to set) and derives `HKDF(root, "gw-XX")` for any `src`
+on first hearing it. The root never enters the repository; the boot log
+prints two bytes of its SHA-256 so two boards can be compared without
+printing it.
+
+**Options not taken.** *A key table per station* (each peer's derived key
+flashed in, no root) is the same secret material in a different shape: a
+table of every derived key lets an attacker sign as every station, exactly
+as the root does, and it has to be regenerated and reflashed on every
+station whenever a station is added. *Asymmetric keys* (§5.1) would let a
+station verify without being able to sign as anyone — the real fix — and
+cost 64 bytes per frame on a 240-byte radio budget. Still the right answer
+for MQTT; still disqualified on LoRa by arithmetic.
+
+**Consequences.** Extracting the root from a station's flash is the "cloned
+node" threat of SPINE-REPLAY.md §4, one station wider: the attacker can
+sign as any station, not just one. That widening is accepted because the
+stations are the same physical class as the nodes and are deployed the
+same way, and because the alternative was a scheme that verifies nothing.
+Revocation is reflash-everything, as §3.1 already said. Nodes on the far
+side of a station's UART are outside this entirely — the bridge signs what
+it forwards, and the node ↔ bridge serial wire is unauthenticated.
+
+**And no permissive mode.** §4 asked for a strict-by-default config key
+with a migration window; the built form has no key and no v1 path. The
+fleet is two stations on one desk; a migration window with nobody in it is
+a fallback with only one user, and §4 names who that is. If a third station
+arrives running v1 it will be rejected loudly, one line per frame, which is
+the correct thing to happen to a station that has not been provisioned.
+
 ## 2026-09-12 — A check that could not run must not fail like a check that did
 
 `parity`'s `peer` job compares the 12 generator mirrors against the generator's

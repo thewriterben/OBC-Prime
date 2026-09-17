@@ -72,6 +72,7 @@ fn rule(id: &str, when: Condition, then: Action, debounce_ms: u64) -> ReflexRule
         debounce_ms,
         max_rate_hz: None,
         fire_on_change: false,
+        hold_ms: 0,
     }
 }
 
@@ -308,6 +309,83 @@ pub fn mesh_node_lost_escalate(opts: &SafingOptions) -> ReflexRule {
     )
 }
 
+/// Triage directive when the LoRa gateway is refusing a station's frames as
+/// forged or replayed (DECISIONS.md 2026-09-14). The frames were dropped; the
+/// question for System 2 is what the station is, not whether to act on them.
+pub const SPINE_FORGERY_PLAYBOOK: &str = "The LoRa gateway is refusing frames from a mesh \
+station: a bad authentication tag (a station built with a different spine root, or a forgery) \
+or a replayed counter. The frames were dropped and nothing was ingested from them. Triage: \
+(1) call `mesh_status` and read `auth_alarms` — which station, which reason, the counter and \
+RSSI; (2) do not `mesh_command` anything on the strength of what that station says, and do \
+not seek another route to it; (3) `record_incident` with subject = the station id, \
+`status: investigating` and the `auth_alarms` entry as evidence — a wrong-root station is a \
+provisioning error for an operator to fix by reflashing, a replay is an attack for an operator \
+to look at; you cannot tell which from here and should not guess. An operator is alerted \
+automatically; you do not need to do that. Every node action stays Track-0 gated.";
+
+/// `spine.auth.alarm_count >= 1` → escalate to System 2: the LoRa gateway has
+/// refused a station's frame as forged or replayed within the last ten
+/// minutes. The count is absent or zero on a healthy mesh (4827 frames, 0
+/// rejections on the bench before this rule existed), so it is a safe default.
+pub fn spine_forgery_escalate(opts: &SafingOptions) -> ReflexRule {
+    rule(
+        "safe-spine-forgery",
+        Condition::Sensor {
+            entity: "spine.auth.alarm_count".to_string(),
+            op: Cmp::Ge,
+            value: 1.0,
+        },
+        Action::Escalate {
+            reason: SPINE_FORGERY_PLAYBOOK.to_string(),
+        },
+        debounce(opts),
+    )
+}
+
+/// Triage directive when a *station* says it is refusing frames on the air
+/// (DECISIONS.md 2026-09-15). Deliberately worded to classify as `Warning`
+/// rather than `Critical` — [`Severity::classify`] reads the reason text, and
+/// this evidence is the station's word over an unauthenticated console, not
+/// the host's own cryptographic judgement. Keep every `Severity::CRIT`
+/// keyword out of it; `the_on_air_rule_is_advisory_not_critical` enforces that.
+pub const SPINE_ON_AIR_PLAYBOOK: &str = "A mesh station reports that it is refusing frames \
+it cannot authenticate: something nearby is transmitting on our frequency with a tag that does \
+not verify. Nothing was ingested — the station drops these at the radio, and they never reach \
+the brain. Weigh the evidence accordingly: this is the station's own report over a serial \
+console that is not authenticated, so it is a lead, not proof, and anyone with access to that \
+cable could have written it. Triage: (1) call `mesh_status` and read `air_refusals` — note that \
+`claimed_src` is the identity the refused frames claimed, which a forger chooses freely, so it \
+says who is being impersonated and never who is transmitting; the RSSI is the one field they \
+do not choose and tells you roughly how close they are; (2) check whether `safe-spine-forgery` \
+has also fired — that rule \
+means the host refused a frame on its own evidence, and that finding outranks this one; \
+(3) do not `mesh_command` anything in response and do not change the deployment root on the \
+strength of this alone; (4) `record_incident` with subject = the station id and \
+`status: investigating`, noting the three readings that fit: a neighbouring deployment on the \
+same band, one of our own boards flashed with the wrong root, or someone probing the mesh. If \
+`air_refusals` names many different sources at once, prefer the third reading and say so. \
+An operator is alerted automatically; you do not need to do that. Every node action stays \
+Track-0 gated.";
+
+/// `spine.air.refused_count >= 1` → wake System 2: a station is reporting
+/// frames it refused on the air within the last ten minutes. Advisory by
+/// construction — see [`SPINE_ON_AIR_PLAYBOOK`] for why it must stay below
+/// [`spine_forgery_escalate`], which watches the host's own refusals.
+pub fn spine_on_air_escalate(opts: &SafingOptions) -> ReflexRule {
+    rule(
+        "safe-spine-on-air",
+        Condition::Sensor {
+            entity: "spine.air.refused_count".to_string(),
+            op: Cmp::Ge,
+            value: 1.0,
+        },
+        Action::Escalate {
+            reason: SPINE_ON_AIR_PLAYBOOK.to_string(),
+        },
+        debounce(opts),
+    )
+}
+
 /// The standard safing rule set for the given options. Order is stable.
 pub fn standard_safing_rules(opts: &SafingOptions) -> Vec<ReflexRule> {
     let mut rules = vec![power_critical_escalate(opts)];
@@ -320,6 +398,8 @@ pub fn standard_safing_rules(opts: &SafingOptions) -> Vec<ReflexRule> {
     rules.push(power_recovered_clear(opts));
     rules.push(net_recovered_clear(opts));
     rules.push(mesh_node_lost_escalate(opts));
+    rules.push(spine_forgery_escalate(opts));
+    rules.push(spine_on_air_escalate(opts));
     for stream in &opts.alarm_streams {
         rules.push(audio_alarm_escalate(stream, opts));
     }
@@ -467,9 +547,125 @@ mod tests {
     #[test]
     fn standard_set_includes_stop_only_with_actuator() {
         // base: power-critical-escalate, power-low, net-offline, net-degraded,
-        // power-recovered, net-recovered, mesh-node-lost = 7; +1 stop with an actuator = 8.
-        assert_eq!(standard_safing_rules(&SafingOptions::default()).len(), 7);
-        assert_eq!(standard_safing_rules(&opts_with_actuator()).len(), 8);
+        // power-recovered, net-recovered, mesh-node-lost, spine-forgery,
+        // spine-on-air = 9; +1 stop with an actuator = 10.
+        assert_eq!(standard_safing_rules(&SafingOptions::default()).len(), 9);
+        assert_eq!(standard_safing_rules(&opts_with_actuator()).len(), 10);
+    }
+
+    /// The two spine rules describe different things and must not be read as
+    /// the same thing. The host's own refusal is unforgeable and pages hard;
+    /// a station's report of what it heard is forgeable by anyone with the
+    /// console and must not. Severity here is derived from the reason *text*,
+    /// so the distinction lives in the wording and this test is what keeps it.
+    #[test]
+    fn the_on_air_rule_is_advisory_not_critical() {
+        let air = spine_on_air_escalate(&SafingOptions::default());
+        assert!(matches!(
+            &air.when,
+            Condition::Sensor { entity, op: Cmp::Ge, value }
+                if entity == "spine.air.refused_count" && *value == 1.0
+        ));
+        let Action::Escalate { reason: air_reason } = &air.then else {
+            panic!("expected an escalate action");
+        };
+        let Action::Escalate {
+            reason: host_reason,
+        } = &spine_forgery_escalate(&SafingOptions::default()).then
+        else {
+            panic!("expected an escalate action");
+        };
+        assert_eq!(
+            crate::Severity::classify(air_reason),
+            crate::Severity::Warning,
+            "the station's word must not page like the host's own judgement"
+        );
+        assert_eq!(
+            crate::Severity::classify(host_reason),
+            crate::Severity::Critical
+        );
+        assert!(crate::Severity::classify(host_reason) > crate::Severity::classify(air_reason));
+
+        // The playbook has to say why it is weaker, name the tool and the
+        // field, and forbid acting on it alone.
+        assert!(
+            air_reason.contains("not authenticated"),
+            "names the weakness"
+        );
+        assert!(air_reason.contains("a lead, not proof"));
+        assert!(
+            air_reason.contains("`mesh_status`"),
+            "names the perceive tool"
+        );
+        assert!(
+            air_reason.contains("air_refusals"),
+            "names the field to read"
+        );
+        assert!(
+            air_reason.contains("who is being impersonated and never who is transmitting"),
+            "the bench-caught misreading: claimed_src is not the refusing station"
+        );
+        assert!(air_reason.contains("do not `mesh_command`"));
+        assert!(
+            air_reason.contains("`safe-spine-forgery`") && air_reason.contains("outranks this one"),
+            "tells System 2 which of the two signals wins"
+        );
+        // Deliberate: the playbook points at the *rule id*, not at the
+        // `auth_alarms` field it would otherwise name, because
+        // `Severity::classify` reads the prose and the word "alarm" would
+        // promote this advisory to Critical — a message is classified by what
+        // it mentions, not by what it is about. Recorded rather than worked
+        // around silently; the rule id is the more durable reference anyway.
+        assert!(
+            !air_reason.contains("alarm"),
+            "one CRIT keyword in the prose and this stops being advisory"
+        );
+        assert!(air_reason.contains("Track-0"), "reaffirms the safety gate");
+    }
+
+    #[test]
+    fn the_forgery_rule_watches_the_gateways_alarm_count_and_forbids_acting_on_the_station() {
+        let r = spine_forgery_escalate(&SafingOptions::default());
+        assert!(matches!(
+            &r.when,
+            Condition::Sensor { entity, op: Cmp::Ge, value } if entity == "spine.auth.alarm_count" && *value == 1.0
+        ));
+        match &r.then {
+            Action::Escalate { reason } => {
+                assert!(reason.contains("`mesh_status`"), "names the perceive tool");
+                assert!(reason.contains("auth_alarms"), "names the field to read");
+                assert!(
+                    reason.contains("do not `mesh_command`"),
+                    "forbids acting on the station"
+                );
+                assert!(
+                    reason.contains("should not guess"),
+                    "wrong root vs attack is the operator's call"
+                );
+                // The severity this rule ships at is produced by a WORD in the
+                // prose above, not by anything structural: `Severity::classify`
+                // raises to Critical on six keywords and "auth_alarms" contains
+                // one of them. The advisory test above pins the same mechanism
+                // from the other side — that `safe-spine-on-air` must NOT contain
+                // "alarm", or it stops being advisory.
+                //
+                // So the coupling is load-bearing in both directions and, until
+                // 2026-09-17, was guarded in only one. Reword this playbook to
+                // say "authentication failures" and the forgery alarm silently
+                // drops to Warning with every test still green.
+                //
+                // Observed live on the bench that day: SPINE-REPLAY A6 step 7b,
+                // both stations wrong-root, `spine.auth.alarm_count` = 1, this
+                // rule raised with this text.
+                assert_eq!(
+                    crate::Severity::classify(reason),
+                    crate::Severity::Critical,
+                    "the forgery alarm must outrank the on-air advisory; it does so \
+                     only because its prose contains a CRIT keyword"
+                );
+            }
+            _ => panic!("expected an escalate action"),
+        }
     }
 
     #[test]
