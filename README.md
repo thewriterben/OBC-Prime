@@ -1,102 +1,77 @@
 # Open Body Control
 
-**An embodied agent system: one brain, a mesh of bodies, and a planner you can trust.**
+**An agent with a body: one brain, a mesh of microcontroller nodes, and reflexes
+that keep working when the brain is unreachable.**
 
-OBC gives a language model a body — a mesh of microcontroller nodes,
-cameras, sensors and actuators — plus the reflexes to react without waiting for
-the model, and the judgement to escalate when reflexes aren't enough.
+OBC gives a language model a body — boards, cameras, sensors and actuators — plus
+the two things a chatbot with plugins does not have. A reflex layer that acts on
+sensed state without waking the model, and escalates to it when a rule cannot
+resolve something. And a deterministic limit table enforced on the node itself,
+so a compromised host, a poisoned skill or a hallucinated tool call still cannot
+drive an actuator outside the bounds the hardware holds.
 
 **Bring your own model.** Point it at Anthropic, OpenAI, OpenRouter or any
-OpenAI-compatible endpoint with an API key and an ordered fallback chain — or
-run it against a local Ollama and pay nothing per token. The provider is one
-config block; nothing else in the system changes.
+OpenAI-compatible endpoint, with an ordered fallback chain so a dead endpoint
+moves to the next rather than failing the turn — or run a local Ollama and pay
+nothing per token. The provider is one config block; nothing else changes.
 
-The bodies are yours either way. They run on your hardware, on your network, and
-the reflex layer keeps working when the brain is unreachable.
+The bodies are yours either way. They run on your hardware, on your network.
 
-> **Status: early.** Most of the core agent runs and is **not yet in this
-> repository** — but twenty-eight crates of it now are. `obc-paths`,
-> `obc-memory`, `obc-planner`, `obc-safety`, `obc-telemetry`,
-> `obc-observability`, `obc-scheduler`, `obc-conscience`, `obc-approval`,
-> `obc-spine`, `obc-tools`, `obc-providers`, `obc-mcp`, `obc-vision`,
-> `obc-position`, `obc-cost`, `obc-tunnel`, `obc-a2a`, `obc-movement`,
-> `obc-navigation`, `obc-tool-api`, `obc-reflex`, `obc-foresight`,
-> `obc-learning`, `obc-fleet`, `obc-audio`, `obc-mission` and `obc-body` are here, vendored
-> and hash-checked, and CI builds and tests them: **1223 tests**.
->
-> They cover the bitemporal world model, the deployment planner the parity
-> claim below rests on, the Track 0 safety layer `docs/SAFETY.md` describes, the
-> perception and reach gates `docs/CONSCIENCE.md` describes, the battery / link
-> / sensor suites that feed the reflexes, the spans and counters the agent
-> records about itself, the position sources that put a node on a map, the spend
-> tracker, the tunnel providers that let a gateway on a home network be
-> reached without opening a port, the A2A endpoint that lets another agent
-> discover this one and send it work, the actuation path that every one of
-> those safety bounds exists to constrain, the localization, SLAM and
-> planning stack that decides where to go, and the reflex engine itself — the
-> rules that fire on sensed state without waking the model, which this page has
-> claimed since its first paragraph and could not show until now — plus the
-> predictive layer above it, which fires on a *forecast* threshold crossing
-> instead of a present one, and the layer above that, which mines the history
-> for rules nobody wrote and holds them inert until someone approves them —
-> plus, as of 2026-08-13, the multi-node coordinator that decides which robot
-> takes which task, the audio suite that records what was heard and said as
-> facts on the same footing, and the mission runner that advances a guarded
-> sequence of steps across restarts.
->
-> And, as of 2026-08-14, the gate in front of all of it: three autonomy levels
-> and a per-call check that reads a tool's declared risk class before asking a
-> person, with "yes, always" written to disk so it means what it says after a
-> restart. Everything else here bounds what the agent *may* do. This is the
-> part that decides when it has to ask first.
->
-> And, the same day, the wire all of it runs on: the MQTT backbone between
-> brain and nodes, a serial LoRa gateway and mesh, the supervisor that decides
-> a node is lost, a P2P transport, and the sinks that put movement commands,
-> reflex actions, speech and fleet assignments onto it. `firmware/` has held
-> the node end of that conversation for weeks and this page could point at it;
-> the brain end was described and not shown. Both ends are here now.
->
-> And, the same day, the layer the model actually touches: every built-in tool
-> — movement, navigation, vision, audio, mesh, shell, files, HTTP, a browser,
-> world memory, missions — each declaring its own risk class to the gate that
-> reads it; the model backends behind "bring your own model", with the ordered
-> fallback chain and the pinned registry that decide whether that promise holds
-> when a key is wrong; and Model Context Protocol in both directions, so
-> another agent can drive a robot *through* the Track 0 gate rather than around
-> it.
->
-> **Where the line is.** Six crates that exist upstream are deliberately not
-> here: the agent loop, the self-improvement layer, the configuration that
-> composes every module's block, the peripheral drivers, the eleven chat
-> adapters and the HTTP gateway. Everything this repository vendors, it vendors
-> because a document here makes a claim a reader cannot check by reading it.
-> Those six are not evidence for a claim — they are most of the product, and
-> vendoring them would make this "the agent, minus the binary" rather than the
-> substrate the documents rest on. The decision is recorded in
-> `scripts/sync_upstream.py`, and the drift gate fails if anything else appears
-> upstream unannounced: silence is the one option not available.
->
-> `obc-vision` went the other way on the same test, and is here. It is the
-> pipeline `docs/CONSCIENCE.md` is *about* — what the agent may observe, gated
-> before the frame reaches world memory, with the refusal written where it can
-> be replayed. A camera is the sharpest case for that claim and the easiest to
-> get wrong, which is why it is worth being able to run rather than read about.
->
-> CI runs them twice: once as a workspace, and once per crate with no siblings —
-> and that second pass runs both `cargo check` and `cargo test`, because a lib
-> built as a test target links its dev-dependencies and can hide a dependency it
-> genuinely needs. Both distinctions were found by a crate walking through the
-> weaker check: obc-tunnel on the features, obc-a2a on the dev-dependency, and
-> obc-mission on the same distinction read backwards — `cargo check -p` green
-> while `cargo test -p --all-targets` failed on four `#[tokio::test]`
-> attributes a check never builds. Three crates, three ways through, one job.
-> The firmware is here in full — see [firmware/](firmware/README.md) — so there
-> is something to flash and watch today, and `cargo run -p obc-demo` runs the
-> safety gate, the planner and the perception gate on the host. What is still
-> missing is the agent that drives them: no brain talks to a board yet. See
-> [PLAN.md](PLAN.md) for what is landing and in what order. Self-hosted first;
-> a hosted option is not foreclosed but is not being built. Expect things to move.
+**This repository is the substrate, not the product.** The agent loop is not
+here. What is here is every part some document on this page makes a claim about
+that a reader could not otherwise check — vendored from the core agent by hash,
+then compiled and run rather than only listed. The rest is deliberately upstream,
+and the lists below say which is which.
+
+## What you can run today
+
+- **Twenty-eight vendored crates.** `cargo test --workspace` runs **1223 tests**
+  of real agent code — the bitemporal world model, Track 0, the perception and
+  reach gates, the reflex engine and the predictive layer above it, the wire
+  between brain and nodes, the tool layer, the model backends, the navigation
+  stack. CI runs them again one crate at a time with no siblings, which is a
+  different and stronger claim: a workspace build unifies features and cannot
+  tell you what one crate needs.
+- **Six demonstrations**, not mocks: `cargo run -p obc-demo -- gate | plan |
+  conscience | track0 | safing | bench`. The gate is `obc_safety::SafetyGate` and
+  the planner is `obc_navigation::planning::plan`, so when `gate` prints REFUSED,
+  a deterministic limit table refused it.
+- **A body with no hardware attached.** Trailwatch ships fourteen days of
+  recorded detections, so perception → world memory → reflex → escalation runs on
+  a laptop in about two minutes, and a reflex fires *before* the model is woken.
+- **Four firmwares**, with a flashing guide — see
+  [firmware/](firmware/README.md). One ESP32-S3 gets you a node that runs its own
+  reflex and safing loops and self-safes with no host connected, which is the half
+  of the safety claim you can check without trusting anything on this page.
+- **The parity gate**, in one command — the next section is what it proves and
+  [parity/README.md](parity/README.md) is how.
+- **Eleven CI jobs.** Among them: the vendored bytes against the core agent's own
+  tree, the WASM bundle against behavioural goldens rather than its own hash, the
+  committed lock against the advisory database, and a check that fails the build on
+  a tool which actuates and does not declare that it does.
+
+## What is not here
+
+- **The agent loop**, the self-improvement layer, the root configuration, the
+  peripheral drivers, the chat adapters and the HTTP gateway. Everything this
+  repository vendors, it vendors because a document here makes a claim a reader
+  cannot check by reading it. These are not evidence for a claim — they are most
+  of the product, and vendoring them would make this "the agent, minus the binary"
+  rather than the substrate the documents rest on. The exclusions are recorded in
+  `scripts/sync_upstream.py`, and the drift gate fails if anything else appears
+  upstream unannounced: silence is the one option not available.
+- **A brain that talks to a board.** Both ends are here and the wire between them
+  is not, so the quickstart's later steps need the core agent checked out beside
+  this repository — which for now means you are the author. See
+  [PLAN.md](PLAN.md) for what is landing and in what order.
+- **Hosted anything.** Self-hosted first. A hosted option is not foreclosed and is
+  not being built.
+
+If you are evaluating this for something that matters, read
+[docs/SAFETY.md](docs/SAFETY.md) §4 before §1 — it is the section that says what
+the safety story does *not* cover. [docs/DECISIONS.md](docs/DECISIONS.md) is why
+things are shaped the way they are, including the choices that were wrong first.
+Expect things to move.
 
 ---
 

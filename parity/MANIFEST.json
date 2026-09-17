@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-16T02:45:29+00:00",
+  "generated": "2026-09-17T04:09:01+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -140,8 +140,8 @@
       "bytes": 649
     },
     "crates/obc-planner/src/peripherals/registry.rs": {
-      "sha256": "3e599d5e06e018c973470eb4a9bb9fd3f7ad5a3d756473909f2e58abe216eb6f",
-      "bytes": 119923
+      "sha256": "401336e23f606b4c6e2def5fa92fae1939025cbc2fba37f405131beed32e21ca",
+      "bytes": 121011
     },
     "crates/obc-planner/src/deployment/mod.rs": {
       "sha256": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
@@ -796,16 +796,16 @@
       "bytes": 11848
     },
     "firmware/obc-esp32-s3/CAMERA.md": {
-      "sha256": "0b784398f97dabc65dcaf5cdf506d3e23b5509e799cbd8683127d2c1d043546c",
-      "bytes": 3990
+      "sha256": "1377348ef1806c1ea406e3558867b7e069b9223b2b3e4984a4b10eb9681e79ff",
+      "bytes": 9861
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
       "sha256": "cd3c896df8d109a87bfb91eb7ef6cad6c482fe8d683a404bcdd0c60a51423870",
       "bytes": 42544
     },
     "firmware/obc-esp32-s3/Cargo.toml": {
-      "sha256": "a36eb814960970e184afa48e5c5eeaddfd119fb3edf73c4e09400b1e0d38caf9",
-      "bytes": 3674
+      "sha256": "a818782a3ec82a680e6f72c73257d4155e01659257ae960bfbfba360ecf1c5d1",
+      "bytes": 5667
     },
     "firmware/obc-esp32-s3/build.rs": {
       "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
@@ -824,20 +824,20 @@
       "bytes": 475
     },
     "firmware/obc-esp32-s3/sdkconfig.defaults": {
-      "sha256": "2210b87ad7f48a97e5d07d060b20ab39321ce0df96ffbb16222815eebd940ded",
-      "bytes": 3421
+      "sha256": "7a18d8634ea143b34a0a58603cdc3693b4f710d6206fdd16ca25dee6316451aa",
+      "bytes": 3882
     },
     "firmware/obc-esp32-s3/src/audio.rs": {
       "sha256": "7b994b9dd4074ac855a35c8a817e917543c06cd6ed67e264103447b31fab2904",
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "fadbe768cd22faf6d0f5aac82c0448fdb7b5f82507e42fd0ed70096ead97054d",
-      "bytes": 9895
+      "sha256": "a6e9fabf36958027314d43857779dc0035a57fd235f50f0b52cd458b9806ae72",
+      "bytes": 12592
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
-      "sha256": "b6dee842580c00b536addaef46550705eea7af4ce60f23f6418cb62d9aaccabb",
-      "bytes": 6747
+      "sha256": "17298115c6e9961c1efb86cafac6769e1fcb5ed465db70fa1c09a269f9444110",
+      "bytes": 14267
     },
     "firmware/obc-esp32-s3/src/camera_bindings.h": {
       "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
@@ -848,8 +848,8 @@
       "bytes": 5181
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "29a0524fb0f86b8b5daf3fa169d89c1b4e20b5eefd44eac49fda6d6d7ae35c46",
-      "bytes": 86037
+      "sha256": "df3ea83c3d9be3be5929c732ef86df84f94fe2ae078e59980a48b6967d80642d",
+      "bytes": 87787
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "f9157a6c812f9094607dc440dc52621c6750c0ad95ea7c8a0073e213b3980015",
@@ -962,7 +962,7 @@
       "crates/obc-planner/src/geo/mod.rs": "88e552902ad4f9d0727641da0989316a0e6c500c3138b34b6b1e5b6207519283",
       "crates/obc-planner/src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
       "crates/obc-planner/src/peripherals/mod.rs": "fe85608430e20762f324cbf2b4c076f69eb17d3a4d37d686d8fef67bdf079083",
-      "crates/obc-planner/src/peripherals/registry.rs": "3e599d5e06e018c973470eb4a9bb9fd3f7ad5a3d756473909f2e58abe216eb6f",
+      "crates/obc-planner/src/peripherals/registry.rs": "401336e23f606b4c6e2def5fa92fae1939025cbc2fba37f405131beed32e21ca",
       "crates/obc-planner/src/deployment/mod.rs": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
       "crates/obc-planner/src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
       "crates/obc-planner/src/deployment/firmware_scaffold.rs": "a7812f69611101d330f0958bedd397bb6055cb14ac11de5a736578308965b8a6",
