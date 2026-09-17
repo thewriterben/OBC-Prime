@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-17T04:15:21+00:00",
+  "generated": "2026-09-17T16:54:58+00:00",
   "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
@@ -388,8 +388,8 @@
       "bytes": 82574
     },
     "crates/obc-reflex/src/safing.rs": {
-      "sha256": "6058704f9b87a544ff0ac840801a7ec54330a00acfdb62503f2a8d487cc2e9ad",
-      "bytes": 47843
+      "sha256": "251bd5e28e076720a0df671a6d381aa2a7d5404e9948f1edb8105a204c74b08a",
+      "bytes": 50296
     },
     "crates/obc-foresight/Cargo.toml": {
       "sha256": "484bd25e5b983a5da4f6917c3921cbf4129527e6e529e93a4d717ed6716ea5c0",
@@ -796,8 +796,8 @@
       "bytes": 11848
     },
     "firmware/obc-esp32-s3/CAMERA.md": {
-      "sha256": "1377348ef1806c1ea406e3558867b7e069b9223b2b3e4984a4b10eb9681e79ff",
-      "bytes": 9861
+      "sha256": "a366679ba5dd63595154f6fc9187da384a1964397e591ff5f2fc6b737a1f642b",
+      "bytes": 10561
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
       "sha256": "cd3c896df8d109a87bfb91eb7ef6cad6c482fe8d683a404bcdd0c60a51423870",
@@ -832,12 +832,12 @@
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "a6e9fabf36958027314d43857779dc0035a57fd235f50f0b52cd458b9806ae72",
-      "bytes": 12592
+      "sha256": "45928a1664e18d93a366c6fd3da78f8b40864b4cfef2aa37f01be062a3bde10b",
+      "bytes": 12816
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
-      "sha256": "17298115c6e9961c1efb86cafac6769e1fcb5ed465db70fa1c09a269f9444110",
-      "bytes": 14267
+      "sha256": "28d2352964301994dd2a5c9d82d39d207a201acf23df25588a0c015e5d9a0061",
+      "bytes": 29711
     },
     "firmware/obc-esp32-s3/src/camera_bindings.h": {
       "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
@@ -856,8 +856,8 @@
       "bytes": 2734
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "df3ea83c3d9be3be5929c732ef86df84f94fe2ae078e59980a48b6967d80642d",
-      "bytes": 87787
+      "sha256": "c8bdf1c3171b513c1da970e504adb5b4dff1957d7b48f197bf3a97a5f24e7838",
+      "bytes": 96517
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "f9157a6c812f9094607dc440dc52621c6750c0ad95ea7c8a0073e213b3980015",

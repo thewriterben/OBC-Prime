@@ -346,6 +346,52 @@ have to re-derive what "it works" means.
    `safe-spine-forgery` at `Critical`. This is the path the four `BadTag` of
    2026-09-13 came down, before the alarm existed to be tested.
 
+     **Result, 2026-09-17 — PASS on every assertion.** Both stations flashed
+     `bench-wrong-root`, so their root fingerprint read `0500` in both boot logs
+     while the host kept `c4cd` — the disagreement visible from both ends before
+     a single frame moved. What followed was the exact mirror of 7a:
+
+     - `spine.auth.gw-D8.alarm` opened **once** for the burst, `count: 1`,
+       `status: "alarmed"`, `reason: "bad tag (wrong root, forged, or altered)"`,
+       and stayed one fact while the rejections kept arriving.
+     - `spine.auth.alarm_count` → **1**. `safe-spine-forgery` watches exactly
+       this and raised the forgery playbook, waking System 2.
+     - `spine.auth.gw-D8` went `rejected: 0` → **9**, with `last_rejected`
+       populated. In 7a this field never moved; that reversal *is* the result.
+     - **No `spine.air.*` fact appeared at all.** The stations agree with each
+       other, so neither printed a refusal, so the on-air channel stayed silent.
+       7a opened an air fact and left `spine.auth` at zero; 7b does the opposite.
+       Each signal is invisible to the other's threat, which is the whole reason
+       both exist.
+     - Only `gw-D8` was ever named. `gw-40` is the host's own station and a
+       station cannot hear itself (DECISIONS.md 2026-09-16), so the host refuses
+       what gw-D8 *forwards* and has nothing to say about gw-40. Expected, and
+       worth stating so the asymmetry is not read as a miss.
+
+     **A finding the run produced, which the procedure did not ask for.**
+     `safe-spine-forgery` is `Critical` only because `Severity::classify` scans
+     the reason prose for six keywords and the playbook happens to say
+     `auth_alarms`. Nothing pinned that. The advisory rule has had the *opposite*
+     assertion since 2026-09-16 — that `safe-spine-on-air` must NOT contain
+     "alarm", or it is promoted out of being advisory — so one mechanism was
+     load-bearing in both directions and guarded in one. Rewording this playbook
+     to "authentication failures" drops the forgery alarm to `Warning` with every
+     test still green. Now pinned in `safing.rs`, and the pin was verified by
+     making that exact edit and watching the test fail.
+
+     **On restoring.** A `bench-wrong-root` board is deaf and mute on the real
+     mesh, and the honest build needs `OBC_SPINE_ROOT` at compile time, so the
+     way back was built and identity-checked *before* the way out: four images,
+     each verified to contain or not contain the wrong-root literal its filename
+     claims. The feature sets came from each board's own boot banner rather than
+     from memory — gw-D8 is `bench-low-power`, gw-40 is
+     `bench-low-power,bench-nvs-fault` — because restoring a board with a feature
+     silently stripped is its own bug. After the reflash both read `c4cd` again,
+     `rejected` stopped moving, `accepted` resumed (19666 → 19675), and node
+     `obc-esp32-s3-001` reappeared in world memory. Frame counters continued
+     across all four flashes (gw-D8 38688 → 38944, gw-40 42944 → 43200): A6
+     step 1 holding through two firmware changes, not just a reboot.
+
    Reflash both boards to the field feature set afterwards. A
    `bench-wrong-root` board carries no deployment secret, so it is safe in a
    drawer, but it is also completely deaf and mute on the real mesh.
