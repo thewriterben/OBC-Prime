@@ -5,6 +5,167 @@ New entries go at the top.
 
 ---
 
+## 2026-09-17 — The node captures greyscale and only greyscale, because the driver bakes the format into its buffers
+
+`docs/VISION-DETECTOR-2026-09.md` ends with a design question and says it wants
+an ADR: the frame-difference detector needs pixels, the camera is configured
+`PIXFORMAT_JPEG`, and decoding a JPEG on the node to difference it is silly. The
+obvious shape was **two capture modes** — greyscale to decide, JPEG when there is
+something worth showing — and the obvious implementation was to flip the sensor
+between them.
+
+That implementation does not exist. This was settled by reading the pinned
+component rather than by trying it.
+
+### What the driver actually does
+
+`espressif/esp32-camera` **v2.0.7** (pinned in `firmware/obc-esp32-s3/Cargo.toml`).
+
+The pixel format is not a sensor setting the driver observes. It is an input to
+the driver's own geometry, consumed once, at init:
+
+* `driver/cam_hal.c`, `cam_config()` — `cam_obj->jpeg_mode = config->pixel_format
+  == PIXFORMAT_JPEG`, and the frame-buffer size branches on it: JPEG gets
+  `width * height / 5`, everything else `width * height * fb_bytes_per_pixel`.
+  For QVGA that is **15,360 bytes for JPEG against 76,800 for greyscale** — and
+  15,360 is exactly what this node's boot log has been printing (`Allocating
+  15360 Byte frame buffer in PSRAM`).
+* `target/esp32s3/ll_cam.c`, `ll_cam_set_sample_mode()` — sets
+  `in_bytes_per_pixel` / `fb_bytes_per_pixel` from the same config field.
+* `cam_config()` calls `cam_dma_config()`, which allocates the frame buffers and
+  the DMA descriptors against those numbers.
+
+`cam_config()` is called from exactly one place: `esp_camera_init()`. Nothing
+re-runs it.
+
+The sensor-side call — `s->set_pixformat()` — only writes sensor registers.
+`esp_camera_init()` calls it *after* `cam_config()`, which is why it works there
+and nowhere else.
+
+**So a runtime format switch leaves the driver describing the old format while
+the sensor emits the new one, and the failure is specific.** Flip a
+JPEG-initialised driver to greyscale and `jpeg_mode` is still true, so
+`cam_hal.c` runs `cam_verify_jpeg_soi()` over raw pixels, finds no start marker,
+stops the capture; `cam_take()` then finds no end marker, logs `NO-EOI`, and
+**recurses** with the remaining timeout until it returns NULL. The symptom is
+"the camera stopped producing frames". The cause is four function calls away.
+
+Upstream invites this mistake: `esp_camera_load_from_nvs()` calls
+`s->set_pixformat(s, pf)` with no reconfiguration at all. A vendor API doing the
+unsafe thing is not permission to do it.
+
+The only supported way to change format is `esp_camera_deinit()` +
+`esp_camera_init()`.
+
+### Decision
+
+**One capture mode: `PIXFORMAT_GRAYSCALE`. Pictures for humans are produced by
+encoding that grey frame in software, on demand, via the component's own
+`fmt2jpg_cb`.**
+
+The node therefore never switches modes, and the detector is never blind.
+
+### Why not deinit/reinit per switch
+
+It works, it is the supported path, and its cost is not the one that matters.
+Tearing down re-probes SCCB, resets the sensor and re-allocates the buffers —
+tolerable. What is not tolerable is what the sensor does next.
+
+The fixture already measured this. `baseline_still` frame 000, immediately after
+a reset, scores `raw` 80.6 with 87% of pixels changed against a steady-state max
+of 4.61 — **17× the quiet floor, with nothing happening**, because auto-exposure
+is converging. Every mode switch manufactures that frame.
+
+So in a two-mode design, every "show me a picture" blinds the detector for
+several frames afterwards, and the blindness looks exactly like a major event.
+The detector would need to know about the camera's state machine and suppress
+itself around it — which is a detector that lies by omission at precisely the
+moment someone was interested enough to ask for a picture.
+
+Rejected for that reason, not for latency.
+
+### Why not keep JPEG and detect on compressed size
+
+A JPEG's length does track scene complexity, it is free, and it needs no format
+change at all. It is also a single scalar, and the one thing the fixture
+established is that **a single scalar cannot separate the three events**: a lamp
+switch, a camera nudge and a person all move a large fraction of the frame. That
+is the entire finding. Rejected.
+
+### What greyscale costs, and what has not been measured
+
+Two of these are facts read from the source; the third is not measured and must
+be before this decision is believed.
+
+**The two bench sensors behave differently, and this is the part that will bite.**
+`ll_cam_set_sample_mode()` special-cases the OV5640 (with the OV3660, NT99141,
+SC031GS, BF20A6, GC0308): those sensors send **Y8**, one byte per pixel. Every
+other sensor — including the **OV2640 on the XIAO** — sends YU/YV at two bytes
+per pixel, and `ll_cam_memcpy()` strides through it keeping every other byte.
+So the Lilygo's greyscale costs 76,800 bytes across the DVP bus and the XIAO's
+costs 153,600 for the same picture. **Thresholds measured on one of these boards
+are not evidence about the other**, over and above the JPEG-round-trip caveat
+`VISION-DETECTOR-2026-09.md` already carries.
+
+**Non-JPEG mode allocates its DMA buffer differently.** JPEG mode takes a fixed
+16 KiB of internal DMA-capable RAM (`ll_cam_dma_sizes`, `dma_half_buffer_cnt =
+16`, 1024 bytes each). Greyscale goes through `ll_cam_calc_rgb_dma()` and sizes
+itself from `CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX`, whose configured value in this
+build has **not** been read. It is larger. `ll_cam_calc_rgb_dma()` can also fail
+outright with `Resolution too high` if a single line exceeds half the buffer; at
+QVGA a line is 320 or 640 bytes, so that is not a risk here and would be at
+higher resolutions.
+
+**The software JPEG encode is unmeasured.** `conversions/to_jpg.cpp`,
+`convert_image()` handles `PIXFORMAT_GRAYSCALE` as `num_channels = 1`,
+`jpge::Y_ONLY`, one `memcpy` per scanline — so the path exists and is a
+one-channel encode. How long `jpge` takes over 76,800 pixels on an ESP32-S3 is
+not known, and nobody should quote a number for it until it is on the bench.
+
+Use `fmt2jpg_cb`, **not** `fmt2jpg`. `fmt2jpg` mallocs a hardcoded 128 KiB
+(`//todo: allocate proper buffer` in the source) and its `memory_stream::put_buf`
+silently clamps on overflow — the warning that would have told you is commented
+out. That is a silent degradation, in a codebase whose rule is that degradation
+appears in the result. The callback form lets the caller own the buffer and count
+the bytes.
+
+### The price, stated plainly
+
+**Pictures off this node are now monochrome.** That is a real loss and it is the
+reason to revisit: colour costs a second mode, and a second mode costs the
+detector's continuity. If colour turns out to matter more than uninterrupted
+detection, deinit/reinit is still there and this entry is the argument to weigh
+against.
+
+It is, for now, a cheaper loss than it looks. The colour this node has produced
+so far is a heavy magenta cast that survived a large lighting change unchanged
+(`camera.rs`, the IR-cut note) and is still unexplained. We are giving up a
+colour channel we cannot yet vouch for.
+
+### An observation that is not a diagnosis
+
+`cam_config()` sets `cam_obj->psram_mode = (config->xclk_freq_hz == 16000000)` on
+every target except the original ESP32. This firmware runs XCLK at 20 MHz, so
+**`psram_mode` is false on both bench boards** — despite `fb_location =
+CAMERA_FB_IN_PSRAM`, which is a different thing entirely (it chooses where the
+frame buffer is malloc'd, not whether DMA writes into it directly). Both boards
+have therefore always been on the copy-through-internal-RAM path.
+
+Nobody in this tree knew that. It is recorded because it is true and because the
+XIAO's null-frame fault lives on that path — but the Lilygo captures fine on the
+same path at the same frequency, so this is **not** an explanation of that fault
+and must not be cited as one.
+
+### The transferable part
+
+The question "can I change this at runtime?" was answered by four function calls
+of reading, and the answer was no in a way that would have presented as an
+intermittent camera fault — this project's most expensive failure mode, and one
+it has already paid for twice on this exact peripheral. A configuration struct
+field is not a setting; it is whatever the callee did with it once.
+
+---
+
 ## 2026-09-16 — A node's name has to come from the chip, because the second board answered to the first one's
 
 The firmware carried `const NODE_ID: &str = "obc-esp32-s3-001"`, with a doc
