@@ -43,6 +43,19 @@
 //! The struct field names (`pin_sccb_sda`/`pin_sccb_scl` in esp32-camera ≥2.0; the
 //! older component spelled them `pin_sscb_*`) and the bindgen enum names are the
 //! parts most likely to need a version tweak — verify against the compiler.
+//!
+//! ---
+//!
+//! **2026-09-16: the pin map is now a per-board choice, and there is no default.**
+//!
+//! The map above was wrong twice because it was a single hard-coded set with no
+//! board attached to it, and nothing forced anyone to say which board they meant.
+//! A default is what let "the Waveshare's pins" survive for weeks on a board with
+//! no camera connector. So `--features camera` alone no longer compiles: it needs
+//! a board feature too, and the unattributed set is quarantined behind
+//! `board-unverified-map` rather than deleted — the history above is worth more
+//! than the twelve numbers, and deleting it would invite someone to re-derive the
+//! same guess.
 
 // Confirmed by looking at the board on 2026-08-21: the Waveshare
 // ESP32-S3-Touch-LCD-2.1 has one FPC connector and it is the screen's. This
@@ -54,37 +67,404 @@ compile_error!(
      camera connector, and this module's pins are its LCD lines. See camera.rs."
 );
 
+// A camera build must name its board. No default: see the 2026-09-16 note above.
+#[cfg(all(
+    feature = "camera",
+    not(any(
+        feature = "board-xiao-sense",
+        feature = "board-lilygo-tcam-s3-v11",
+        feature = "board-unverified-map"
+    ))
+))]
+compile_error!(
+    "`camera` needs a board feature so the pin map is attributable. Add \
+     `board-xiao-sense` (Seeed XIAO ESP32S3 Sense, pins from the vendor wiki), \
+     `board-lilygo-tcam-s3-v11` (LILYGO T-CameraPlus-S3 **V1.0/V1.1 only** -- V1.2 \
+     moves VSYNC/PWDN/RESET and is a different board), or, only if you know what it \
+     is for, `board-unverified-map` (the historical unattributed set — matches no \
+     known board). See camera.rs."
+);
+
+// Pairwise, because each pin map is a different board and picking two means the
+// compiler silently takes whichever `cfg` it sees first.
+#[cfg(all(feature = "board-xiao-sense", feature = "board-unverified-map"))]
+compile_error!("pick one camera board feature, not both (xiao-sense + unverified-map)");
+#[cfg(all(feature = "board-xiao-sense", feature = "board-lilygo-tcam-s3-v11"))]
+compile_error!("pick one camera board feature, not both (xiao-sense + lilygo-tcam-s3-v11)");
+#[cfg(all(feature = "board-lilygo-tcam-s3-v11", feature = "board-unverified-map"))]
+compile_error!("pick one camera board feature, not both (lilygo-tcam-s3-v11 + unverified-map)");
+
+// The camera board and the board *profile* (`board.rs`) must agree, or Track 0
+// opens the wrong pins at boot. On the Lilygo V1.1 the XIAO's default output
+// allow-list `[21, 3, 7, 8]` is SD_CS, camera RESET, camera XCLK and camera D6 --
+// the node would drive its own sensor clock as an actuator. `board.rs` selects the
+// Lilygo profile from the same feature, and this refuses the combination that
+// cannot be made consistent.
+#[cfg(all(feature = "board-lilygo-tcam-s3-v11", feature = "board-waveshare-21"))]
+compile_error!(
+    "`board-lilygo-tcam-s3-v11` and `board-waveshare-21` are different boards; \
+     pick one."
+);
+
 use anyhow::Context;
 // esp32-camera bindings live in their own module (see Cargo.toml `bindings_module`).
 use esp_idf_svc::sys::camera as sys;
 // ESP_OK / error type come from the base bindings, not the camera module.
 use esp_idf_svc::sys::ESP_OK;
 
+/// One board's DVP wiring. `-1` means "not connected on this board".
+///
+/// A struct rather than loose constants so a board is a single value that can be
+/// named, cited and diffed — the previous shape made it impossible to tell, at a
+/// glance, whether you were looking at one board's map or a merge of two.
+struct CameraPins {
+    /// IR-cut filter switch, `-1` when the board has none (or does not break it
+    /// out). The Lilygo T-CameraPlus-S3 has an AP1511B on GPIO16; the XIAO Sense
+    /// has no such part. Left undriven, an OV5640 sees infrared across the whole
+    /// frame and every picture comes back washed magenta — which is exactly what
+    /// the first images off this node looked like.
+    ir_cut: i32,
+    /// Level that ENGAGES the IR-cut filter (blocks infrared). Determined on the
+    /// bench by trying both and looking at the picture; see the board consts.
+    ir_cut_engaged_level: u32,
+    pwdn: i32,
+    reset: i32,
+    xclk: i32,
+    sccb_sda: i32,
+    sccb_scl: i32,
+    d0: i32,
+    d1: i32,
+    d2: i32,
+    d3: i32,
+    d4: i32,
+    d5: i32,
+    d6: i32,
+    d7: i32,
+    vsync: i32,
+    href: i32,
+    pclk: i32,
+}
+
+/// Seeed XIAO ESP32S3 Sense — the OV2640/OV5640 on the Sense expansion board.
+///
+/// Source: Seeed's own wiki, "Camera Usage in Seeed Studio XIAO ESP32S3 Sense",
+/// section *Camera slot circuit design for expansion boards*, which publishes the
+/// table of the 14 GPIOs the card slot occupies. Retrieved 2026-09-16 and
+/// cross-checked against the `CAMERA_MODEL_XIAO_ESP32S3` entry of the Arduino
+/// `camera_pins.h` the same page uses:
+///
+/// ```text
+/// XCLK 10   PCLK 13   VSYNC 38   HREF 47   SIOD(SDA) 40   SIOC(SCL) 39
+/// Y2 15  Y3 17  Y4 18  Y5 16  Y6 14  Y7 12  Y8 11  Y9 48
+/// ```
+///
+/// `PWDN` and `RESET` are not broken out on this board, hence `-1`.
+///
+/// **VERIFIED ON METAL 2026-09-16**, XIAO ESP32S3 Sense, MAC `64:E8:33:7E:7E:04`.
+/// This is the first pin map in this file that is evidence rather than a claim:
+///
+/// ```text
+/// sccb: pin_sda 40 pin_scl 39
+/// camera: Detected camera at address=0x30
+/// camera: Detected OV2640 camera
+/// camera: Camera PID=0x26 VER=0x42 MIDL=0x7f MIDH=0xa2
+/// obc_esp32_s3: OV2640 camera initialised
+/// ```
+///
+/// The sensor answering over SCCB also proves `xclk` (GPIO10) is running — an
+/// OV2640 will not respond on the control bus without its clock. So XCLK, SIOD
+/// and SIOC are confirmed by this log; the eight data lines, VSYNC and HREF are
+/// NOT, because a successful `esp_camera_init` never moves a pixel. See the
+/// capture failure recorded below.
+///
+/// Note D0..D7 map to Y2..Y9 (the sensor's low two bits are not wired), which is
+/// why the numbers below look shuffled against the table — that ordering is the
+/// convention, not a transcription error.
+#[cfg(feature = "board-xiao-sense")]
+const PINS: CameraPins = CameraPins {
+    // No IR-cut filter on the Sense expansion board.
+    ir_cut: -1,
+    ir_cut_engaged_level: 0,
+    pwdn: -1,
+    reset: -1,
+    xclk: 10,
+    sccb_sda: 40,
+    sccb_scl: 39,
+    d0: 15, // Y2
+    d1: 17, // Y3
+    d2: 18, // Y4
+    d3: 16, // Y5
+    d4: 14, // Y6
+    d5: 12, // Y7
+    d6: 11, // Y8
+    d7: 48, // Y9
+    vsync: 38,
+    href: 47,
+    pclk: 13,
+};
+
+/// LILYGO T-CameraPlus-S3, hardware revision **V1.0/V1.1 only**.
+///
+/// Sources, both retrieved 2026-09-16, and they agree exactly:
+///
+/// * `libraries/private_library/pin_config.h` in `Xinyuan-LilyGO/T-CameraPlus-S3`
+///   (branch `arduino-esp32-libs_V2.0.14`, the repo's only branch — there is no
+///   `master`), block `#ifdef T_CameraPlus_S3_V1_0_V1_1` plus the shared block
+///   below it.
+/// * That repo's README, table *"T-CameraPlus-S3_V1.0-V1.1 版本 → camera module
+///   ov2640 pins"*.
+///
+/// ```text
+/// XCLK 7   PCLK 10   VSYNC 4   HREF 5   SIOD(SDA) 1   SIOC(SCL) 2
+/// RESET 3   PWDN -1 (not wired on this revision)
+/// Y2 12  Y3 14  Y4 15  Y5 13  Y6 11  Y7 9  Y8 8  Y9 6
+/// ```
+///
+/// **Do not use this map on a V1.2 board.** Only three camera pins differ, which
+/// is exactly why it is dangerous: V1.2 has VSYNC on 3, PWDN on 4 and RESET on
+/// -1 — GPIO3 and GPIO4 swap roles. Loading this map on a V1.2 board drives
+/// GPIO4 as an input while the board expects it as PWDN. The vendor ships
+/// `pin_config.h` with **V1.2 selected**, so the upstream default is the other
+/// revision from ours.
+///
+/// Two board-level facts that do not live in this struct but govern any build
+/// using it:
+///
+/// * **PSRAM is QUAD (QSPI), not octal.** The vendor's `platformio.ini` has
+///   `qio_opi` commented out and `qio_qspi` active, their `sdkconfig.defaults`
+///   says `CONFIG_SPIRAM_MODE_QUAD=y`, and the README's Arduino table says
+///   "QSPI PSRAM". Use `sdkconfig.defaults.camera-lilygo-tcam-v11`, not the
+///   XIAO's overlay, which is `MODE_OCT` and measured correct for that board
+///   only.
+/// * **SCCB is shared.** On V1.0/V1.1 GPIO1/2 also carry the CST816S touch
+///   controller (0x15) and the SY6970 PMIC (0x6A). The camera driver takes the
+///   bus as its SCCB master. This is why `board.rs` gives this board no sensor
+///   I2C bus and no microphone — the firmware's I2S mic is GPIO0/1/2 and would
+///   fight the sensor. (V1.2 splits them onto 33/37; another reason not to mix
+///   the revisions.)
+#[cfg(feature = "board-lilygo-tcam-s3-v11")]
+const PINS: CameraPins = CameraPins {
+    // AP1511B IR-cut switch. `#define AP1511B_FBC 16` in the vendor
+    // pin_config.h (both revisions). The vendor never states which level
+    // engages the filter, so it was MEASURED 2026-09-16 by flashing both and
+    // looking at the picture, same scene minutes apart:
+    //
+    //   level 1 -- scene readable, contrast present, warm cast
+    //   level 0 -- markedly worse: flat pink/white wash, contrast gone
+    //
+    // That pointed to 1, and level 1 is what ships. But treat it as WEAK: the
+    // two frames were minutes apart, so exposure and auto-gain moved between
+    // them, and the difference could have been that rather than the filter.
+    //
+    // It got weaker the same evening. The warm cast is UNCHANGED across a
+    // bright daylight-window scene and a lamp-lit one -- a large lighting
+    // change that altered exposure visibly and the colour not at all. A cast
+    // that ignores the light is systematic: sensor auto-white-balance (left at
+    // the driver's default, never looked at), or this pin not switching
+    // anything at all. Ambient colour temperature it is not.
+    //
+    // So: the pin is real and cited, the LEVEL is a guess supported by one
+    // uncontrolled comparison, and the cast is NOT explained. The clean test
+    // is to toggle this pin between two frames of one unchanged scene without
+    // reflashing -- which needs a command to drive it, and Track 0 denies GPIO
+    // writes on this board because `output_pins` is empty. Do that before
+    // believing the value above.
+    ir_cut: 16,
+    ir_cut_engaged_level: 1,
+    pwdn: -1,
+    reset: 3,
+    xclk: 7,
+    sccb_sda: 1,
+    sccb_scl: 2,
+    d0: 12, // Y2
+    d1: 14, // Y3
+    d2: 15, // Y4
+    d3: 13, // Y5
+    d4: 11, // Y6
+    d5: 9,  // Y7
+    d6: 8,  // Y8
+    d7: 6,  // Y9
+    vsync: 4,
+    href: 5,
+    pclk: 10,
+};
+
+/// The historical map. **Matches no known board** — see the module header for how
+/// it came to be here and why it is kept. Quarantined behind its own feature so
+/// nothing selects it by accident.
+#[cfg(feature = "board-unverified-map")]
+const PINS: CameraPins = CameraPins {
+    // Unknown board; claiming an IR-cut pin would be one more invented fact.
+    ir_cut: -1,
+    ir_cut_engaged_level: 0,
+    pwdn: -1,
+    reset: -1,
+    xclk: 15,
+    sccb_sda: 4,
+    sccb_scl: 5,
+    d0: 39,
+    d1: 40,
+    d2: 41,
+    d3: 42,
+    d4: 16,
+    d5: 17,
+    d6: 18,
+    d7: 19,
+    vsync: 21,
+    href: 38,
+    pclk: 13,
+};
+
+// ── OPEN: init succeeds, capture never does (2026-09-16) ─────────────────────
+//
+// `esp_camera_init` returns ESP_OK and the sensor is identified, but every
+// `esp_camera_fb_get` returns null, preceded by:
+//
+//     W cam_hal: Failed to get the frame on time!
+//
+// Measured 6/6 failures, at 37947, 41947, 45947, 49947, 53947, 57947 ms --
+// exactly 4000 ms apart, which is the driver's own timeout. It is deterministic,
+// not flaky, and it is not a warm-up effect. `jpeg_quality` was varied across
+// 10/12/20/30 with no change to the timing, which also suggests the command's
+// `quality` argument is not reaching the sensor.
+//
+// What that narrows it to: the control path (XCLK, SIOD, SIOC) is proven by the
+// SCCB detection above. The DATA path is not exercised by `esp_camera_init` at
+// all -- it never moves a pixel -- so the suspects are the eight data lines,
+// VSYNC, HREF and PCLK, or the config below.
+//
+// ELIMINATED so far, each by measurement rather than by reasoning:
+//
+//   * **Buffer count / grab mode.** `fb_count = 2` + `CAMERA_GRAB_LATEST`, the
+//     configuration usually prescribed with PSRAM, was flashed and confirmed
+//     active (two frame-buffer allocations in the boot log). Capture failed 6/6
+//     with the identical 4000 ms timeout. See the note at `fb_count` below.
+//   * **An LEDC conflict inside this firmware.** XCLK is driven by
+//     `LEDC_TIMER_0` / `LEDC_CHANNEL_0`; a grep of `src/` finds no other LEDC
+//     user, so nothing here is stealing the timer and detuning XCLK.
+//   * **A GPIO conflict inside this firmware.** Nothing else in `src/` claims
+//     any of the fourteen camera pins. The boot log's configured outputs are
+//     GPIO 21/3/7/8 and the I2S mic is 0/1/2; none overlap.
+//
+// STILL OPEN, in the order worth trying:
+//
+//   1. **The physical connection.** SCCB is two lines out of fourteen through
+//      the same path; a partially seated camera FPC or expansion-board
+//      connector reproduces this signature exactly -- control answers, data
+//      never arrives. This is the cheapest thing left and needs hands, not a
+//      build.
+//   2. **`xclk_freq_hz = 20_000_000`.** SCCB answering proves XCLK exists, not
+//      that it is the right frequency; the OV2640's control logic tolerates a
+//      wide range while PCLK timing does not. 10 MHz is the usual fallback.
+//   3. **The sensor module itself**, swapped for the second XIAO Sense's.
+//
+// Two changes have now failed on this, so per the project's two-strikes rule
+// the next person should gather evidence rather than try a third variation
+// blind. A scope or logic analyser on PCLK and VSYNC while a capture is
+// attempted answers 1 and 2 at once, and is the honest next step.
+//
+// ── 2026-09-16, later: a SECOND board, and it moves the suspicion ────────────
+//
+// The LILYGO T-CameraPlus-S3 V1.0/V1.1 was brought up specifically as the
+// discriminating experiment: same driver, same `capture_base64`, different
+// board, different sensor (OV5640), different pin map, different PSRAM mode.
+// If it captured, the XIAO's camera hardware was at fault. It did not.
+//
+// What that board proved, all from its own boot log:
+//
+//     esp_psram: SPI SRAM memory test OK          (QUAD, as the vendor says)
+//     sccb: pin_sda 1 pin_scl 2                   (the cited map)
+//     camera: Detected camera at address=0x3c
+//     camera: Detected OV5640 camera
+//     camera: Camera PID=0x5640
+//     ov5640: Calculated XVCLK: 20000000 Hz ... PCLK: 11250000 Hz
+//
+// So on BOTH boards the sensor is found and configured, and on NEITHER does a
+// frame come back. Two pin maps, two sensors, two PSRAM modes, two SCCB buses.
+// That is most of the board-level hypothesis space, and it is gone.
+//
+// **They fail differently, and the difference is the lead.** The XIAO answers
+// `{"ok":false,"error":"esp_camera_fb_get returned null (no frame)"}` in ~4 s,
+// preceded by `cam_hal: Failed to get the frame on time!`. The Lilygo answers
+// NOTHING -- no reply, no error, no log -- for 45 s, while `gpio_read` answers
+// normally immediately before and immediately after, and beacons keep flowing.
+// The command is received and the main loop survives; only the response never
+// appears.
+//
+// ── CONFIRMED 2026-09-16: the Lilygo's camera works; the REPLY PATH drops it ──
+//
+// The hypothesis above was that the capture succeeds and the reply is lost for
+// size. The measurement -- logging `(*fb).len` before encoding, which is what
+// `capture_base64` now does -- settled it in one run:
+//
+//     capture: frame len=5020 B, 320x240, format=4, base64 will be ~6696 B
+//     capture: encoded 6696 B, handing it to the reply path
+//
+// A real QVGA JPEG (`format=4` is `PIXFORMAT_JPEG`). Then the host received
+// nothing. `send_line` in `main.rs` writes into a 4096-byte TX ring and
+// abandons the rest of the line after five `Ok(0)` stalls -- about 50 ms --
+// silently. 6697 bytes does not fit that budget. See the note under `send_line`.
+//
+// **So the Lilygo has no camera bug at all**, and three sessions of suspecting
+// pin maps, PSRAM, fb_count, ribbon seating and the sensor were spent on a
+// board whose camera was working the whole time. What made it look like a
+// camera fault was a silent drop: the node could not say "I have your image and
+// cannot send it", so the absence of a reply read as the absence of a frame.
+//
+// The XIAO is a SEPARATE fault and is still open. It never reaches this path:
+// `esp_camera_fb_get` returns null there, with `cam_hal: Failed to get the
+// frame on time!`, so there is no frame to drop. Two boards, two unrelated
+// bugs, and the second one masked the first one's diagnosis.
+//
+// ── 2026-09-16: FIRST IMAGE OFF A NODE ───────────────────────────────────────
+//
+// With `send_line` chunking its writes, the Lilygo returned a complete JPEG:
+// 4905 bytes, 320x240, `FF D8` … `FF D9`, decoded and viewed. The camera path
+// on this board is end-to-end working.
+//
+// The image has a heavy magenta cast. **Likely cause, not yet tested:** the
+// vendor's `pin_config.h` defines `AP1511B_FBC 16` — the IR-cut filter switch —
+// and this firmware never drives that pin. An OV5640 with the IR-cut filter
+// disengaged sees infrared across the whole frame, which washes exactly this
+// purple. The fix would be to assert GPIO16 at init on this board.
+//
+// Two reasons that is not done here. It is one more board-specific pin, so it
+// belongs in `CameraPins` (or a board-level init hook) rather than hard-coded;
+// and nobody has confirmed the polarity — whether high or low engages the
+// filter is not stated in the sources read on 2026-09-16, and guessing it is
+// how this file got its reputation. Confirm from the schematic
+// (`project/T-CameraPlus-S3_V1.0-V1.1_20241109.pdf`) or by trying both and
+// looking at the picture, then record which way round it was.
+//
+// The vendor's OV5640 examples also call `set_vflip(1)` / `set_hmirror(0)` for
+// this sensor and load an autofocus blob (`ESP32_OV5640_AF`); we do neither, so
+// orientation and focus are whatever the sensor powers up with.
+
 /// Initialise the camera driver (global; call once at boot).
 pub fn init() -> anyhow::Result<()> {
     // Zero-initialise the C config, then fill the fields this board needs.
     let mut cfg: sys::camera_config_t = unsafe { core::mem::zeroed() };
 
-    cfg.pin_pwdn = -1;
-    cfg.pin_reset = -1;
-    cfg.pin_xclk = 15;
+    cfg.pin_pwdn = PINS.pwdn;
+    cfg.pin_reset = PINS.reset;
+    cfg.pin_xclk = PINS.xclk;
     // SCCB (camera-control I2C) pins live in anonymous unions in the binding — the
     // component keeps both the new `pin_sccb_*` and legacy `pin_sscb_*` spellings.
     // Writing a union field is safe in Rust.
-    cfg.__bindgen_anon_1.pin_sccb_sda = 4;
-    cfg.__bindgen_anon_2.pin_sccb_scl = 5;
+    cfg.__bindgen_anon_1.pin_sccb_sda = PINS.sccb_sda;
+    cfg.__bindgen_anon_2.pin_sccb_scl = PINS.sccb_scl;
     // 8-bit parallel data bus D0..D7.
-    cfg.pin_d0 = 39;
-    cfg.pin_d1 = 40;
-    cfg.pin_d2 = 41;
-    cfg.pin_d3 = 42;
-    cfg.pin_d4 = 16;
-    cfg.pin_d5 = 17;
-    cfg.pin_d6 = 18;
-    cfg.pin_d7 = 19;
-    cfg.pin_vsync = 21;
-    cfg.pin_href = 38;
-    cfg.pin_pclk = 13;
+    cfg.pin_d0 = PINS.d0;
+    cfg.pin_d1 = PINS.d1;
+    cfg.pin_d2 = PINS.d2;
+    cfg.pin_d3 = PINS.d3;
+    cfg.pin_d4 = PINS.d4;
+    cfg.pin_d5 = PINS.d5;
+    cfg.pin_d6 = PINS.d6;
+    cfg.pin_d7 = PINS.d7;
+    cfg.pin_vsync = PINS.vsync;
+    cfg.pin_href = PINS.href;
+    cfg.pin_pclk = PINS.pclk;
 
     cfg.xclk_freq_hz = 20_000_000;
     cfg.ledc_timer = sys::ledc_timer_t_LEDC_TIMER_0;
@@ -93,6 +473,17 @@ pub fn init() -> anyhow::Result<()> {
     cfg.pixel_format = sys::pixformat_t_PIXFORMAT_JPEG;
     cfg.frame_size = sys::framesize_t_FRAMESIZE_QVGA; // 320×240 — fits one PSRAM fb
     cfg.jpeg_quality = 12; // 0..63, lower = higher quality
+
+    // `fb_count = 2` + `CAMERA_GRAB_LATEST` was tried on 2026-09-16 and REFUTED.
+    // It is the configuration usually prescribed when PSRAM is present, and the
+    // reasoning was sound: with one buffer the DVP capture must start on demand
+    // and finish inside the driver's timeout, while two let it keep a capture in
+    // flight. The board took the change -- the boot log showed two `Allocating
+    // 15360 Byte frame buffer in PSRAM` lines instead of one -- and capture still
+    // failed 6/6 with the identical 4000 ms timeout.
+    //
+    // So the buffer count is not the cause, and these stay at their original
+    // values rather than carrying a change no evidence supports.
     cfg.fb_count = 1;
     cfg.fb_location = sys::camera_fb_location_t_CAMERA_FB_IN_PSRAM;
     cfg.grab_mode = sys::camera_grab_mode_t_CAMERA_GRAB_WHEN_EMPTY;
@@ -101,24 +492,108 @@ pub fn init() -> anyhow::Result<()> {
     if err != ESP_OK {
         anyhow::bail!("esp_camera_init failed (error {err})");
     }
+
+    // ── IR-cut filter ────────────────────────────────────────────────────────
+    //
+    // Boards that have one (the Lilygo's AP1511B on GPIO16) leave it undriven
+    // after `esp_camera_init`, so the sensor sees infrared. `ir_cut_engaged_level`
+    // is a bench-determined fact, not a datasheet one — see the board const.
+    if PINS.ir_cut >= 0 {
+        unsafe {
+            use esp_idf_svc::sys::*;
+            let mask = 1u64 << PINS.ir_cut;
+            let io = gpio_config_t {
+                pin_bit_mask: mask,
+                mode: gpio_mode_t_GPIO_MODE_OUTPUT,
+                pull_up_en: gpio_pullup_t_GPIO_PULLUP_DISABLE,
+                pull_down_en: gpio_pulldown_t_GPIO_PULLDOWN_DISABLE,
+                intr_type: gpio_int_type_t_GPIO_INTR_DISABLE,
+                ..core::mem::zeroed()
+            };
+            if gpio_config(&io) == ESP_OK
+                && gpio_set_level(PINS.ir_cut, PINS.ir_cut_engaged_level) == ESP_OK
+            {
+                log::info!(
+                    "camera: IR-cut filter engaged (GPIO{} = {})",
+                    PINS.ir_cut,
+                    PINS.ir_cut_engaged_level
+                );
+            } else {
+                log::warn!("camera: IR-cut filter setup failed on GPIO{}", PINS.ir_cut);
+            }
+        }
+    }
+
+    // ── Orientation: deliberately NOT set. ───────────────────────────────────
+    //
+    // The first real picture off this node (2026-09-16) came back upside down,
+    // and the vendor's own OV5640 example does exactly what you would reach for:
+    //
+    //     if (s->id.PID == OV5640_PID) { s->set_vflip(s, 1); s->set_hmirror(s, 0); }
+    //
+    // That call was written here and then removed, because the board was
+    // **physically mounted upside down on the bench for testing** — USB at the
+    // bottom. A software flip would have compensated for a temporary arrangement
+    // and then silently inverted every correctly-mounted board afterwards. The
+    // vendor's flip says their sensor is inverted relative to *their* reference
+    // mounting; it says nothing about ours.
+    //
+    // One photograph taken with the board deliberately inverted cannot separate
+    // "the sensor is mounted upside down on the PCB" from "the PCB is upside
+    // down on the desk". The measurement that settles it is one frame with the
+    // board in its intended orientation. Until someone takes it, the sensor is
+    // left at its power-on default and the picture means what the lens saw.
+    //
+    // When it is settled: the flip belongs keyed on the sensor PID the driver
+    // reports (`esp_camera_sensor_get()`, `id.PID`, 0x5640 for the OV5640),
+    // not on the board feature, so a board fitted with a different sensor gets
+    // the right answer without anyone editing a pin map.
+
     Ok(())
 }
 
 /// Capture one JPEG frame and return it base64-encoded.
+///
+/// Logs the frame's size and shape BEFORE encoding, on purpose. On 2026-09-16 the
+/// Lilygo returned nothing at all to `camera_capture` — no reply, no error, no
+/// log — while answering `gpio_read` normally on either side of it, and there was
+/// no way to tell "the sensor produced no frame" from "the sensor produced a
+/// frame we failed to send". Those have opposite fixes. The log line below is the
+/// difference, and it goes out on the console whether or not the reply ever does.
 pub fn capture_base64() -> anyhow::Result<String> {
     let fb = unsafe { sys::esp_camera_fb_get() };
     if fb.is_null() {
+        log::warn!("capture: esp_camera_fb_get returned null -- the sensor gave no frame");
         anyhow::bail!("esp_camera_fb_get returned null (no frame)");
     }
     // Copy the frame out, then always return the buffer to the driver.
     let result = (|| {
         let len = unsafe { (*fb).len } as usize;
         let buf = unsafe { (*fb).buf };
+        let width = unsafe { (*fb).width };
+        let height = unsafe { (*fb).height };
+        let format = unsafe { (*fb).format };
+        // The measurement. A plausible JPEG size here means the camera works and
+        // anything still broken is downstream of this line.
+        log::info!(
+            "capture: frame len={len} B, {width}x{height}, format={format}, \
+             base64 will be ~{} B",
+            len.div_ceil(3) * 4
+        );
         if buf.is_null() || len == 0 {
+            log::warn!(
+                "capture: frame buffer empty (buf_null={}, len={len})",
+                buf.is_null()
+            );
             anyhow::bail!("empty frame buffer");
         }
         let data = unsafe { core::slice::from_raw_parts(buf, len) };
-        Ok(base64_encode(data))
+        let encoded = base64_encode(data);
+        log::info!(
+            "capture: encoded {} B, handing it to the reply path",
+            encoded.len()
+        );
+        Ok(encoded)
     })();
     unsafe { sys::esp_camera_fb_return(fb) };
     result.context("camera capture")
@@ -126,8 +601,7 @@ pub fn capture_base64() -> anyhow::Result<String> {
 
 /// Minimal standard base64 encoder (no external crate in the firmware deps).
 fn base64_encode(input: &[u8]) -> String {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
     for chunk in input.chunks(3) {
         let b0 = chunk[0] as u32;

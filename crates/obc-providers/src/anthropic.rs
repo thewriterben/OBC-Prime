@@ -18,7 +18,7 @@
 use crate::ProviderConfig;
 use crate::{
     ChatCompletion, ChatMessage, ChatRole, DeltaSink, Provider, ResponseFormat, StreamDelta,
-    ToolCall,
+    ToolCall, Usage,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -114,27 +114,48 @@ impl AnthropicProvider {
             })
             .collect();
 
-        let anth_tools: Option<Vec<AnthropicTool>> = if tools.is_empty() {
-            None
-        } else {
-            Some(
-                tools
-                    .iter()
-                    .map(|t| AnthropicTool {
-                        name: t.name().to_string(),
-                        description: t.description().to_string(),
-                        input_schema: t.parameters_schema(),
-                    })
-                    .collect(),
-            )
-        };
+        // One tool with a bad name used to fail the whole request: the bench's
+        // 208-character learned skill drew `tools.30.custom.name: String should
+        // have at most 128 characters` on every cloud turn (2026-09-11). Skip
+        // such tools, loudly, and send the rest.
+        let mut kept: Vec<AnthropicTool> = Vec::with_capacity(tools.len());
+        for t in tools {
+            if !valid_tool_name(t.name()) {
+                tracing::warn!(
+                    tool = %t.name().chars().take(80).collect::<String>(),
+                    len = t.name().len(),
+                    "anthropic: tool left out of the request, its name breaks the API rule \
+                     (1-128 chars of A-Z a-z 0-9 _ -); the request would otherwise be refused"
+                );
+                continue;
+            }
+            kept.push(AnthropicTool {
+                name: t.name().to_string(),
+                description: t.description().to_string(),
+                input_schema: t.parameters_schema(),
+            });
+        }
+        let anth_tools: Option<Vec<AnthropicTool>> =
+            if kept.is_empty() { None } else { Some(kept) };
 
+        // No `temperature`: current models (Sonnet 5, Opus 4.7 and later) refuse
+        // it with `temperature is deprecated for this model`, and the default is
+        // what we want anyway. `ProviderConfig::temperature` still applies to
+        // the other providers.
         let mut body = serde_json::json!({
             "model": config.model,
             "messages": anth_messages,
-            "temperature": config.temperature,
             "max_tokens": 4096,
         });
+        // `think`: `false` turns thinking off (accepted on Sonnet 5 and the 4.6+
+        // family; the agent does not replay thinking blocks, so this is the
+        // setting to use for a tool-using brain), `true` asks for adaptive
+        // thinking, unset leaves the model's default.
+        match config.think {
+            Some(false) => body["thinking"] = serde_json::json!({"type": "disabled"}),
+            Some(true) => body["thinking"] = serde_json::json!({"type": "adaptive"}),
+            None => {}
+        }
         if stream {
             body["stream"] = Value::Bool(true);
         }
@@ -247,6 +268,7 @@ impl Provider for AnthropicProvider {
             )
         })?;
 
+        let usage = response.usage.map(Usage::from);
         let mut message = String::new();
         let mut tool_calls = Vec::new();
 
@@ -260,6 +282,7 @@ impl Provider for AnthropicProvider {
                         args: input.to_string(),
                     });
                 }
+                AnthropicContent::Other => {}
             }
         }
 
@@ -268,6 +291,7 @@ impl Provider for AnthropicProvider {
             tool_calls,
             provider: self.name().to_string(),
             model: config.model.clone(),
+            usage,
         })
     }
 
@@ -317,6 +341,15 @@ impl Provider for AnthropicProvider {
     }
 }
 
+/// The Messages API's rule for a tool name: 1-128 characters of `[A-Za-z0-9_-]`.
+pub fn valid_tool_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 /// Join the `data:` lines of one SSE event; `None` for comments/keep-alives.
 pub fn sse_data(raw: &str) -> Option<String> {
     let mut data = String::new();
@@ -341,6 +374,9 @@ pub fn sse_data(raw: &str) -> Option<String> {
 pub struct StreamFold {
     pub message: String,
     blocks: Vec<(usize, ToolCall)>,
+    /// `message_start` carries the prompt-side numbers (input, cache read,
+    /// cache write); `message_delta` the output count at the end.
+    pub usage: Option<Usage>,
 }
 
 impl StreamFold {
@@ -360,6 +396,7 @@ impl StreamFold {
             tool_calls,
             provider: provider.to_string(),
             model: model.to_string(),
+            usage: self.usage,
         }
     }
 }
@@ -402,6 +439,31 @@ pub fn fold_event(data: &str, fold: &mut StreamFold, sink: DeltaSink<'_>) -> Res
             }
             BlockDelta::Other => {}
         },
+        StreamEvent::MessageStart { message } => {
+            if let Some(u) = message.usage {
+                fold.usage = Some(u.into());
+            }
+        }
+        StreamEvent::MessageDelta { usage } => {
+            // The final usage: output_tokens is the count for the whole
+            // message; newer servers repeat the input-side numbers here too.
+            if let Some(u) = usage {
+                let mut cur = fold.usage.unwrap_or_default();
+                if u.output_tokens > 0 {
+                    cur.output_tokens = u.output_tokens;
+                }
+                if u.input_tokens > 0 {
+                    cur.input_tokens = u.input_tokens;
+                }
+                if u.cache_read_input_tokens > 0 {
+                    cur.cache_read_input_tokens = u.cache_read_input_tokens;
+                }
+                if u.cache_creation_input_tokens > 0 {
+                    cur.cache_creation_input_tokens = u.cache_creation_input_tokens;
+                }
+                fold.usage = Some(cur);
+            }
+        }
         StreamEvent::Error { error } => {
             anyhow::bail!("Anthropic API error (stream): {}", error.message);
         }
@@ -431,6 +493,39 @@ struct AnthropicTool {
 #[derive(Debug, Deserialize)]
 struct AnthropicResponse {
     content: Vec<AnthropicContent>,
+    #[serde(default)]
+    usage: Option<AnthropicUsage>,
+}
+
+/// The API's `usage` object, on the response and on `message_start` /
+/// `message_delta`. Every field defaults so a partial object parses.
+#[derive(Debug, Default, Clone, Copy, Deserialize)]
+struct AnthropicUsage {
+    #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
+    output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
+}
+
+impl From<AnthropicUsage> for Usage {
+    fn from(u: AnthropicUsage) -> Self {
+        Usage {
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
+            cache_read_input_tokens: u.cache_read_input_tokens,
+            cache_creation_input_tokens: u.cache_creation_input_tokens,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MessageStartBody {
+    #[serde(default)]
+    usage: Option<AnthropicUsage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,6 +539,10 @@ enum AnthropicContent {
         name: String,
         input: Value,
     },
+    /// `thinking`, `redacted_thinking`, and whatever comes next: not ours to
+    /// read, and not a reason to fail the turn.
+    #[serde(other)]
+    Other,
 }
 
 /// The streaming event types this fold cares about; everything else
@@ -458,6 +557,13 @@ enum StreamEvent {
     },
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta { index: usize, delta: BlockDelta },
+    #[serde(rename = "message_start")]
+    MessageStart { message: MessageStartBody },
+    #[serde(rename = "message_delta")]
+    MessageDelta {
+        #[serde(default)]
+        usage: Option<AnthropicUsage>,
+    },
     #[serde(rename = "message_stop")]
     MessageStop,
     #[serde(rename = "error")]
@@ -657,5 +763,155 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("Overloaded"));
+    }
+}
+
+#[cfg(test)]
+mod current_models_tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    struct Named(&'static str);
+
+    #[async_trait]
+    impl Tool for Named {
+        fn name(&self) -> &str {
+            self.0
+        }
+        fn description(&self) -> &str {
+            "t"
+        }
+        fn parameters_schema(&self) -> Value {
+            serde_json::json!({"type": "object", "properties": {}})
+        }
+        // Named at runtime, so the Track 0 audit wants the risk said out loud.
+        fn risk_class(&self) -> obc_tool_api::RiskClass {
+            obc_tool_api::RiskClass::safe()
+        }
+        async fn execute(&self, _args: Value) -> anyhow::Result<obc_tool_api::ToolResult> {
+            Ok(obc_tool_api::ToolResult::ok("ok"))
+        }
+    }
+
+    fn cfg(think: Option<bool>) -> ProviderConfig {
+        ProviderConfig {
+            name: "anthropic".into(),
+            model: "claude-sonnet-5".into(),
+            think,
+            ..Default::default()
+        }
+    }
+
+    fn msgs() -> Vec<ChatMessage> {
+        vec![ChatMessage {
+            role: ChatRole::User,
+            content: "hi".into(),
+        }]
+    }
+
+    #[test]
+    fn no_temperature_and_think_maps_to_the_thinking_field() {
+        let (_, body) = AnthropicProvider::build_request(&msgs(), &[], &cfg(None), false).unwrap();
+        assert!(body.get("temperature").is_none(), "{body}");
+        assert!(body.get("thinking").is_none());
+        let (_, body) =
+            AnthropicProvider::build_request(&msgs(), &[], &cfg(Some(false)), false).unwrap();
+        assert_eq!(body["thinking"]["type"], "disabled");
+        let (_, body) =
+            AnthropicProvider::build_request(&msgs(), &[], &cfg(Some(true)), false).unwrap();
+        assert_eq!(body["thinking"]["type"], "adaptive");
+    }
+
+    #[test]
+    fn a_tool_with_an_illegal_name_is_left_out_not_fatal() {
+        let long: &'static str = Box::leak("learned_".repeat(30).into_boxed_str());
+        assert_eq!(long.len(), 240);
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(Named("schedule")),
+            Box::new(Named(long)),
+            Box::new(Named("has space")),
+        ];
+        let (_, body) =
+            AnthropicProvider::build_request(&msgs(), &tools, &cfg(None), false).unwrap();
+        let names: Vec<&str> = body["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["schedule"]);
+        // all bad -> no tools key at all rather than an empty array
+        let tools: Vec<Box<dyn Tool>> = vec![Box::new(Named(long))];
+        let (_, body) =
+            AnthropicProvider::build_request(&msgs(), &tools, &cfg(None), false).unwrap();
+        assert!(body.get("tools").is_none());
+        assert!(valid_tool_name("a-b_C9"));
+        assert!(!valid_tool_name(""));
+        assert!(!valid_tool_name(&"x".repeat(129)));
+    }
+
+    #[test]
+    fn a_thinking_block_in_the_response_is_ignored_not_an_error() {
+        let raw = r#"{"content":[{"type":"thinking","thinking":"","signature":"sig"},
+            {"type":"text","text":"hello"},
+            {"type":"tool_use","id":"t1","name":"schedule","input":{"action":"list"}}]}"#;
+        let r: AnthropicResponse = serde_json::from_str(raw).unwrap();
+        let kinds: Vec<&str> = r
+            .content
+            .iter()
+            .map(|c| match c {
+                AnthropicContent::Text { .. } => "text",
+                AnthropicContent::ToolUse { .. } => "tool_use",
+                AnthropicContent::Other => "other",
+            })
+            .collect();
+        assert_eq!(kinds, ["other", "text", "tool_use"]);
+    }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use super::*;
+
+    #[test]
+    fn the_stream_fold_keeps_the_usage_from_start_and_delta() {
+        let mut fold = StreamFold::default();
+        let sink = |_d: StreamDelta| {};
+        let events = [
+            r#"{"type":"message_start","message":{"id":"m","usage":{"input_tokens":12,"cache_read_input_tokens":5000,"cache_creation_input_tokens":300,"output_tokens":1}}}"#,
+            r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+            r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#,
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":42}}"#,
+            r#"{"type":"message_stop"}"#,
+        ];
+        for e in events {
+            if fold_event(e, &mut fold, &sink).unwrap() {
+                break;
+            }
+        }
+        let done = fold.finish("anthropic", "claude-sonnet-5");
+        let u = done.usage.expect("usage");
+        assert_eq!(u.input_tokens, 12);
+        assert_eq!(u.cache_read_input_tokens, 5000);
+        assert_eq!(u.cache_creation_input_tokens, 300);
+        assert_eq!(u.output_tokens, 42);
+        assert_eq!(u.prompt_tokens(), 5312);
+        assert!((u.billable_input() - (12.0 + 500.0 + 375.0)).abs() < 1e-9);
+        assert!((u.cache_hit_ratio().unwrap() - 5000.0 / 5312.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_non_streaming_response_carries_its_usage() {
+        let raw = r#"{"content":[{"type":"text","text":"hello"}],
+            "usage":{"input_tokens":7,"output_tokens":3,"cache_read_input_tokens":100}}"#;
+        let r: AnthropicResponse = serde_json::from_str(raw).unwrap();
+        let u: Usage = r.usage.unwrap().into();
+        assert_eq!(
+            (u.input_tokens, u.output_tokens, u.cache_read_input_tokens),
+            (7, 3, 100)
+        );
+        // and a response without usage still parses
+        let r: AnthropicResponse = serde_json::from_str(r#"{"content":[]}"#).unwrap();
+        assert!(r.usage.is_none());
     }
 }

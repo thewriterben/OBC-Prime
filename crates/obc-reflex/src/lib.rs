@@ -114,6 +114,46 @@ impl Snapshot {
 pub enum Condition {
     /// Compare a sensor/entity numeric value (e.g. `living_room.temp > 28`).
     Sensor { entity: String, op: Cmp, value: f64 },
+    /// Like `Sensor`, but the threshold is bound to a node **modulation slot**:
+    /// `min + level·(max − min)`, where `level ∈ [0, 1]` is whatever the node
+    /// last received on its `descend` command, or `default` if nothing. This
+    /// is the spinal tier's handle — the brain moves a threshold inside a
+    /// range the rule owns; it never names an actuator. The host evaluates
+    /// this at `default`: modulation is a node-side concept, and a rule that
+    /// runs on the host has no descending path to be modulated by. See
+    /// `firmware/obc-esp32-s3/src/reflex.rs` for the node half.
+    SensorSlot {
+        entity: String,
+        op: Cmp,
+        slot: u8,
+        min: f64,
+        max: f64,
+        default: f64,
+    },
+    /// Compare a reading against **its own recent history**: true when
+    /// `value op (baseline + offset)`, where `baseline` is an exponential moving
+    /// average of the entity with time constant `tau_s`, kept by the engine and
+    /// advanced every tick the entity is present (time-aware, so a host ticking at
+    /// one cadence and a node at another agree). The threshold is a *distance from
+    /// where the signal has been*, not a place on the scale — invariant to slow
+    /// drift and to where a sensor happens to sit.
+    ///
+    /// Offset, not ratio: WILD (Zhao et al. 2026) thresholds a power envelope at
+    /// k × its baseline mean, which is right for a positive quantity; °C and most
+    /// sensor scales are not ratio-scaled, and `baseline + 3` reads the same at
+    /// 20 °C as at 40 °C where `1.15 × baseline` does not.
+    ///
+    /// The first sample *is* the baseline, so the leaf is false until the signal
+    /// has moved; with no baseline yet (the entity has never been seen) it is
+    /// false, like any leaf with missing evidence. `SensorBaseline` rules are
+    /// evaluated only through an engine, which owns the state — a bare
+    /// [`Condition::eval`] has no history and answers false.
+    SensorBaseline {
+        entity: String,
+        op: Cmp,
+        offset: f64,
+        tau_s: f64,
+    },
     /// A GPIO/entity equals an integer value.
     GpioEq { entity: String, value: i64 },
     /// A fact's (optionally nested) string value equals `equals`. With `field`,
@@ -134,12 +174,91 @@ pub enum Condition {
     Or { any: Vec<Condition> },
 }
 
+/// A time-aware exponential moving average of one entity: the engine-owned
+/// state behind [`Condition::SensorBaseline`].
+///
+/// `b += (1 − e^(−dt/τ)) · (v − b)`, with `dt` the real time since the last
+/// update, so the time constant is a property of the signal and not of the tick:
+/// a missed tick, a slower cadence, a host ticking at one rate and a node at
+/// another all leave τ meaning the same seconds. A sample stands for the
+/// interval that ends at it, so for a signal that holds between samples this is
+/// the exact continuous EMA at the sample instants — and one sample after a
+/// long gap stands for the whole gap, which is the right reading of a gap: a
+/// hole in the evidence is not a step in the signal.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Baseline {
+    /// The current average.
+    pub value: f64,
+    /// When it was last advanced (ms).
+    pub at_ms: u64,
+}
+
+impl Baseline {
+    /// Start a baseline at the first sample.
+    pub fn new(value: f64, at_ms: u64) -> Self {
+        Self { value, at_ms }
+    }
+
+    /// Advance to `now_ms` with sample `v` under time constant `tau_s`.
+    pub fn update(&mut self, v: f64, now_ms: u64, tau_s: f64) {
+        let dt_s = now_ms.saturating_sub(self.at_ms) as f64 / 1000.0;
+        let alpha = 1.0 - (-dt_s / tau_s).exp();
+        self.value += alpha * (v - self.value);
+        self.at_ms = now_ms;
+    }
+}
+
+/// The key a baseline lives under: an entity and a time constant. Two rules
+/// asking for the same pair share one; different `tau_s` are different
+/// histories. Keyed on the bits so `f64` can be a map key.
+pub type BaselineKey = (String, u64);
+
+/// Baselines by key — what an engine passes into evaluation.
+pub type Baselines = HashMap<BaselineKey, Baseline>;
+
+/// The key for `entity` at `tau_s`.
+pub fn baseline_key(entity: &str, tau_s: f64) -> BaselineKey {
+    (entity.to_string(), tau_s.to_bits())
+}
+
 impl Condition {
-    /// Evaluate against a [`Snapshot`].
+    /// Evaluate against a [`Snapshot`] with no baseline history — every
+    /// [`Condition::SensorBaseline`] leaf is false. Engines call
+    /// [`Condition::eval_with`].
     pub fn eval(&self, snap: &Snapshot) -> bool {
+        self.eval_with(snap, &Baselines::new())
+    }
+
+    /// Evaluate against a [`Snapshot`] and the engine's [`Baselines`].
+    pub fn eval_with(&self, snap: &Snapshot, baselines: &Baselines) -> bool {
         match self {
             Condition::Sensor { entity, op, value } => {
                 snap.nums.get(entity).is_some_and(|v| op.test(*v, *value))
+            }
+            Condition::SensorBaseline {
+                entity,
+                op,
+                offset,
+                tau_s,
+            } => match (
+                snap.nums.get(entity),
+                baselines.get(&baseline_key(entity, *tau_s)),
+            ) {
+                (Some(v), Some(b)) => op.test(*v, b.value + offset),
+                _ => false,
+            },
+            Condition::SensorSlot {
+                entity,
+                op,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                let threshold = min + default.clamp(0.0, 1.0) * (max - min);
+                snap.nums
+                    .get(entity)
+                    .is_some_and(|v| op.test(*v, threshold))
             }
             Condition::GpioEq { entity, value } => snap
                 .nums
@@ -156,8 +275,8 @@ impl Condition {
                 };
                 s == Some(equals.as_str())
             }),
-            Condition::And { all } => all.iter().all(|c| c.eval(snap)),
-            Condition::Or { any } => any.iter().any(|c| c.eval(snap)),
+            Condition::And { all } => all.iter().all(|c| c.eval_with(snap, baselines)),
+            Condition::Or { any } => any.iter().any(|c| c.eval_with(snap, baselines)),
         }
     }
 
@@ -165,6 +284,8 @@ impl Condition {
     pub fn collect_entities(&self, set: &mut HashSet<String>) {
         match self {
             Condition::Sensor { entity, .. }
+            | Condition::SensorBaseline { entity, .. }
+            | Condition::SensorSlot { entity, .. }
             | Condition::GpioEq { entity, .. }
             | Condition::State { entity, .. } => {
                 set.insert(entity.clone());
@@ -173,7 +294,74 @@ impl Condition {
             Condition::Or { any } => any.iter().for_each(|c| c.collect_entities(set)),
         }
     }
+
+    /// Collect every baseline this condition asks for: the (entity, `tau_s`)
+    /// pairs an engine has to keep advancing.
+    pub fn collect_baselines(&self, set: &mut HashSet<BaselineKey>) {
+        match self {
+            Condition::SensorBaseline { entity, tau_s, .. } => {
+                set.insert(baseline_key(entity, *tau_s));
+            }
+            Condition::And { all } => all.iter().for_each(|c| c.collect_baselines(set)),
+            Condition::Or { any } => any.iter().for_each(|c| c.collect_baselines(set)),
+            Condition::Sensor { .. }
+            | Condition::SensorSlot { .. }
+            | Condition::GpioEq { .. }
+            | Condition::State { .. } => {}
+        }
+    }
+
+    /// Reject a slot binding no node can hold. The same check the node runs
+    /// when rules are pushed (`set_reflex_rules`), applied here at config load
+    /// so a bad rule fails the host at startup rather than the node at push.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            Condition::SensorSlot {
+                slot,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                if *slot as usize >= MAX_SLOTS {
+                    return Err(format!("slot {slot} out of range (max {})", MAX_SLOTS - 1));
+                }
+                if !(min.is_finite() && max.is_finite()) {
+                    return Err(format!("slot {slot}: min/max must be finite"));
+                }
+                if !(*default >= 0.0 && *default <= 1.0) {
+                    return Err(format!(
+                        "slot {slot}: default level {default} not in [0, 1]"
+                    ));
+                }
+                Ok(())
+            }
+            Condition::SensorBaseline {
+                entity,
+                offset,
+                tau_s,
+                ..
+            } => {
+                if !(tau_s.is_finite() && *tau_s > 0.0) {
+                    return Err(format!(
+                        "baseline on {entity}: tau_s {tau_s} must be finite and > 0"
+                    ));
+                }
+                if !offset.is_finite() {
+                    return Err(format!("baseline on {entity}: offset must be finite"));
+                }
+                Ok(())
+            }
+            Condition::And { all } => all.iter().try_for_each(Condition::validate),
+            Condition::Or { any } => any.iter().try_for_each(Condition::validate),
+            Condition::Sensor { .. } | Condition::GpioEq { .. } | Condition::State { .. } => Ok(()),
+        }
+    }
 }
+
+/// Modulation slots a node holds — pinned to the firmware's `MAX_SLOTS` by
+/// `tests/firmware_node_gates.rs`.
+pub const MAX_SLOTS: usize = 16;
 
 /// The action a fired reflex performs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -188,6 +376,11 @@ pub enum Action {
     /// Publish a payload to a spine topic.
     Publish { topic: String, payload: Value },
     /// Hand control up to System 2 (wake the LLM agent) with a reason.
+    ///
+    /// The reason is the woken agent's *prompt*, so it is long on purpose — the
+    /// safing playbooks in [`safing`] run to a thousand characters of triage.
+    /// Log [`escalation_label`] of it, never the whole thing; see that function
+    /// for what a full-text log cost us.
     Escalate { reason: String },
     /// Apply a typed, safety-bounded movement (Movement subsystem). Still bounded
     /// by the Track 0 gate inside the `MovementController` before it actuates.
@@ -234,9 +427,39 @@ pub struct ReflexRule {
     /// missing evidence identity is not evidence of sameness.
     #[serde(default)]
     pub fire_on_change: bool,
+    /// The condition must have held, without a break, for at least this long before
+    /// the rule may fire. Zero (the default) means a single true tick is enough.
+    ///
+    /// The third of three questions a rule can ask, distinct from the other two.
+    /// `debounce_ms` asks "has enough time passed since I last fired?" — a rate.
+    /// `fire_on_change` asks "did anything happen?" — an edge. This asks "is it
+    /// still true?" — persistence. A reading that crosses a threshold for one
+    /// sample and drops back is a transient, and a transient is exactly what a
+    /// one-tick rule fires on: a 1 °C quantised die temperature flickering across
+    /// its slot threshold, a link-silence reading at the edge of its timeout.
+    ///
+    /// This is the duration criterion of an event detector: WILD (Zhao et al.
+    /// 2026) accepts a ripple only if the power envelope stays over threshold for
+    /// 20–600 ms, and it is the cheapest vetting stage there is — no model, no
+    /// window, one timestamp per rule. Continuity is judged at tick resolution:
+    /// the condition is "still true" if every tick since it became true said so,
+    /// and the engine cannot see between ticks.
+    ///
+    /// Composes with the other two. With `fire_on_change`, the one fire per run
+    /// comes once the hold has elapsed; a run shorter than the hold fires nothing.
+    /// Debounce applies on top, as it always did.
+    #[serde(default)]
+    pub hold_ms: u64,
 }
 
 impl ReflexRule {
+    /// Reject a rule the node side would refuse (see [`Condition::validate`]).
+    pub fn validate(&self) -> Result<(), String> {
+        self.when
+            .validate()
+            .map_err(|e| format!("reflex rule {}: {e}", self.id))
+    }
+
     /// The minimum interval (ms) between fires implied by `debounce_ms` + `max_rate_hz`.
     fn min_interval_ms(&self) -> u64 {
         let rate_ms = self
@@ -270,6 +493,16 @@ pub struct ReflexEngine {
     /// `last_fire` so a rule that does not opt in pays nothing and behaves exactly as
     /// before.
     last_evidence: Mutex<HashMap<String, Vec<i64>>>,
+    /// Per rule with a `hold_ms`: the tick at which its condition last became true.
+    ///
+    /// Present while the condition holds, removed the tick it drops, so "held for
+    /// `hold_ms`" is `now − true_since`. Only rules with a non-zero hold are entered,
+    /// for the same reason as `last_evidence`: a rule that does not ask pays nothing.
+    true_since: Mutex<HashMap<String, u64>>,
+    /// The baselines every `SensorBaseline` leaf in the rule set asks for, advanced
+    /// at each `evaluate` from the snapshot before the rules are judged. Evidence
+    /// history, not rule state — it belongs to the entity.
+    baselines: Mutex<Baselines>,
     trusted: obc_memory::world::OriginSet,
 }
 
@@ -302,6 +535,8 @@ impl ReflexEngine {
             rules,
             last_fire: Mutex::new(HashMap::new()),
             last_evidence: Mutex::new(HashMap::new()),
+            true_since: Mutex::new(HashMap::new()),
+            baselines: Mutex::new(Baselines::new()),
             trusted: obc_memory::world::OriginSet::EVIDENCE,
         }
     }
@@ -321,14 +556,58 @@ impl ReflexEngine {
         self.rules.len()
     }
 
+    /// The baseline this engine holds for `entity` at `tau_s`, if any rule has
+    /// asked for one and the entity has been seen.
+    pub fn baseline(&self, entity: &str, tau_s: f64) -> Option<Baseline> {
+        self.baselines
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&baseline_key(entity, tau_s))
+            .copied()
+    }
+
     /// Evaluate all rules against `snapshot` at `now_ms`; returns the actions to
     /// perform (respecting debounce/rate), and records fire times.
     pub fn evaluate(&self, snapshot: &Snapshot, now_ms: u64) -> Vec<FiredReflex> {
+        // Advance every baseline the rules ask for, from this tick's readings,
+        // before any rule is judged: the first sample of an entity *is* its
+        // baseline, so a rule cannot fire on the tick that started its history.
+        let mut baselines = self.baselines.lock().unwrap_or_else(|p| p.into_inner());
+        let mut keys = HashSet::new();
+        for rule in &self.rules {
+            rule.when.collect_baselines(&mut keys);
+        }
+        for key in keys {
+            if let Some(&v) = snapshot.nums.get(&key.0) {
+                let tau_s = f64::from_bits(key.1);
+                baselines
+                    .entry(key)
+                    .and_modify(|b| b.update(v, now_ms, tau_s))
+                    .or_insert_with(|| Baseline::new(v, now_ms));
+            }
+        }
         let mut guard = self.last_fire.lock().unwrap_or_else(|p| p.into_inner());
         let mut fired = Vec::new();
         for rule in &self.rules {
-            if !rule.when.eval(snapshot) {
+            if !rule.when.eval_with(snapshot, &baselines) {
+                if rule.hold_ms > 0 {
+                    // The run of truth is over; the next true starts the hold again.
+                    self.true_since
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .remove(&rule.id);
+                }
                 continue;
+            }
+            if rule.hold_ms > 0 {
+                // Persistence, before rate and edge: a condition that has not yet held
+                // long enough is not a candidate at all, whatever the clock or the
+                // evidence say. `entry` keeps the tick the run began; the check reads it.
+                let mut since = self.true_since.lock().unwrap_or_else(|p| p.into_inner());
+                let began = *since.entry(rule.id.clone()).or_insert(now_ms);
+                if now_ms.saturating_sub(began) < rule.hold_ms {
+                    continue;
+                }
             }
             let min_interval = rule.min_interval_ms();
             if min_interval > 0 {
@@ -464,6 +743,41 @@ pub async fn dispatch(actions: &[FiredReflex], sink: &dyn ActionSink) -> anyhow:
     Ok(())
 }
 
+/// The part of an escalation reason worth putting on a log line: its first
+/// sentence, or the whole string when there is no sentence break.
+///
+/// An escalation reason does double duty. It is the prompt System 2 is woken
+/// with (`build_objective` interpolates it verbatim), so the safing playbooks
+/// are written as full triage directives — [`safing::MESH_LOST_PLAYBOOK`] is
+/// about 1,060 characters. It was also the log message at four sites, which is
+/// why on the night of 2026-07-28 a phantom mesh node (see the module comment
+/// on `mesh_supervisor::snapshot`) wrote 2,367 lines carrying the same
+/// paragraph — 2.5 MB, 41 % of a 46-day log file, in about nine hours at
+/// twelve lines a minute. The reasoner still gets every word; the log gets the
+/// sentence a human reads.
+///
+/// The break is `". "` or a trailing `"."` — deliberately not any `'.'`, so
+/// `mesh_status` calls and `docs/playbooks/x.md` paths inside a sentence do not
+/// split it. A reason with no break is returned whole, which is the old
+/// behaviour and is right for the short ones (`"person detected (verified) on
+/// a camera"`). Capped at [`LABEL_MAX`] so a reason written as one long
+/// sentence still cannot flood a line.
+pub fn escalation_label(reason: &str) -> &str {
+    let end = reason
+        .find(". ")
+        .map(|i| i + 1)
+        .or_else(|| reason.strip_suffix('.').map(str::len).map(|n| n + 1))
+        .unwrap_or(reason.len());
+    let label = &reason[..end];
+    match label.char_indices().nth(LABEL_MAX) {
+        Some((cut, _)) => &label[..cut],
+        None => label,
+    }
+}
+
+/// Character cap on an [`escalation_label`].
+pub const LABEL_MAX: usize = 160;
+
 /// A safe default sink that only *logs* intended actions without executing them
 /// — useful for dry-run / supervised rollout before wiring the real spine sink.
 pub struct LoggingActionSink;
@@ -479,7 +793,10 @@ impl ActionSink for LoggingActionSink {
         Ok(())
     }
     async fn escalate(&self, reason: &str) -> anyhow::Result<()> {
-        tracing::info!(reason, "reflex: escalate to System 2 (dry-run)");
+        tracing::info!(
+            escalation = escalation_label(reason),
+            "reflex: escalate to System 2 (dry-run)"
+        );
         Ok(())
     }
     async fn move_actuator(&self, command: &MovementCommand) -> anyhow::Result<()> {
@@ -689,6 +1006,55 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn escalation_label_is_the_first_sentence() {
+        // The real playbook. Its first sentence is what a reader needs; the
+        // remaining ~1,000 characters are triage instructions for the LLM.
+        let full = safing::MESH_LOST_PLAYBOOK;
+        assert!(full.len() > 900, "playbook shrank: {}", full.len());
+        assert_eq!(
+            escalation_label(full),
+            "A mesh node is presumed lost (LoRa escalation)."
+        );
+    }
+
+    #[test]
+    fn a_reason_with_no_sentence_break_is_kept_whole() {
+        // The short reasons were never the problem and must not be truncated.
+        let short = "person detected (verified) on a camera";
+        assert_eq!(escalation_label(short), short);
+        assert_eq!(escalation_label(""), "");
+    }
+
+    #[test]
+    fn only_a_sentence_break_splits_it() {
+        // A bare '.' split would cut at `mesh_status` calls and at
+        // `docs/playbooks/x.md`, producing a label that reads as a fragment.
+        assert_eq!(
+            escalation_label("call `a.b` then stop. And more."),
+            "call `a.b` then stop."
+        );
+        assert_eq!(
+            escalation_label("see docs/playbooks/mesh-node-lost.md"),
+            "see docs/playbooks/mesh-node-lost.md"
+        );
+        // A trailing period is a break; a one-sentence reason keeps it.
+        assert_eq!(escalation_label("all quiet."), "all quiet.");
+    }
+
+    #[test]
+    fn one_long_sentence_still_cannot_flood_a_line() {
+        let long = "x".repeat(LABEL_MAX * 3);
+        assert_eq!(escalation_label(&long).chars().count(), LABEL_MAX);
+    }
+
+    #[test]
+    fn the_cap_cuts_on_a_character_not_a_byte() {
+        // Slicing mid-codepoint would panic, and a reason can carry an em dash.
+        let long = "é".repeat(LABEL_MAX * 2);
+        assert_eq!(escalation_label(&long).chars().count(), LABEL_MAX);
+    }
+
+    #[test]
     fn fact_value_extraction() {
         assert_eq!(fact_to_f64(&json!(3.5)), Some(3.5));
         assert_eq!(fact_to_f64(&json!(true)), Some(1.0));
@@ -720,6 +1086,7 @@ mod tests {
             debounce_ms: 0,
             max_rate_hz: None,
             fire_on_change: false,
+            hold_ms: 0,
         };
         let e = ReflexEngine::new(vec![rule]);
         let ents = e.referenced_entities();
@@ -864,6 +1231,7 @@ mod tests {
             debounce_ms: 0,
             max_rate_hz: None,
             fire_on_change: true,
+            hold_ms: 0,
         }
     }
 
@@ -929,6 +1297,264 @@ mod tests {
             e.tick(&w, 2_000).unwrap().len(),
             1,
             "still critical, still says so"
+        );
+    }
+
+    fn rule_with_hold(hold_ms: u64, fire_on_change: bool) -> ReflexRule {
+        ReflexRule {
+            id: "held".to_string(),
+            when: Condition::Sensor {
+                entity: "x".to_string(),
+                op: Cmp::Gt,
+                value: 0.0,
+            },
+            then: Action::Escalate {
+                reason: "held".to_string(),
+            },
+            debounce_ms: 0,
+            max_rate_hz: None,
+            fire_on_change,
+            hold_ms,
+        }
+    }
+
+    #[test]
+    fn a_transient_does_not_satisfy_a_hold() {
+        // The persistence question. One true tick is a candidate for a rule with
+        // no hold; for a rule that asks for 3 s it is a transient until it has
+        // been true, without a break, for 3 s of ticks.
+        let e = ReflexEngine::new(vec![rule_with_hold(3_000, false)]);
+        let on = snap(&[("x", 1.0)]);
+        let off = snap(&[("x", 0.0)]);
+        assert!(
+            e.evaluate(&on, 0).is_empty(),
+            "first true tick starts the hold"
+        );
+        assert!(e.evaluate(&off, 1_000).is_empty(), "a drop resets it");
+        assert!(
+            e.evaluate(&on, 2_000).is_empty(),
+            "true again: a new run from 2 s"
+        );
+        assert!(e.evaluate(&on, 4_000).is_empty(), "2 s into the new run");
+        assert_eq!(e.evaluate(&on, 5_000).len(), 1, "3 s held: fires");
+        assert_eq!(
+            e.evaluate(&on, 6_000).len(),
+            1,
+            "no edge flag, no debounce: keeps firing while held, as before"
+        );
+    }
+
+    #[test]
+    fn a_rule_with_no_hold_fires_on_its_first_true_tick() {
+        // The default, and every rule written before the field existed.
+        let e = ReflexEngine::new(vec![rule_with_hold(0, false)]);
+        assert_eq!(e.evaluate(&snap(&[("x", 1.0)]), 0).len(), 1);
+    }
+
+    #[test]
+    fn hold_composes_with_fire_on_change() {
+        // Edge and persistence together: one fire per run, and only for a run
+        // that outlasts the hold. A short run fires nothing at all.
+        use obc_memory::world::{Origin, WorldMemory};
+        let w = WorldMemory::open_in_memory().unwrap();
+        let e = ReflexEngine::new(vec![rule_with_hold(2_000, true)]);
+        let observe = |v: f64, t: u64| {
+            w.observe_as("x", json!(v), t, t, "bench", Origin::Observed)
+                .unwrap()
+        };
+        observe(1.0, 0);
+        assert!(e.tick(&w, 0).unwrap().is_empty(), "hold starts");
+        observe(0.0, 1_000);
+        assert!(e.tick(&w, 1_000).unwrap().is_empty(), "a 1 s run: nothing");
+        observe(1.0, 2_000);
+        assert!(e.tick(&w, 2_000).unwrap().is_empty());
+        observe(1.0, 3_000);
+        assert!(e.tick(&w, 3_000).unwrap().is_empty(), "1 s in");
+        observe(1.0, 4_000);
+        assert_eq!(e.tick(&w, 4_000).unwrap().len(), 1, "2 s held: fires");
+        assert!(
+            e.tick(&w, 4_500).unwrap().is_empty(),
+            "same row, still held: the host's edge is evidence identity, and nothing new was observed"
+        );
+        observe(1.0, 5_000);
+        assert_eq!(
+            e.tick(&w, 5_000).unwrap().len(),
+            1,
+            "a new row is new evidence and the hold is long satisfied — fires again (host semantics; \
+             the node, which has no ids, fires once per run of truth)"
+        );
+    }
+
+    // ── SensorBaseline: a threshold relative to the signal's own history ──
+
+    fn baseline_rule(offset: f64, tau_s: f64) -> ReflexRule {
+        ReflexRule {
+            id: "rising".to_string(),
+            when: Condition::SensorBaseline {
+                entity: "t".to_string(),
+                op: Cmp::Gt,
+                offset,
+                tau_s,
+            },
+            then: Action::Escalate {
+                reason: "rising".to_string(),
+            },
+            debounce_ms: 0,
+            max_rate_hz: None,
+            fire_on_change: false,
+            hold_ms: 0,
+        }
+    }
+
+    #[test]
+    fn the_first_sample_is_the_baseline_and_a_step_above_it_fires() {
+        // τ = 10 s, offset 2. Ten seconds at 20 °C, then 25 °C. On the step tick
+        // the baseline has already moved a little toward 25 — α = 1 − e^(−1/10) —
+        // and the reading is still well above it.
+        let e = ReflexEngine::new(vec![baseline_rule(2.0, 10.0)]);
+        for t in 0..10u64 {
+            assert!(
+                e.evaluate(&snap(&[("t", 20.0)]), t * 1_000).is_empty(),
+                "steady at 20: nothing at t={t}"
+            );
+        }
+        let b = e.baseline("t", 10.0).unwrap();
+        assert!(
+            (b.value - 20.0).abs() < 1e-12,
+            "a constant signal is its own baseline"
+        );
+        assert_eq!(
+            e.evaluate(&snap(&[("t", 25.0)]), 10_000).len(),
+            1,
+            "the step fires"
+        );
+        let b = e.baseline("t", 10.0).unwrap();
+        let expected = 20.0 + (1.0 - (-0.1f64).exp()) * 5.0;
+        assert!(
+            (b.value - expected).abs() < 1e-12,
+            "{} vs {expected}",
+            b.value
+        );
+    }
+
+    #[test]
+    fn a_slow_drift_never_fires_because_the_baseline_follows_it() {
+        // The invariance the rule exists for. A ramp of 0.01 °C/s climbs 10 °C
+        // over 1000 s — five times the offset — and never fires, because an EMA
+        // tracking a ramp lags it by a constant: s·(1−α)/α per sample step, which
+        // is ≈ s·τ (0.095 °C here, against s·τ = 0.1). A fixed threshold at 22
+        // would have fired at t = 200 s and stayed fired.
+        let e = ReflexEngine::new(vec![baseline_rule(2.0, 10.0)]);
+        for t in 0..=1000u64 {
+            let v = 20.0 + 0.01 * t as f64;
+            assert!(
+                e.evaluate(&snap(&[("t", v)]), t * 1_000).is_empty(),
+                "drift fired at t={t}, v={v}"
+            );
+        }
+        let b = e.baseline("t", 10.0).unwrap();
+        let lag = 30.0 - b.value;
+        let alpha = 1.0 - (-0.1f64).exp();
+        let expected = 0.01 * (1.0 - alpha) / alpha;
+        assert!(
+            (lag - expected).abs() < 1e-9,
+            "steady-state lag {lag} vs {expected}"
+        );
+        // …and a step on top of the drift still fires at once.
+        assert_eq!(e.evaluate(&snap(&[("t", 35.0)]), 1_001_000).len(), 1);
+    }
+
+    #[test]
+    fn the_time_constant_is_seconds_not_ticks() {
+        // Two engines see the same signal — 20 °C through t = 10 s, 25 °C after —
+        // one ticked every second, one every two. Both sample t = 10 (the last
+        // 20) and t = 20, so both attribute the step to the same instant, and at
+        // t = 20 s both hold the exact continuous answer 25 − 5·e^(−1): the tick
+        // cadence did not change τ. (A sample stands for the interval that ends
+        // at it — a step is dated to the sample before the first one that shows
+        // it — so two cadences agree exactly when they share that sample.)
+        let fast = ReflexEngine::new(vec![baseline_rule(2.0, 10.0)]);
+        let slow = ReflexEngine::new(vec![baseline_rule(2.0, 10.0)]);
+        let v = |t: u64| if t <= 10 { 20.0 } else { 25.0 };
+        for t in 0..=20u64 {
+            fast.evaluate(&snap(&[("t", v(t))]), t * 1_000);
+            if t % 2 == 0 {
+                slow.evaluate(&snap(&[("t", v(t))]), t * 1_000);
+            }
+        }
+        let expected = 25.0 - 5.0 * (-1.0f64).exp();
+        for (name, e) in [("1 Hz", &fast), ("0.5 Hz", &slow)] {
+            let b = e.baseline("t", 10.0).unwrap().value;
+            assert!((b - expected).abs() < 1e-12, "{name}: {b} vs {expected}");
+        }
+    }
+
+    #[test]
+    fn a_missing_reading_neither_fires_nor_moves_the_baseline() {
+        let e = ReflexEngine::new(vec![baseline_rule(2.0, 10.0)]);
+        e.evaluate(&snap(&[("t", 20.0)]), 0);
+        assert!(e.evaluate(&snap(&[]), 1_000).is_empty());
+        assert_eq!(
+            e.baseline("t", 10.0).unwrap().at_ms,
+            0,
+            "not advanced on absence"
+        );
+        // Seen again after a 10 s gap at 25: one update with dt = 10 s = τ, not
+        // ten with dt = 1. That one sample stands for the whole gap, so the
+        // baseline absorbs 63 % of the step — 23.16 — and the reading is 1.84
+        // above it, under the offset: no fire. A gap in the evidence is not a
+        // step in the signal.
+        assert!(e.evaluate(&snap(&[("t", 25.0)]), 10_000).is_empty());
+        let expected = 20.0 + (1.0 - (-1.0f64).exp()) * 5.0;
+        assert!((e.baseline("t", 10.0).unwrap().value - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_bare_eval_has_no_history_and_answers_false() {
+        // Only an engine owns baselines. The pure `eval` is what the `And`/`Or`
+        // tests use; a baseline leaf there is false, like any missing evidence.
+        assert!(!baseline_rule(2.0, 10.0).when.eval(&snap(&[("t", 100.0)])));
+    }
+
+    #[test]
+    fn a_baseline_rule_the_node_would_refuse_fails_validation() {
+        let mut r = baseline_rule(2.0, 0.0);
+        assert!(r.validate().unwrap_err().contains("tau_s"));
+        r = baseline_rule(2.0, f64::NAN);
+        assert!(r.validate().is_err());
+        r = baseline_rule(f64::INFINITY, 10.0);
+        assert!(r.validate().unwrap_err().contains("offset"));
+        assert!(
+            baseline_rule(-2.0, 0.5).validate().is_ok(),
+            "a falling rule is fine"
+        );
+    }
+
+    #[test]
+    fn baseline_condition_serializes_to_the_node_wire_form() {
+        let c = baseline_rule(3.0, 60.0).when;
+        let json = serde_json::to_string(&c).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"sensor_baseline","entity":"t","op":"gt","offset":3.0,"tau_s":60.0}"#
+        );
+        assert_eq!(serde_json::from_str::<Condition>(&json).unwrap(), c);
+        let mut ents = HashSet::new();
+        c.collect_entities(&mut ents);
+        assert!(ents.contains("t"), "the snapshot has to fetch the entity");
+    }
+
+    #[test]
+    fn hold_ms_is_optional_on_the_wire() {
+        // A rule written before the field existed still parses, and holds nothing.
+        let js = r#"{"id":"r","when":{"type":"sensor","entity":"x","op":"gt","value":0.0},"then":{"type":"escalate","reason":"r"}}"#;
+        let r: ReflexRule = serde_json::from_str(js).unwrap();
+        assert_eq!(r.hold_ms, 0);
+        let js = serde_json::to_string(&rule_with_hold(1_500, false)).unwrap();
+        assert!(js.contains("\"hold_ms\":1500"), "{js}");
+        assert_eq!(
+            serde_json::from_str::<ReflexRule>(&js).unwrap().hold_ms,
+            1_500
         );
     }
 
@@ -1013,6 +1639,7 @@ mod tests {
             debounce_ms: 0,
             max_rate_hz: None,
             fire_on_change: false,
+            hold_ms: 0,
         };
         let e = ReflexEngine::new(vec![rule]);
         assert_eq!(e.tick(&world, 2_000).unwrap().len(), 1);
@@ -1034,6 +1661,7 @@ mod tests {
             debounce_ms: 500,
             max_rate_hz: None,
             fire_on_change: false,
+            hold_ms: 0,
         }
     }
 
@@ -1043,6 +1671,62 @@ mod tests {
         let fired = e.evaluate(&snap(&[("sensor.temperature", 30.0)]), 1_000);
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].rule_id, "fan-on-hot");
+    }
+
+    fn slot_cond(slot: u8, default: f64) -> Condition {
+        Condition::SensorSlot {
+            entity: "sensor.temperature".to_string(),
+            op: Cmp::Gt,
+            slot,
+            min: 20.0,
+            max: 60.0,
+            default,
+        }
+    }
+
+    #[test]
+    fn a_slot_bound_threshold_evaluates_at_its_default_on_the_host() {
+        // 20 + 0.5·40 = 40 °C: the host has no descending path, so the rule
+        // holds its default — the same answer a freshly booted node gives.
+        let c = slot_cond(3, 0.5);
+        assert!(c.eval(&snap(&[("sensor.temperature", 45.0)])));
+        assert!(!c.eval(&snap(&[("sensor.temperature", 35.0)])));
+        assert!(!c.eval(&snap(&[])));
+        let mut ents = HashSet::new();
+        c.collect_entities(&mut ents);
+        assert!(ents.contains("sensor.temperature"));
+    }
+
+    #[test]
+    fn a_slot_the_node_cannot_hold_fails_validation_and_names_the_rule() {
+        let mut r = fan_rule();
+        r.when = slot_cond(16, 0.5);
+        let err = r.validate().unwrap_err();
+        assert!(
+            err.contains("fan-on-hot") && err.contains("slot 16"),
+            "{err}"
+        );
+        r.when = Condition::Or {
+            any: vec![slot_cond(1, 1.5)],
+        };
+        assert!(r.validate().unwrap_err().contains("not in [0, 1]"));
+        r.when = slot_cond(15, 1.0);
+        assert!(r.validate().is_ok());
+        assert!(
+            fan_rule().validate().is_ok(),
+            "a literal threshold has nothing to validate"
+        );
+    }
+
+    #[test]
+    fn slot_condition_serializes_to_the_node_wire_form() {
+        let json = serde_json::to_string(&slot_cond(3, 0.5)).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"sensor_slot","entity":"sensor.temperature","op":"gt","slot":3,"min":20.0,"max":60.0,"default":0.5}"#
+        );
+        let back: Condition = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, slot_cond(3, 0.5));
     }
 
     #[test]
@@ -1120,6 +1804,7 @@ mod tests {
             debounce_ms: 0,
             max_rate_hz: None,
             fire_on_change: false,
+            hold_ms: 0,
         };
         let e = ReflexEngine::new(vec![rule]);
         let fired = e.evaluate(&snap(&[("motion", 1.0)]), 1);
@@ -1338,6 +2023,7 @@ mod tests {
             debounce_ms: 0,
             max_rate_hz: None,
             fire_on_change: false,
+            hold_ms: 0,
         };
         let sink = Arc::new(MockSink::default());
         let sink_dyn: Arc<dyn ActionSink> = sink.clone();
