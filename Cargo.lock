@@ -2451,6 +2451,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "ed25519-dalek",
+ "hex",
  "obc-audio",
  "obc-fleet",
  "obc-memory",
@@ -2463,6 +2465,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "tempfile",
  "tokio",
  "tokio-serial",
  "tracing",
@@ -2557,6 +2560,8 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]

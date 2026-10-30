@@ -143,6 +143,12 @@ mod identity_map;
 /// against the BME280 datasheet's own double-precision algorithm.
 mod sensor_math;
 
+/// Sizes a mesh reply to the bridge's 228-byte line, or replaces it with a
+/// short error under the same id. No ESP dependencies, so
+/// `tests/firmware_mesh_reply.rs` runs it on the host against the bridge's own
+/// framer.
+mod mesh_reply;
+
 /// Real I2C sensor drivers (MAX17048 fuel gauge, MPU6050 IMU).
 // Under `--features camera` the I2C bus is disabled, so the sensor
 // constructor/probe paths are intentionally unused in that build. NOT because of
@@ -168,6 +174,25 @@ mod dht;
 /// OV2640 camera driver — opt-in via `--features camera` (see CAMERA.md).
 #[cfg(feature = "camera")]
 mod camera;
+
+/// The frame-difference detector's arithmetic. No ESP dependencies, so
+/// `tests/firmware_detector_math.rs` executes it on the host against frames
+/// `scripts/vision/classify.py` has already scored — the same split, and for the
+/// same reason, as `sensor_math` and `identity_map`.
+#[cfg(feature = "camera")]
+mod detector_math;
+
+// A build without the camera must not have PSRAM. The live node's build has
+// none (sdkconfig.defaults), so PSRAM here means a camera overlay leaked in:
+// `ESP_IDF_SDKCONFIG_DEFAULTS` left set in the shell from a camera build, or a
+// target dir whose esp-idf build a camera build made (build.rs). Either way the
+// binary is not the one on `obc-esp32-s3-001`, and this is where that stops.
+#[cfg(all(not(feature = "camera"), esp_idf_spiram))]
+compile_error!(
+    "PSRAM is on in a build without `camera`. Clear $env:ESP_IDF_SDKCONFIG_DEFAULTS \
+     and use this crate's own CARGO_TARGET_DIR (or `cargo clean` it): the esp-idf \
+     build came from a camera overlay. Camera builds live in firmware/obc-esp32-s3-camera."
+);
 
 /// Maximum line length for incoming serial commands (bytes).
 ///
@@ -270,17 +295,18 @@ const I2C_PINS: (i32, i32) = match BOARD.i2c {
     None => (-1, -1),
 };
 
-/// DHT22/AM2302 data line. Uses D10 (GPIO9) — a free exposed pad that avoids the
-/// actuator outputs, the I2C bus (5/6), and the I2S mic pins (1/2). Wire the
-/// module's `out` pin here (with `+`→3V3 and `-`→GND).
-#[cfg(not(feature = "board-waveshare-21"))]
-const DHT22_GPIO: i32 = 9;
+/// DHT22/AM2302 data line, a board fact since 2026-09-26 (`board::ACTIVE.dht22_gpio`):
+/// D10/GPIO9 on the XIAO, IO0 on the Waveshare, none on the LILYGO where GPIO9 is
+/// the camera's Y7. `None` means the pin is never driven.
+const DHT22_GPIO: Option<i32> = board::ACTIVE.dht22_gpio;
 
-/// DHT22/AM2302 data line (Waveshare 2.1 board): header pin `IO0` = GPIO0, the
-/// board's one spare pin. Add a 10 kΩ pull-up to 3V3 — it doubles as the BOOT
-/// strapping hold-high (the DHT22 idles high, so normal boot is preserved).
-#[cfg(feature = "board-waveshare-21")]
-const DHT22_GPIO: i32 = 0;
+/// Environment telemetry cadence (2026-09-26). Three tiny typed frames a minute
+/// — `temperature`, `humidity`, `pressure` — each `{"type":…,"value":…}`, which
+/// the host gateway files as `mesh.<node>.<type>` with no host change and a
+/// reflex `Sensor` rule can read (`fact_to_f64` takes a top-level `value`).
+/// Real readings only: the stub values `read_sensor` falls back to when no
+/// BME280 answers must never leave the node as if measured.
+const ENV_INTERVAL_MS: u64 = 60_000;
 
 // ── Agent State ───────────────────────────────────────────────────────────────
 
@@ -641,8 +667,8 @@ fn main() -> anyhow::Result<()> {
     );
     info!("Serial: native USB-Serial-JTAG (send newline-delimited JSON commands)");
     info!(
-        "Commands: gpio_read, gpio_write, camera_capture, audio_sample, sensor_read, \
-         capabilities, announce, agent_chat, agent_config, agent_clear"
+        "Commands: gpio_read, gpio_write, camera_capture, camera_detect, audio_sample, \
+         sensor_read, capabilities, announce, agent_chat, agent_config, agent_clear"
     );
 
     info!("Stack headroom after init: {} bytes", stack_headroom());
@@ -776,28 +802,16 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    // Camera (opt-in). Owns the SCCB and the parallel data bus; the pins are the
-    // board's, see camera.rs. The sensor part is whatever is fitted -- the XIAO
-    // Sense has an OV2640, the Lilygo T-CameraPlus-S3 an OV5640 (both measured
-    // 2026-09-16). This comment used to say "OV2640" and "GPIO4/5", which were
-    // the unverified map's numbers and were never this board's.
-    #[cfg(feature = "camera")]
-    match camera::init() {
-        // Not "OV2640 camera initialised": that line printed on a board with an
-        // OV5640 in it, two lines after the driver logged `Camera PID=0x5640`.
-        Ok(()) => info!("camera initialised"),
-        Err(e) => log::warn!("camera init failed ({e}); camera_capture falls back to stub"),
-    }
     // I2S microphone (SCK=GPIO0, WS=GPIO1, SD=GPIO2). Falls back to the stub RMS if
     // init fails or no mic is fitted.
     //
     // Disabled on the Waveshare 2.1 build: GPIO0 is the DHT22 there and GPIO1/2
     // are LCD lines — no mic is wirable; `audio_sample` serves the stub RMS.
     // Not on the Lilygo T-CameraPlus-S3 V1.0/V1.1: this init takes GPIO0/1/2, and
-    // on that board GPIO1/2 are the camera's SCCB. It runs *after* `camera::init`,
-    // so it would have reassigned the sensor's control bus out from under a
-    // camera that had just reported success -- a failure that would have looked
-    // like anything but an I2S driver. `BOARD.has_mic` is false there and the
+    // on that board GPIO1/2 are the camera's SCCB. Had it run after `camera::init`
+    // it would have reassigned the sensor's control bus out from under a camera
+    // that had just reported success -- a failure that would have looked like
+    // anything but an I2S driver. `BOARD.has_mic` is false there and the
     // const assertion below makes the two agree.
     #[cfg(not(any(feature = "board-waveshare-21", feature = "board-lilygo-tcam-s3-v11")))]
     {
@@ -818,6 +832,47 @@ fn main() -> anyhow::Result<()> {
             }
             Err(e) => log::warn!("I2S mic init failed ({e}); audio_sample falls back to stub"),
         }
+    }
+    // Camera (opt-in). Owns the SCCB and the parallel data bus; the pins are the
+    // board's, see camera.rs. The sensor part is whatever is fitted -- the XIAO
+    // Sense has an OV2640, the Lilygo T-CameraPlus-S3 an OV5640 (both measured
+    // 2026-09-16). This comment used to say "OV2640" and "GPIO4/5", which were
+    // the unverified map's numbers and were never this board's.
+    //
+    // **The camera MUST initialise after the I2S mic, and after anything else that
+    // allocates a GDMA channel.** Found 2026-09-25 on two XIAO Senses with two
+    // sensors (002/OV2640, a84de4/OV3660). Both showed the same fault: VSYNC
+    // arrived every frame, and `cam_hal: FB-SIZE: 0 != 76800` said not one byte
+    // of pixel data followed. The mechanism, read in both sources:
+    //
+    //   * esp32-camera 2.0.7 (`target/esp32s3/ll_cam.c`, `ll_cam_dma_init`) does
+    //     not use the GDMA driver. It scans the channel registers from the top
+    //     for one whose `in.link.addr` is 0, takes it ("DMA Channel=4"), and
+    //     programs it by direct register writes. The GDMA allocator never learns
+    //     that channel is in use.
+    //   * ESP-IDF v5.3.2 (`esp_hw_support/dma/gdma.c`, `gdma_acquire_group_handle`)
+    //     RESETS the whole GDMA block (`gdma_ll_reset_register`) the first time any
+    //     driver allocates a channel. The I2S RX driver is such a driver.
+    //
+    // So with the camera first, the mic's allocation wiped the camera's DMA
+    // setup in the same millisecond as "camera initialised". The capture peripheral kept
+    // raising VSYNC, which is its own interrupt, while its DMA never moved
+    // another byte. In JPEG mode an empty frame is dropped silently, which is
+    // why 002 only ever showed `Failed to get the frame on time`. The Lilygo
+    // worked because its build has no I2S mic (GPIO1/2 are its SCCB). Nothing
+    // was wrong with either Sense.
+    //
+    // With the mic first, the GDMA group already exists and is never reset
+    // again, and the allocator hands out pairs from 0 upward while the camera
+    // takes the highest free one. That holds only while fewer than five other
+    // GDMA channels are allocated. An esp32-camera that allocates through the
+    // GDMA driver would remove the ordering rule entirely.
+    #[cfg(feature = "camera")]
+    match camera::init() {
+        // Not "OV2640 camera initialised": that line printed on a board with an
+        // OV5640 in it, two lines after the driver logged `Camera PID=0x5640`.
+        Ok(()) => info!("camera initialised"),
+        Err(e) => log::warn!("camera init failed ({e}); camera_capture falls back to stub"),
     }
     // On-die temperature sensor: no wiring, real signal. The default range
     // (−10…80 °C) is the accurate one for a bench and a room; the driver
@@ -869,6 +924,8 @@ fn main() -> anyhow::Result<()> {
     // means lost. Kept well under the host `stale_ms` (set stale_ms ≥ ~3× this).
     const BEACON_INTERVAL_MS: u64 = 30_000;
     let mut last_beacon_ms: u64 = 0;
+    // Environment telemetry (BME280 over I2C): see `ENV_INTERVAL_MS`.
+    let mut last_env_ms: u64 = 0;
     // Link watchdog: time of last host contact on *either* link — a USB byte or a
     // mesh command addressed to us. If the host goes silent past the safing
     // timeout, the built-in `safe-link-offline` rule fires (on-MCU offline
@@ -991,7 +1048,12 @@ fn main() -> anyhow::Result<()> {
                                                     serde_json::json!(identity::node_id()),
                                                 );
                                             }
-                                            let out = v.to_string();
+                                            // The bridge discards a line over 228 B
+                                            // and tells only its own console; an
+                                            // oversized reply became silence, and the
+                                            // host blamed range. Send one that fits,
+                                            // or say why it cannot (2026-10-13).
+                                            let out = mesh_reply::fit(&v);
                                             let _ = u.write(out.as_bytes());
                                             let _ = u.write(b"\n");
                                         }
@@ -1024,10 +1086,12 @@ fn main() -> anyhow::Result<()> {
             // per ~2 s (the sensor's minimum) and reuse the last good value in
             // between. Overrides the stubbed sensor.temperature with a real reading
             // so overheat/safing rules act on measured data; adds sensor.humidity.
-            if now.saturating_sub(agent_state.dht_last_read_ms) >= 2000 {
-                agent_state.dht_last_read_ms = now;
-                if let Ok((t, h)) = dht::read_dht22(DHT22_GPIO) {
-                    agent_state.dht_last = Some((t, h));
+            if let Some(pin) = DHT22_GPIO {
+                if now.saturating_sub(agent_state.dht_last_read_ms) >= 2000 {
+                    agent_state.dht_last_read_ms = now;
+                    if let Ok((t, h)) = dht::read_dht22(pin) {
+                        agent_state.dht_last = Some((t, h));
+                    }
                 }
             }
             if let Some((t, h)) = agent_state.dht_last {
@@ -1146,6 +1210,38 @@ fn main() -> anyhow::Result<()> {
             let spine_msg = beacon.to_string();
             send_line(&mut usb, &spine_msg, LineKind::Report);
             mirror_spine(&mut spine_uart, &spine_msg);
+        }
+
+        // Environment telemetry: what the room is like, once a minute, from a
+        // BME280 that actually answered. Read the bus directly so the stub
+        // fallback in `read_sensor` cannot be mistaken for a measurement; a
+        // node with no sensor sends nothing and the host sees nothing, which is
+        // the honest state. Three frames of ~70 bytes, well under the 228-byte
+        // spine payload limit and far below the keepalive traffic.
+        if now.saturating_sub(last_env_ms) >= ENV_INTERVAL_MS {
+            last_env_ms = now;
+            if let Some(bus) = agent_state.sensors.as_mut() {
+                for (quantity, field, unit) in [
+                    ("temperature", "temperature", "C"),
+                    ("humidity", "humidity", "%"),
+                    ("pressure", "pressure", "hPa"),
+                ] {
+                    if let Some(Ok(value)) = bus.read("bme280", field) {
+                        let rounded = (value * 100.0).round() / 100.0;
+                        let msg = serde_json::json!({
+                            "type": quantity,
+                            "node_id": identity::node_id(),
+                            "value": rounded,
+                            "unit": unit,
+                            "sensor": "bme280",
+                            "ts_ms": now,
+                        })
+                        .to_string();
+                        send_line(&mut usb, &msg, LineKind::Report);
+                        mirror_spine(&mut spine_uart, &msg);
+                    }
+                }
+            }
         }
     }
 }
@@ -1443,6 +1539,8 @@ fn handle_request(line: &str, state: &mut AgentState) -> anyhow::Result<Response
                 camera_capture(quality, &format)
             }
 
+            "camera_detect" => camera_detect(),
+
             "audio_sample" => {
                 let duration_ms = req
                     .args
@@ -1473,7 +1571,10 @@ fn handle_request(line: &str, state: &mut AgentState) -> anyhow::Result<Response
                     .to_string();
                 if sensor == "dht22" {
                     // Not on the I2C bus — its own single-wire GPIO (D10). ~5 ms read.
-                    let (t, h) = dht::read_dht22(DHT22_GPIO)?;
+                    let Some(pin) = DHT22_GPIO else {
+                        anyhow::bail!("this board has no DHT22 pin ({})", board::ACTIVE.name);
+                    };
+                    let (t, h) = dht::read_dht22(pin)?;
                     let v = match field.as_str() {
                         "temperature" => t,
                         "humidity" => h,
@@ -1612,10 +1713,16 @@ fn gpio_write(
 fn camera_capture(quality: u8, format: &str) -> anyhow::Result<String> {
     #[cfg(feature = "camera")]
     {
-        // Format/quality are baked into the driver config at init; capture returns
-        // a base64 JPEG frame from the OV2640.
-        let _ = (quality, format);
-        camera::capture_base64()
+        // `format` is still baked into the driver at init and cannot be changed
+        // at runtime — see the 2026-09-17 ADR for why that is a property of the
+        // driver and not an omission here.
+        //
+        // `quality` stopped being ignored on 2026-09-17. The node captures
+        // greyscale, so the picture is produced by the software encoder, and
+        // that encoder takes a quality. It is the one argument of the two that
+        // now does something.
+        let _ = format;
+        camera::capture_base64(quality)
     }
     #[cfg(not(feature = "camera"))]
     {
@@ -1629,6 +1736,152 @@ fn camera_capture(quality: u8, format: &str) -> anyhow::Result<String> {
             "STUB:camera_capture:quality={quality}:format={format}:base64_jpeg_data_here"
         ))
     }
+}
+
+// ── Detector ──────────────────────────────────────────────────────────────────
+//
+// The node decides for itself whether something happened, because the whole
+// point of G2 is a summary on the air and 228 bytes of payload will not carry a
+// picture. See `docs/VISION-DETECTOR-2026-09.md` for what was measured and
+// `detector_math.rs` for the rule.
+
+/// What the detector has to remember between frames: one reference frame and
+/// how settled the exposure is.
+///
+/// The reference costs `width * height` bytes of heap (76,800 at QVGA), which
+/// PSRAM has in abundance. The alternative — keeping the previous *gradient* —
+/// would cost four times that to save recomputing it, and the node is not short
+/// of cycles at one frame a second.
+#[cfg(feature = "camera")]
+struct DetectorState {
+    prev: Option<Vec<u8>>,
+    warm: detector_math::WarmUp,
+}
+
+#[cfg(feature = "camera")]
+impl DetectorState {
+    const fn new() -> Self {
+        Self {
+            prev: None,
+            warm: detector_math::WarmUp::new(),
+        }
+    }
+}
+
+#[cfg(feature = "camera")]
+static DETECTOR: std::sync::Mutex<DetectorState> = std::sync::Mutex::new(DetectorState::new());
+
+/// Score one frame against the last one and say what it looks like.
+///
+/// Every field of the reply is measured except the verdict, which depends on
+/// three thresholds taken from a host fixture of JPEG-decoded frames. This node
+/// differences the sensor's raw Y8, which is not the same pixels — so the reply
+/// carries `thresholds_provisional: true` until someone re-measures them here.
+/// A verdict that quietly implied it had been validated on this hardware would
+/// be the kind of claim this project keeps having to retract.
+fn camera_detect() -> anyhow::Result<String> {
+    #[cfg(feature = "camera")]
+    {
+        use detector_math::{Readiness, HOST_FIXTURE_2026_09_16 as T};
+
+        let mut st = DETECTOR
+            .lock()
+            .map_err(|_| anyhow::anyhow!("detector state is poisoned"))?;
+
+        let (scored, mean, w, h) = camera::with_frame(|data, w, h, fmt| {
+            if fmt != camera::FORMAT_GRAYSCALE {
+                anyhow::bail!(
+                    "detector needs greyscale pixels and the driver produced format \
+                     {fmt}. It is fixed at init and cannot be switched at runtime -- \
+                     see the 2026-09-17 ADR."
+                );
+            }
+            let mean = detector_math::mean(data)
+                .ok_or_else(|| anyhow::anyhow!("empty frame has no brightness"))?;
+            let scored = match st.prev.as_deref() {
+                Some(prev) => detector_math::score(prev, data, w, h, T.pixel_eps),
+                None => None,
+            };
+            // Whatever we decided, this frame becomes the reference. Doing it
+            // inside the borrow means a capture that fails downstream cannot
+            // leave a stale reference behind.
+            match st.prev.as_mut() {
+                Some(buf) if buf.len() == data.len() => buf.copy_from_slice(data),
+                _ => st.prev = Some(data.to_vec()),
+            }
+            Ok((scored, mean, w, h))
+        })?;
+
+        let readiness = st.warm.observe(mean);
+        let class = match (readiness, scored) {
+            (Readiness::Ready, Some(s)) => Some(classify_and_settle(&mut st, &s)),
+            _ => None,
+        };
+
+        let mut out = serde_json::json!({
+            "node_id": identity::node_id(),
+            "state": readiness.as_str(),
+            "mean": round2(mean),
+            "width": w,
+            "height": h,
+            "thresholds_provisional": true,
+        });
+        if let Some(s) = scored {
+            out["frac"] = serde_json::json!(round4(s.frac));
+            out["edge"] = serde_json::json!(round2(s.edge));
+        }
+        match class {
+            Some(c) => {
+                out["class"] = serde_json::json!(c.as_str());
+                // `detection` is deliberately narrower than `class`: a lamp and
+                // a bumped tripod are states, not events. `det=1` for a light
+                // switch is a lie, and this is where that is enforced.
+                out["detection"] = serde_json::json!(c.is_detection());
+            }
+            None => {
+                // No class, and no `detection: false` either -- "I cannot tell"
+                // must not be readable as "nothing happened".
+                out["why_no_class"] = serde_json::json!(match readiness {
+                    Readiness::NoReference => "no previous frame to compare against",
+                    Readiness::WarmingUp =>
+                        "brightness is still moving; auto-exposure has not settled",
+                    Readiness::Ready => "scored nothing (geometry changed between frames)",
+                });
+            }
+        }
+        Ok(out.to_string())
+    }
+    #[cfg(not(feature = "camera"))]
+    {
+        anyhow::bail!(
+            "camera_detect needs --features camera; this build has no camera (see CAMERA.md)"
+        )
+    }
+}
+
+/// Classify, and drop the reference when the camera has moved.
+///
+/// After a nudge, "compare to before" has stopped meaning anything: the previous
+/// frame is a picture of somewhere else and the exposure is about to re-converge
+/// on a new scene. Reporting `warming_up` for a frame or two afterwards is the
+/// honest form of "I cannot compare to before".
+#[cfg(feature = "camera")]
+fn classify_and_settle(st: &mut DetectorState, s: &detector_math::Scores) -> detector_math::Class {
+    let c = detector_math::classify(s, &detector_math::HOST_FIXTURE_2026_09_16);
+    if c == detector_math::Class::Nudge {
+        st.warm.reset();
+    }
+    c
+}
+
+#[cfg(feature = "camera")]
+fn round2(v: f32) -> f32 {
+    (v * 100.0).round() / 100.0
+}
+
+#[cfg(feature = "camera")]
+fn round4(v: f32) -> f32 {
+    (v * 10_000.0).round() / 10_000.0
 }
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
@@ -2016,6 +2269,7 @@ fn execute_local_tool(
                 .unwrap_or("jpeg");
             camera_capture(quality, fmt)
         }
+        "camera_detect" => camera_detect(),
         "audio_sample" => {
             let dur = args
                 .get("duration_ms")

@@ -1,14 +1,14 @@
 {
-  "generated": "2026-09-17T17:40:43+00:00",
-  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw",
+  "generated": "2026-10-30T22:24:28+00:00",
+  "upstream": "F:\\Documents\\GitHub\\Oh-Ben-Claw\\.claude\\worktrees\\obc-next-steps-c1e2a6",
   "note": "Vendored from the core agent. Do not edit by hand \u2014 run scripts/sync_upstream.py sync.",
   "artifacts": {
     "registry/registry.json": {
-      "sha256": "24d89c90dbb3e71444832990c06192f8d16310416c457e8d05b3ac653e1235cf",
-      "bytes": 43364
+      "sha256": "669938dba5c5692287bb3a36411d0200aa18d1bb604891b5ea6c6291ab62bb8a",
+      "bytes": 43930
     },
     "firmware-templates/templates.json": {
-      "sha256": "3998f09b16c05f4ee5d45c5627e36620c2fd37282252797368187dd9a52588aa",
+      "sha256": "bd05f5a65e246c69fabab12d05464ba91fb67e25683fdd8db8e9cd0951180c30",
       "bytes": 95594
     },
     "parity/fixtures/deployment/nanopi/inventory.json": {
@@ -20,8 +20,8 @@
       "bytes": 785
     },
     "parity/fixtures/deployment/nanopi/expected-config.toml": {
-      "sha256": "1337de8e1065e33718fc4e839683bc168a9972dceed6daa14a1cca04425ef2c1",
-      "bytes": 3670
+      "sha256": "36fbc86e117e293ccfbeca1885cb964128b9ca6df1e514be7665b0898507d2bb",
+      "bytes": 3959
     },
     "parity/fixtures/siteplan/square/case.json": {
       "sha256": "d9e4cd68d128b55e2a9de22262072e06cd26766b687844e619b313a6e766f639",
@@ -32,20 +32,20 @@
       "bytes": 556
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm": {
-      "sha256": "a0f9e0f17355a98e09f5965d98a132d780e5fea6857f0601505000806a51d995",
-      "bytes": 226775
+      "sha256": "91ff7901f3bfc47695a008e4a32bbd328fdb7c5803f5eb9ae0e9e6b4d013ca76",
+      "bytes": 229094
     },
     "wasm/obc-planner/obc_planner_wasm.js": {
-      "sha256": "c73ae55ff1437ee64b2f9a945bdc3ff428f143f7d6d29f3deb6a314cff346f41",
-      "bytes": 8089
+      "sha256": "e91a61ca94622cd5e39e5ef8137bceb7954f96329fdedced6da2554ba94bd796",
+      "bytes": 8070
     },
     "wasm/obc-planner/obc_planner_wasm.d.ts": {
       "sha256": "4ec7211a95dfef385c19737e998ba2a8142e1b059066b7dc47d7dfdae5fb4673",
       "bytes": 323
     },
     "wasm/obc-planner/obc_planner_wasm_bg.wasm.d.ts": {
-      "sha256": "4bfc3876562725360995bd771b659606ecbfee5204b2dcf686f7da9043ec1f30",
-      "bytes": 697
+      "sha256": "5ece41f79747b80ee698338f1ba3e23548eae149e6eaa81127dceaaa0583aaf2",
+      "bytes": 849
     },
     "wasm/obc-planner/package.json": {
       "sha256": "268801038e637b974e1cb371db9334c4d78ecc4daec3724319ce894fa2d25504",
@@ -64,16 +64,16 @@
       "bytes": 1765
     },
     "crates/obc-memory/src/lib.rs": {
-      "sha256": "f5d2155f6e89e40199e0fc1931786e41be9dc3d1eeeecd773f92a1c4ac421c95",
-      "bytes": 28702
+      "sha256": "7297942173af973c71675789f1b630a9e9471080ce8b4c6a10ccdf10f7aae278",
+      "bytes": 28343
     },
     "crates/obc-memory/src/world.rs": {
-      "sha256": "e6869eda344a9ba28f7ec43450e5510b198dc647f00291d935eeafac622ebaca",
-      "bytes": 66043
+      "sha256": "84a2e630139be90a64fdcb7f6838d837e2b0b1e84fa6478c1b12e28713b885ee",
+      "bytes": 68952
     },
     "crates/obc-memory/src/notes.rs": {
-      "sha256": "2fdcd1643ee133ac1c5a70929385b366905feb3a2cefc7104549791f79bd304d",
-      "bytes": 9528
+      "sha256": "6ce2c6901b5db6357214c0e0c00e5395d9f19da9baf83318318c4966eba1a799",
+      "bytes": 10691
     },
     "crates/obc-memory/src/liveness.rs": {
       "sha256": "1c17afa67b73e5e2a56974b584e1534bffed270c5c20b7cc87b1f2fb93f99228",
@@ -84,20 +84,12 @@
       "bytes": 15977
     },
     "crates/obc-memory/src/trajectory.rs": {
-      "sha256": "d5269f99aaeccd39fd4cec05e28b2ef12f695e5efc1f7d7608cd80473c29977b",
-      "bytes": 44385
+      "sha256": "66915dc789e5197ca3ab8091c8301ca50b662eb33ff3f04aba980b282f3a279c",
+      "bytes": 45627
     },
     "crates/obc-memory/src/embed.rs": {
       "sha256": "b4c5518e499493afda4335c9df224e2adf14621013a5add27b3b890656ae3cdb",
       "bytes": 1601
-    },
-    "crates/obc-memory/src/heartbeat.rs": {
-      "sha256": "1f4ac3869e144e918d91e513a81fdeb08d44f0e7a9f3b8db86bbf3c8696f7ac0",
-      "bytes": 9510
-    },
-    "crates/obc-memory/src/journal.rs": {
-      "sha256": "de1837b22cfc3eba88951dd74bcdf474259bb2a2f205209b3a5950639aa817b6",
-      "bytes": 8902
     },
     "crates/obc-memory/src/mushroom.rs": {
       "sha256": "fbabe3f09ffdd9d08f2d72d679bdaf82bf5cb6bbb6097ce9e3034c9ed69f5332",
@@ -140,8 +132,8 @@
       "bytes": 649
     },
     "crates/obc-planner/src/peripherals/registry.rs": {
-      "sha256": "7acfffa1716d19fcf1b735fcda1aa9659d179cc49a4c72dc226b305f11fd01c3",
-      "bytes": 121819
+      "sha256": "fb9d723c32e28252756f856958688ddaef0e0912189da1e3145771fa60681e34",
+      "bytes": 127008
     },
     "crates/obc-planner/src/deployment/mod.rs": {
       "sha256": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
@@ -160,8 +152,8 @@
       "bytes": 28436
     },
     "crates/obc-planner/src/deployment/planner.rs": {
-      "sha256": "a4dfb39c0c0b6e03140c415a9a753451f9aae247322a72c5ca1f1861ce1cc7a5",
-      "bytes": 26734
+      "sha256": "8424e1738fe27a70f320235e985324b838f88e7b7d84a94cc5663ba3ca82c357",
+      "bytes": 28520
     },
     "crates/obc-planner/src/deployment/scheme.rs": {
       "sha256": "92a5f9b1149bf69da37f3641dee518dc15c247e86b5aee7a11fee6494fa1a8a5",
@@ -172,8 +164,8 @@
       "bytes": 2229
     },
     "crates/obc-safety/src/lib.rs": {
-      "sha256": "a09c5b37fe60a42170ead0ed75dc826110990cee4d793a06b8893d56f538ab95",
-      "bytes": 4904
+      "sha256": "0af85173a42ba8e40c02ba7351c9d5adb9ccf953f6b98711994cd8cf5ec4f4c0",
+      "bytes": 5566
     },
     "crates/obc-safety/src/risk.rs": {
       "sha256": "10051bc2d2eb9843953e3fc1f08f2a638396607638c6a29573691d37c356f606",
@@ -188,24 +180,24 @@
       "bytes": 14488
     },
     "crates/obc-safety/src/frame_auth.rs": {
-      "sha256": "f40f3b5e904de7bdec7cea5191634c9cc6be93107ca61a64ccac94eb71e13032",
-      "bytes": 16361
+      "sha256": "a4e31faa063c7a7993ea9958725b26b1e28a9d62e439b2ddc50ba8c421f1cf3b",
+      "bytes": 24185
     },
     "crates/obc-safety/src/limits.rs": {
       "sha256": "7c49d9dd76df3a04d75ea1632acca492d9a27e508fffaf2f11642d9c450c6f2b",
       "bytes": 11647
     },
     "crates/obc-safety/src/audit.rs": {
-      "sha256": "5ad40e2f8f3d95c6b7c82bb490f4d6adbe0b9d791e0516253137a7607542da90",
-      "bytes": 20199
+      "sha256": "07d134c6e57364ba36d97aa571abdddc10da7d009bf1817d3eed04ffa257e09e",
+      "bytes": 22344
     },
     "crates/obc-safety/src/audit_sign.rs": {
       "sha256": "7d747d6ccdf3ba9adc98b2d536b18a9e0ed4d4c3ba3f27c2c8511492ea93f19e",
       "bytes": 4916
     },
     "crates/obc-safety/src/authorize.rs": {
-      "sha256": "2a61d8f0ceddfd993bb2a63b6fce01c4961a2e030dc00b4057e4318ace11d831",
-      "bytes": 14663
+      "sha256": "bdcc5f79726fc16b5607fa9f1b0eeeb008f1111138d006523d101ad6271fd882",
+      "bytes": 16455
     },
     "crates/obc-safety/src/taint.rs": {
       "sha256": "3ccd7bbca75b64f4dccdf9ea7cd1c79e2ab2cb52283be0bb68380572bb55b509",
@@ -216,16 +208,20 @@
       "bytes": 10316
     },
     "crates/obc-safety/src/pairing.rs": {
-      "sha256": "e710143e9dde0cc989156a6c15bcbdd66aa3480574dbd569a036a014fec2f7c5",
-      "bytes": 16835
+      "sha256": "82e43e9ada85629a341e4ccc573fa3967ec479fe2619ba473e2cf2b9cef79742",
+      "bytes": 17202
+    },
+    "crates/obc-safety/src/node_identity.rs": {
+      "sha256": "2990f65649de30798f2955054c3e3d29aa7558def512e0a3683c56f4ba32fd24",
+      "bytes": 32999
     },
     "crates/obc-safety/src/policy.rs": {
       "sha256": "552b8e7dc8bd2ca0003d1a1eca22f1a77597b9b3502d300aef96bf87a9afd203",
       "bytes": 12919
     },
     "crates/obc-safety/src/redteam.rs": {
-      "sha256": "34afc371ff3d0a38614d5c115def6356a79b9e82c5742d3ad046f79416e1f362",
-      "bytes": 7803
+      "sha256": "5914e811787e19bf9cc0f940f4fcadbb3c13822ac0f3726b90e1b33edb93a966",
+      "bytes": 7954
     },
     "crates/obc-safety/src/vault.rs": {
       "sha256": "e8ba80c1e9a9bfe3707271c898374af125cf82faddd82a015fec157d8093e5bc",
@@ -440,16 +436,16 @@
       "bytes": 2852
     },
     "crates/obc-approval/src/lib.rs": {
-      "sha256": "987ae14c5508b90052b5fe10c2a39aa5d9bda614b25700a005468ba2fd2cec0f",
-      "bytes": 53740
+      "sha256": "e88a6f32f73235f7d8b64ec2f10d5d1cb69a893e8532a85a454c884537cd2bd6",
+      "bytes": 55632
     },
     "crates/obc-spine/Cargo.toml": {
-      "sha256": "636c84f1bd81a5bff1f8ad18d1b22cc444f1683c376aaf0d4765c8583b3868d1",
-      "bytes": 5595
+      "sha256": "1bda6ea90fd7ffba8aafdb50a36bec032db2442ee05df38e0a8d4cb335dfa71a",
+      "bytes": 5778
     },
     "crates/obc-spine/src/lib.rs": {
-      "sha256": "68cb08ffc48c26a372eb468b66068ebbaeb268c6925916b4ce38fa1466915498",
-      "bytes": 40683
+      "sha256": "7bd9e80604609498176c1dc22f6b70accb4706d9043dc7c31171db19c302342e",
+      "bytes": 46376
     },
     "crates/obc-spine/src/action.rs": {
       "sha256": "4a1d63f023e0de5149bbf1e3c643551172db8e8ec7211eba9d03fba73a11815a",
@@ -476,8 +472,8 @@
       "bytes": 96805
     },
     "crates/obc-spine/src/p2p.rs": {
-      "sha256": "3612c86175070484eb65ca3a4319d08cea8bf1db69cea24f50c85c99ddc315e8",
-      "bytes": 29025
+      "sha256": "0b8bfc9bc55e24b7ec8b95e75f7dd9f2bf34a3b7ac00777affc0f16910a60c1a",
+      "bytes": 81995
     },
     "crates/obc-spine/src/speech.rs": {
       "sha256": "11d98219da711f768c20ab9a689d2144b67b53d54481ea2dd2c901af24a4c59d",
@@ -504,40 +500,40 @@
       "bytes": 3245
     },
     "crates/obc-providers/src/anthropic.rs": {
-      "sha256": "48515592e1029f5310f3cdaf837f0cf7e28cf4ed8247245b4431531e8bb68ad2",
-      "bytes": 33534
+      "sha256": "d4dcf083749907b74814e4dcec7f72cc9ae196426c8e00ce2b0236a0d8273ef4",
+      "bytes": 33541
     },
     "crates/obc-providers/src/compatible.rs": {
-      "sha256": "f9c818387263e5603b412bb13e65685834657a89b6f722a3f540a1baa83c247f",
-      "bytes": 6035
+      "sha256": "7e0ddf38f6734a155e26066cf135a3a771972a08e08761d9c101cfa017a0c752",
+      "bytes": 6042
     },
     "crates/obc-providers/src/failover.rs": {
       "sha256": "3c468152f7925de928a28dd98fd588febede07f3ebdea412c807f64f1bfea168",
       "bytes": 5820
     },
     "crates/obc-providers/src/lib.rs": {
-      "sha256": "3b6407976fee4d1228e4567b30dfaba6a47b68301c367034bb7cc425a9cccc93",
-      "bytes": 23671
+      "sha256": "6ab3d33a20ea41c34140276f08160525014ab7bad412296435d432a098ea8097",
+      "bytes": 26405
     },
     "crates/obc-providers/src/model_registry.rs": {
       "sha256": "a8d767a530264f21ddd58ef75e0ed1ffa3fb9970e658910a64a4f537cf41e970",
       "bytes": 10269
     },
     "crates/obc-providers/src/ollama.rs": {
-      "sha256": "27827b6fbeea401c101e9dee2db2b1464773fde4bcd8743a95df7487df2a63b4",
-      "bytes": 16667
+      "sha256": "8b472deaff85351a4fad3559d88162f3e3766882558c3b7acbd7140d39ca255c",
+      "bytes": 16674
     },
     "crates/obc-providers/src/openai.rs": {
-      "sha256": "ce5456ece147c9278da44cf05547ae93ddcacc30962271458c26b391784080fc",
-      "bytes": 6328
+      "sha256": "51dfa4ba8ec9b697abe5ed94b7774cb66543e8d49ba967401f8b61e6f3520d7c",
+      "bytes": 6335
     },
     "crates/obc-providers/src/openrouter.rs": {
-      "sha256": "df897e7417a5bcd7131a2dd144f8139f3d0e6ae17db5c6d320da22830f9e9010",
-      "bytes": 5929
+      "sha256": "9ba4f48973bd30f75ca3fc6159f133a4bf9a2b2555432ba5848b2a04578ea8c7",
+      "bytes": 5936
     },
     "crates/obc-providers/src/retry.rs": {
-      "sha256": "53a15c035481cfead828b11a28c0b0d554f8c0427d28f7b3c6895b04f3c13c74",
-      "bytes": 9955
+      "sha256": "f400b695eafd1ebda874c143ffd6401960913fb9cc8a1f68423088a336ed21d1",
+      "bytes": 10446
     },
     "crates/obc-tools/Cargo.toml": {
       "sha256": "7e4868cc8ad32e3207cc31608d5552a286da3d4c9e65b251e91f9c60f01a6ca6",
@@ -560,8 +556,8 @@
       "bytes": 10028
     },
     "crates/obc-tools/src/builtin/browser.rs": {
-      "sha256": "43e043046959d1fdb75cc75b87a30628e79714f5699c2ece2fa4db9d587e36df",
-      "bytes": 51652
+      "sha256": "1a572a4850e3133ec3ddffa85ee2c447eb5871461d5d9559649473550ecf5c84",
+      "bytes": 52704
     },
     "crates/obc-tools/src/builtin/browser_cdp.rs": {
       "sha256": "f4d0c6335f4de54747e2217b03b0b167354fb0a415b5f0beb9880e7395d4e691",
@@ -592,16 +588,16 @@
       "bytes": 19337
     },
     "crates/obc-tools/src/builtin/incident.rs": {
-      "sha256": "fcee5c7088d2bd810d3c6da57386fff608bc104319cee14da055fc5c022d65d3",
-      "bytes": 11049
+      "sha256": "52f655b6c3949263068fc87fbcfa2f4409dc9fde99eba18922ddfbf11ab0464e",
+      "bytes": 11650
     },
     "crates/obc-tools/src/builtin/learn.rs": {
       "sha256": "82ce4db5dde1613a86d07bfb3138dea265bf2fce2d487f6eeb949d45536b9308",
       "bytes": 6796
     },
     "crates/obc-tools/src/builtin/memory.rs": {
-      "sha256": "559bd8b27169bec3d9c7ce40eb1321f3254de794ef35708012026ffa12c4c8e0",
-      "bytes": 7976
+      "sha256": "5e52df094dae035dc53b6ee5b74f382d5be53443686e6a166ff222046fce6374",
+      "bytes": 8052
     },
     "crates/obc-tools/src/builtin/mesh.rs": {
       "sha256": "77fc7adcf7e7f23ded8ab59e93420cd05c5d2275c03b88cbe8338629ae7b9754",
@@ -624,8 +620,8 @@
       "bytes": 17817
     },
     "crates/obc-tools/src/builtin/ota.rs": {
-      "sha256": "9263c29a2c03356f873ffddca3aa5e6686373f0cdc41cb0ab02bd7ef24dd8312",
-      "bytes": 18289
+      "sha256": "a5180c4d95b6c5d96db5a809018233ffd5b121de849e69da4ab9af81f83dca7e",
+      "bytes": 18624
     },
     "crates/obc-tools/src/builtin/power.rs": {
       "sha256": "5fc4fbdf0de4633134ada516e099121c2c367624ef881fcd01b26ba2cdf8d511",
@@ -656,28 +652,28 @@
       "bytes": 8632
     },
     "crates/obc-tools/src/builtin/vision.rs": {
-      "sha256": "793720d9365f725d7c5f0cc1d58717a5fe4001ce012874660b46280b3b9dc43c",
-      "bytes": 19455
+      "sha256": "affe5b6883e53d56ac183a4ae44f6872b7c7cf28faf51ba6822532abdebb9f33",
+      "bytes": 26141
     },
     "crates/obc-tools/src/builtin/world.rs": {
-      "sha256": "bfc47b6dec8e9d250717a97e12b996a0aa51b7066f228c153496b06f4c09c5be",
-      "bytes": 17500
+      "sha256": "ae3e4f7b4665cbbc4e47df56e79145989216e152e3f420ee56812c876c91c549",
+      "bytes": 17918
     },
     "crates/obc-tools/src/credentials.rs": {
       "sha256": "e762dc0c05809116eb43a2b29be30605646336526a5f64c4627060cc5d350e0b",
       "bytes": 3644
     },
     "crates/obc-tools/src/lib.rs": {
-      "sha256": "01ca7e7b7a42a92dd8ddddd3cefcaa5024f6c0bb56c5e730df92d6143c542ee0",
-      "bytes": 9475
+      "sha256": "1faf4c6364731e3852aa9764e7c7c75e8004f8fb7eec5163c880b788b7aa5c5b",
+      "bytes": 11149
     },
     "crates/obc-vision/Cargo.toml": {
-      "sha256": "1fcdc34ee72870eff6d49bddb3b01c68e42c5799b977f1b72d6ca0fe3c76a565",
-      "bytes": 2675
+      "sha256": "ad2d745535607556c85b74475fd424e530b2d756eec07541e25d0bdc41d103cd",
+      "bytes": 2898
     },
     "crates/obc-vision/src/lib.rs": {
-      "sha256": "fd1f1589ef0aac1a35fadb7e9220e1046df1ecde78af9498418625bd661c86ff",
-      "bytes": 1079
+      "sha256": "fbe9c6708652779cce6216abf6ebeb955bac11fd64e3d5d15665c2d1fdf354cd",
+      "bytes": 1570
     },
     "crates/obc-vision/src/clawcam_actuate.rs": {
       "sha256": "6c27126e2467817c25b411965aff9ac20ad39fd300645262f2df6f339b7f8434",
@@ -698,6 +694,22 @@
     "crates/obc-vision/src/clawcam_spatial.rs": {
       "sha256": "b699b83dd491fbb1985ed1599da075e70c2783ece3a76099cb043e4d3dcfa81e",
       "bytes": 4093
+    },
+    "crates/obc-vision/src/motion.rs": {
+      "sha256": "77b8ce2b8e2a48f7413e82681de4eb4cfaab6a29f99cd3e90514e9df7cdc1fa4",
+      "bytes": 9672
+    },
+    "crates/obc-vision/src/jpeg.rs": {
+      "sha256": "bb55db1b642dd47b3cbf0a7fc915c84d7f860094de197a821922b364efbcdbed",
+      "bytes": 2169
+    },
+    "crates/obc-vision/src/camera_percepts.rs": {
+      "sha256": "edd3c187b0529adb9c182d6de7c83af1bf892bc17e884a86430a63af776fa720",
+      "bytes": 8475
+    },
+    "crates/obc-vision/src/camera_health.rs": {
+      "sha256": "ab7e481c40c308734cc8bcdbc4843143ec11dcaafef89a655cf29ed196499826",
+      "bytes": 20958
     },
     "crates/obc-body/Cargo.toml": {
       "sha256": "e38621d3cdc27fbaa9bf2557fbad1f4c9eb31206b79dfa56bed049416230cbc0",
@@ -796,20 +808,20 @@
       "bytes": 11848
     },
     "firmware/obc-esp32-s3/CAMERA.md": {
-      "sha256": "a366679ba5dd63595154f6fc9187da384a1964397e591ff5f2fc6b737a1f642b",
-      "bytes": 10561
+      "sha256": "e487f1acaccfb0b55dccc1200476442158809ed6f9d32b74ac7051c95321d1f8",
+      "bytes": 13857
     },
     "firmware/obc-esp32-s3/Cargo.lock": {
       "sha256": "cd3c896df8d109a87bfb91eb7ef6cad6c482fe8d683a404bcdd0c60a51423870",
       "bytes": 42544
     },
     "firmware/obc-esp32-s3/Cargo.toml": {
-      "sha256": "a818782a3ec82a680e6f72c73257d4155e01659257ae960bfbfba360ecf1c5d1",
-      "bytes": 5667
+      "sha256": "97d7cb27e85b4621aa6fcc17050f5942a39322f60fec06a11c1aa0e379a07fc8",
+      "bytes": 5737
     },
     "firmware/obc-esp32-s3/build.rs": {
-      "sha256": "5ee1451deff32bd1a0a73d218b79f9cee6111e0f26862cd3a53e9b5009ddff4b",
-      "bytes": 53
+      "sha256": "c02184d537722fc803bba0d4aea8dfb416a9d4996c0270a614f9908c46a9cc5f",
+      "bytes": 2747
     },
     "firmware/obc-esp32-s3/components_esp32s3.lock": {
       "sha256": "8479771b38ced82368c32fd69a25eb30c08e5ed3fcc65b9a485c74df85df0e59",
@@ -832,16 +844,16 @@
       "bytes": 2645
     },
     "firmware/obc-esp32-s3/src/board.rs": {
-      "sha256": "45928a1664e18d93a366c6fd3da78f8b40864b4cfef2aa37f01be062a3bde10b",
-      "bytes": 12816
+      "sha256": "aa0bfef901d5d4be76f08e4a66313ecd7d62f0620ad67fcb137e603a9ac794fe",
+      "bytes": 14189
     },
     "firmware/obc-esp32-s3/src/camera.rs": {
-      "sha256": "28d2352964301994dd2a5c9d82d39d207a201acf23df25588a0c015e5d9a0061",
-      "bytes": 29711
+      "sha256": "9dd5ed81b69f5b7a64c1df0d3d4b4c46e7a549c37569ae1b64f91b8f8490a50c",
+      "bytes": 41074
     },
     "firmware/obc-esp32-s3/src/camera_bindings.h": {
-      "sha256": "b1654ad3b3baf0c8ae3f96fb90d99c96abd3da6a3f7d15769c529831f5b16171",
-      "bytes": 454
+      "sha256": "7f36c2cde7eff66015a1671bfecca40d4c7f8586946cb03ff0be53f1ee6b1cbc",
+      "bytes": 1018
     },
     "firmware/obc-esp32-s3/src/dht.rs": {
       "sha256": "affb936c5bcc59ca9c5210707752ef6a93544fbba356a8ba9ca75dc0271fecca",
@@ -852,12 +864,12 @@
       "bytes": 4079
     },
     "firmware/obc-esp32-s3/src/identity_map.rs": {
-      "sha256": "4da182e63c6a95fdd1ced0a37242ee9473981c4336227c145c12a7e59ea66f04",
-      "bytes": 3458
+      "sha256": "d21020ecc679255ff4ff38b2a3e7549eae3cb0fab4d31b0b871c41e5e1a037e2",
+      "bytes": 4559
     },
     "firmware/obc-esp32-s3/src/main.rs": {
-      "sha256": "c8bdf1c3171b513c1da970e504adb5b4dff1957d7b48f197bf3a97a5f24e7838",
-      "bytes": 96517
+      "sha256": "e97b71fc1c9728d44937da84840a95243e5421ebf8b31258f0658ea8ef0049cd",
+      "bytes": 108732
     },
     "firmware/obc-esp32-s3/src/reflex.rs": {
       "sha256": "f9157a6c812f9094607dc440dc52621c6750c0ad95ea7c8a0073e213b3980015",
@@ -870,6 +882,14 @@
     "firmware/obc-esp32-s3/src/sensor_math.rs": {
       "sha256": "fb4540ef1bf1588adbb9fd295ede46f8a79e8d3d235f77c77de2f218c752bd6c",
       "bytes": 5908
+    },
+    "firmware/obc-esp32-s3/src/detector_math.rs": {
+      "sha256": "8d1540d21e69af6b2475f3d131f3b65046864301aac559246f14d1d9a817d425",
+      "bytes": 11431
+    },
+    "firmware/obc-esp32-s3/src/mesh_reply.rs": {
+      "sha256": "d4335da7ab348cd5ba097ae709bc2f28e95131699143e4490035e37fc7989b2b",
+      "bytes": 2501
     },
     "firmware/obc-esp32-s3/src/safety.rs": {
       "sha256": "639de43ee232d9081bafc40ef8e370409786c1d6f0c4e5d9a4d22a605020268b",
@@ -892,8 +912,8 @@
       "bytes": 44823
     },
     "firmware/heltec-lora-linktest/Cargo.toml": {
-      "sha256": "d6cc89d2c17520d0489bed857dd79661c1b15b257106a0d120828f3e869df0d4",
-      "bytes": 2871
+      "sha256": "bd0d7bb978b3c58cac329098f2b89d6b890a39f4b6cdae3384950db398a38a66",
+      "bytes": 3158
     },
     "firmware/heltec-lora-linktest/build.rs": {
       "sha256": "2345abff7585266ff956fa54e596da21705d8b32ccc6014be8bc25a2d495d821",
@@ -912,16 +932,16 @@
       "bytes": 4732
     },
     "firmware/heltec-lora-linktest/src/main.rs": {
-      "sha256": "010077358f97e1414539365cba94fd989047fb0444d24b30d5fb91ba30e2b2cf",
-      "bytes": 33446
+      "sha256": "d61702690c2d3cd6790f3576e668a99a69d86423982e98021606fa24c081f39b",
+      "bytes": 36680
     },
     "firmware/heltec-lora-linktest/src/spine.rs": {
       "sha256": "e879dd5d92c657f6d763c84e202f4fc785a088e196ff699ca43a47966403c93f",
       "bytes": 35262
     },
     "firmware/heltec-lora-linktest/src/sx1262.rs": {
-      "sha256": "2f278b68d0104c21b801bd61db8c78a6625d5a97280bcd662dbed655c530d099",
-      "bytes": 16050
+      "sha256": "754cdb7b0c49be36c2b84ba3f66bf35c305f45ce21a93ba135314a77b382906e",
+      "bytes": 21416
     },
     "firmware/lora-node/README.md": {
       "sha256": "b614e7606099cf93b2204af96a58c8b8d1390a8b764db3321799969cf8021b8a",
@@ -959,7 +979,7 @@
     "toolchain": {
       "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
       "wasm-pack": "wasm-pack 0.15.0",
-      "wasm-bindgen": "0.2.127"
+      "wasm-bindgen": "0.2.130"
     },
     "sources": {
       "planner-wasm/Cargo.toml": "8a01fbafe7b27df24f987ac64ed6361522eac0dd00d55919c2c8d5e8d3d79cec",
@@ -970,12 +990,12 @@
       "crates/obc-planner/src/geo/mod.rs": "88e552902ad4f9d0727641da0989316a0e6c500c3138b34b6b1e5b6207519283",
       "crates/obc-planner/src/siteplan/mod.rs": "55c051875f38d53215dc5a076e099d4a8821b7631191155b0ab0127402a29ccc",
       "crates/obc-planner/src/peripherals/mod.rs": "fe85608430e20762f324cbf2b4c076f69eb17d3a4d37d686d8fef67bdf079083",
-      "crates/obc-planner/src/peripherals/registry.rs": "7acfffa1716d19fcf1b735fcda1aa9659d179cc49a4c72dc226b305f11fd01c3",
+      "crates/obc-planner/src/peripherals/registry.rs": "fb9d723c32e28252756f856958688ddaef0e0912189da1e3145771fa60681e34",
       "crates/obc-planner/src/deployment/mod.rs": "6223f44680398eee4f1f88b1adb758d26b09b148fd492ea352fe3ae540f74113",
       "crates/obc-planner/src/deployment/advisor.rs": "6b14b8f40d81c37e17f180d87d8ce35e38b060bb8d2b4f63967025cec61c2e84",
       "crates/obc-planner/src/deployment/firmware_scaffold.rs": "a7812f69611101d330f0958bedd397bb6055cb14ac11de5a736578308965b8a6",
       "crates/obc-planner/src/deployment/inventory.rs": "57a75b58476822d86fa60763ebd2fdb1482274d7cc45405e710318be2d7c3f96",
-      "crates/obc-planner/src/deployment/planner.rs": "a4dfb39c0c0b6e03140c415a9a753451f9aae247322a72c5ca1f1861ce1cc7a5",
+      "crates/obc-planner/src/deployment/planner.rs": "8424e1738fe27a70f320235e985324b838f88e7b7d84a94cc5663ba3ca82c357",
       "crates/obc-planner/src/deployment/scheme.rs": "92a5f9b1149bf69da37f3641dee518dc15c247e86b5aee7a11fee6494fa1a8a5"
     }
   }

@@ -106,6 +106,37 @@ compile_error!(
      pick one."
 );
 
+// The frame buffer needs PSRAM, and each board's module needs its own PSRAM
+// mode: the Sense is OCT, the Lilygo V1.1 is QUAD. A wrong or missing overlay
+// used to show up as a camera that initialised and never produced a frame, or
+// as a boot loop; esp-idf-sys hands the sdkconfig back as `esp_idf_*` cfgs, so
+// it is checked here instead. The overlay is chosen by
+// firmware/obc-esp32-s3-camera's manifest (Sense) or by
+// scripts/build_camera.ps1 (either board).
+#[cfg(all(feature = "camera", not(esp_idf_spiram)))]
+compile_error!(
+    "`camera` without PSRAM: the sdkconfig overlay was not applied. Build from \
+     firmware/obc-esp32-s3-camera (scripts/build_camera.ps1), which selects it."
+);
+#[cfg(all(
+    feature = "board-xiao-sense",
+    esp_idf_spiram,
+    not(esp_idf_spiram_mode_oct)
+))]
+compile_error!(
+    "`board-xiao-sense` needs OCT PSRAM: use sdkconfig.defaults.camera-xiao-sense \
+     (scripts/build_camera.ps1 -Board xiao-sense)."
+);
+#[cfg(all(
+    feature = "board-lilygo-tcam-s3-v11",
+    esp_idf_spiram,
+    not(esp_idf_spiram_mode_quad)
+))]
+compile_error!(
+    "`board-lilygo-tcam-s3-v11` needs QUAD PSRAM: use \
+     sdkconfig.defaults.camera-lilygo-tcam-v11 (scripts/build_camera.ps1 -Board lilygo-tcam-v11)."
+);
+
 use anyhow::Context;
 // esp32-camera bindings live in their own module (see Cargo.toml `bindings_module`).
 use esp_idf_svc::sys::camera as sys;
@@ -315,7 +346,12 @@ const PINS: CameraPins = CameraPins {
     pclk: 13,
 };
 
-// ── OPEN: init succeeds, capture never does (2026-09-16) ─────────────────────
+// ── RESOLVED 2026-09-25: init succeeds, capture never does ───────────────────
+//
+// Kept as found, because the wrong turns are the useful part. The cause was
+// none of the suspects below: the I2S mic's first GDMA allocation reset the
+// camera's DMA channel. See the note above `camera::init` in main.rs, and the
+// resolution at the end of this block.
 //
 // `esp_camera_init` returns ESP_OK and the sensor is identified, but every
 // `esp_camera_fb_get` returns null, preceded by:
@@ -411,10 +447,42 @@ const PINS: CameraPins = CameraPins {
 // camera fault was a silent drop: the node could not say "I have your image and
 // cannot send it", so the absence of a reply read as the absence of a frame.
 //
-// The XIAO is a SEPARATE fault and is still open. It never reaches this path:
+// The XIAO is a SEPARATE fault. It never reaches this path:
 // `esp_camera_fb_get` returns null there, with `cam_hal: Failed to get the
 // frame on time!`, so there is no frame to drop. Two boards, two unrelated
 // bugs, and the second one masked the first one's diagnosis.
+//
+// ── RESOLVED 2026-09-25: the XIAO's fault was the I2S mic, not the XIAO ──────
+//
+// One binary on two Senses with two sensors (002/OV2640, a84de4/OV3660) gave
+// the same `cam_hal: FB-SIZE: 0 != 76800` on every frame. VSYNC arrived, but no
+// pixel data followed. Ribbon, XCLK and sensor were all ruled out at once:
+// esp32-camera 2.0.7 claims its GDMA channel by direct register writes, and
+// ESP-IDF resets the whole GDMA block on the first driver allocation, which was
+// the I2S mic's, made immediately after `camera::init`. The Lilygo never saw
+// it because its build has no mic. JPEG mode drops an empty frame silently,
+// which is why only a timeout ever showed.
+//
+// With the mic initialised first, 002 (MAC 64:E8:33:7E:7E:04) returned
+// `capture: frame len=76800 B, 320x240, format=3` on 3 of 4 tries
+// (`scripts/probe_sense_capture.py`, ELF 48baf785c). Those are the first frames
+// from a XIAO Sense in this project. The pin map above was right all along.
+//
+// The second Sense, same binary: a84de4 (MAC AC:27:6E:A8:4D:E4, OV3660) booted
+// clean for two minutes, then returned 10/10 `frame len=76800 B, 320x240,
+// format=3`. Both Senses and both sensors now capture.
+//
+// RESOLVED 2026-09-26, and different from the fault above: 002's fourth try
+// had returned null with `cam_hal: EV-VSYNC-OVF`. The driver's one-slot event
+// queue was still full when the frame ended, so its task was not keeping up
+// with 24-line DMA chunks at the OV2640's ~25 fps. The OV3660 (~11 fps,
+// 48-line chunks) never overflowed, which pointed at the rate. XCLK went from
+// 20 to 10 MHz on the Sense (see `XCLK_HZ` in `init`). At 20 MHz the overflow
+// had logged continuously from boot; at 10 MHz, 002 ran two minutes without a
+// single one, and then returned 20/20 `frame len=76800 B, 320x240, format=3`
+// (ELF 5e74389dd, probe_sense_capture.py). The OV2640's own PLL dividers are
+// unchanged (`clk_div: 3, pclk_div: 8`), so halving its input halved its pixel
+// clock, as intended.
 //
 // ── 2026-09-16: FIRST IMAGE OFF A NODE ───────────────────────────────────────
 //
@@ -439,6 +507,15 @@ const PINS: CameraPins = CameraPins {
 // The vendor's OV5640 examples also call `set_vflip(1)` / `set_hmirror(0)` for
 // this sensor and load an autofocus blob (`ESP32_OV5640_AF`); we do neither, so
 // orientation and focus are whatever the sensor powers up with.
+
+/// The `pixformat_t` value this node captures, re-exported so callers do not
+/// have to reach into the generated bindings to name it.
+///
+/// Measured on `obc-esp32-s3-003` 2026-09-17: the driver reports `format=3` for
+/// `PIXFORMAT_GRAYSCALE` in this component build. The constant is used rather
+/// than the 3, because the number is an enum discriminant that belongs to
+/// esp32-camera and not to us.
+pub const FORMAT_GRAYSCALE: u32 = sys::pixformat_t_PIXFORMAT_GRAYSCALE;
 
 /// Initialise the camera driver (global; call once at boot).
 pub fn init() -> anyhow::Result<()> {
@@ -466,12 +543,49 @@ pub fn init() -> anyhow::Result<()> {
     cfg.pin_href = PINS.href;
     cfg.pin_pclk = PINS.pclk;
 
-    cfg.xclk_freq_hz = 20_000_000;
+    // XCLK: 10 MHz on the XIAO Sense, 20 MHz elsewhere.
+    //
+    // Measured 2026-09-25 with the GDMA fix in place: 002's OV2640 at 20 MHz
+    // runs ~25 fps, and 1 of 4 captures was aborted with `cam_hal:
+    // EV-VSYNC-OVF`. The driver's one-slot event queue was still full when the
+    // frame ended, because its task could not keep up with a DMA chunk every
+    // 24 lines. The Sense's OV3660 (a84de4) runs ~11 fps with 48-line chunks,
+    // under a quarter of that event rate, and went 10/10 with no overflow.
+    // Halving XCLK halves the OV2640's pixel clock and event rate. Verified
+    // 2026-09-26 on 002: no overflow in two minutes, then 20/20 frames. The
+    // Lilygo's OV5640 captured cleanly at 20 MHz and is left alone.
+    #[cfg(feature = "board-xiao-sense")]
+    const XCLK_HZ: i32 = 10_000_000;
+    #[cfg(not(feature = "board-xiao-sense"))]
+    const XCLK_HZ: i32 = 20_000_000;
+    cfg.xclk_freq_hz = XCLK_HZ;
     cfg.ledc_timer = sys::ledc_timer_t_LEDC_TIMER_0;
     cfg.ledc_channel = sys::ledc_channel_t_LEDC_CHANNEL_0;
 
-    cfg.pixel_format = sys::pixformat_t_PIXFORMAT_JPEG;
-    cfg.frame_size = sys::framesize_t_FRAMESIZE_QVGA; // 320×240 — fits one PSRAM fb
+    // ── Greyscale, and only greyscale. ───────────────────────────────────────
+    //
+    // ADR: OBC-Prime `docs/DECISIONS.md`, 2026-09-17. The short version: this
+    // field is not a setting the driver watches, it is an input consumed once.
+    // `cam_config()` derives `jpeg_mode`, `fb_size`, `in/fb_bytes_per_pixel` and
+    // the DMA descriptors from it, and is called from exactly one place —
+    // `esp_camera_init`. `s->set_pixformat()` afterwards moves sensor registers
+    // and nothing else, so a "runtime format switch" desynchronises the driver
+    // from the sensor and presents as an intermittent camera fault.
+    //
+    // The detector needs pixels (see `docs/VISION-DETECTOR-2026-09.md`). Two
+    // modes would mean a deinit/init per switch, and the fixture measured what a
+    // sensor reset costs: the frame after one scores 17× the quiet floor with
+    // nothing happening, auto-exposure converging. That is a detector that goes
+    // blind every time someone asks for a picture.
+    //
+    // Price: pictures off this node are monochrome until the software encoder
+    // lands.
+    cfg.pixel_format = sys::pixformat_t_PIXFORMAT_GRAYSCALE;
+    // 320x240 = 76,800 B of Y8.
+    cfg.frame_size = sys::framesize_t_FRAMESIZE_QVGA;
+    // Ignored while the format is not JPEG — `esp_camera_init` only calls
+    // `set_quality` under `pix_format == PIXFORMAT_JPEG`. Kept so the value is
+    // not re-invented when the encoder arrives.
     cfg.jpeg_quality = 12; // 0..63, lower = higher quality
 
     // `fb_count = 2` + `CAMERA_GRAB_LATEST` was tried on 2026-09-16 and REFUTED.
@@ -560,13 +674,40 @@ pub fn init() -> anyhow::Result<()> {
 /// no way to tell "the sensor produced no frame" from "the sensor produced a
 /// frame we failed to send". Those have opposite fixes. The log line below is the
 /// difference, and it goes out on the console whether or not the reply ever does.
-pub fn capture_base64() -> anyhow::Result<String> {
+pub fn capture_base64(quality: u8) -> anyhow::Result<String> {
+    with_frame(|data, width, height, format| {
+        if format == sys::pixformat_t_PIXFORMAT_JPEG {
+            // The sensor encoded it. Nothing to do but hand it over.
+            return Ok(base64_encode(data));
+        }
+        let jpeg = encode_jpeg(data, width, height, format, quality)?;
+        log::info!(
+            "capture: encoded {} B of {format} into {} B of JPEG at quality {quality} \
+             ({}:1)",
+            data.len(),
+            jpeg.len(),
+            data.len() / jpeg.len().max(1)
+        );
+        Ok(base64_encode(&jpeg))
+    })
+}
+
+/// Borrow one frame's pixels, then always give the buffer back to the driver.
+///
+/// The driver owns a fixed number of frame buffers and stops producing frames
+/// when they are all out on loan, so the return is unconditional — on the error
+/// path too. That is the only reason this is a closure rather than a function
+/// that hands out a `&[u8]`.
+///
+/// The callback gets `(pixels, width, height, format)`.
+pub fn with_frame<R>(
+    f: impl FnOnce(&[u8], usize, usize, u32) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
     let fb = unsafe { sys::esp_camera_fb_get() };
     if fb.is_null() {
         log::warn!("capture: esp_camera_fb_get returned null -- the sensor gave no frame");
         anyhow::bail!("esp_camera_fb_get returned null (no frame)");
     }
-    // Copy the frame out, then always return the buffer to the driver.
     let result = (|| {
         let len = unsafe { (*fb).len } as usize;
         let buf = unsafe { (*fb).buf };
@@ -588,15 +729,115 @@ pub fn capture_base64() -> anyhow::Result<String> {
             anyhow::bail!("empty frame buffer");
         }
         let data = unsafe { core::slice::from_raw_parts(buf, len) };
-        let encoded = base64_encode(data);
-        log::info!(
-            "capture: encoded {} B, handing it to the reply path",
-            encoded.len()
-        );
-        Ok(encoded)
+        f(data, width as usize, height as usize, format)
     })();
     unsafe { sys::esp_camera_fb_return(fb) };
     result.context("camera capture")
+}
+
+/// Encode raw pixels to JPEG with the component's software encoder.
+///
+/// This node captures greyscale, so the sensor never makes a JPEG and something
+/// has to. `jpge` compresses a one-channel frame as `Y_ONLY` — the picture is
+/// monochrome, which is the price the 2026-09-17 ADR states.
+///
+/// `fmt2jpg_cb` rather than `fmt2jpg`: the latter allocates a hardcoded 128 KiB
+/// and its output stream truncates on overflow **silently** (the warning is
+/// commented out in `to_jpg.cpp`). Owning the buffer here means an encode that
+/// does not fit is an error rather than a shorter picture.
+fn encode_jpeg(
+    src: &[u8],
+    width: usize,
+    height: usize,
+    format: u32,
+    quality: u8,
+) -> anyhow::Result<Vec<u8>> {
+    let jpge_quality = command_quality_to_jpge(quality);
+
+    let mut out: Vec<u8> = Vec::with_capacity(src.len() / 8);
+    let ok = unsafe {
+        sys::fmt2jpg_cb(
+            src.as_ptr() as *mut u8,
+            src.len(),
+            width as u16,
+            height as u16,
+            format,
+            jpge_quality,
+            Some(jpeg_sink),
+            &mut out as *mut Vec<u8> as *mut core::ffi::c_void,
+        )
+    };
+    if !ok {
+        anyhow::bail!(
+            "fmt2jpg_cb refused a {width}x{height} frame of format {format} \
+             ({} B at jpge quality {jpge_quality})",
+            src.len()
+        );
+    }
+    if out.is_empty() {
+        anyhow::bail!("fmt2jpg_cb reported success and produced no bytes");
+    }
+    // A JPEG that does not end in EOI was truncated. The encoder cannot tell us
+    // that, so the bytes have to.
+    if out.len() < 4 || out[..2] != [0xFF, 0xD8] || out[out.len() - 2..] != [0xFF, 0xD9] {
+        anyhow::bail!(
+            "software encoder produced {} B that is not a complete JPEG \
+             (starts {:02X?}, ends {:02X?})",
+            out.len(),
+            &out[..out.len().min(2)],
+            &out[out.len().saturating_sub(2)..]
+        );
+    }
+    Ok(out)
+}
+
+/// Map the `camera_capture` command's `quality` onto `jpge`'s.
+///
+/// **The command's range is 1..=10, not the sensor's 0..63.** `main.rs` clamps
+/// to `CAMERA_QUALITY_MIN..CAMERA_QUALITY_MAX` = 1..10 with a default of 5, and
+/// that is the number arriving here.
+///
+/// Getting this wrong is not theoretical: the first version of this function
+/// assumed the sensor's scale, so every request in the command's actual range
+/// landed in the top sixth of `jpge`'s and `quality: 10` and `quality: 40`
+/// produced 11,020 and 11,005 bytes — a 15-byte difference across what should
+/// have been opposite ends of the dial. Two nearly-identical files is what
+/// exposed it; a single capture would have looked perfect.
+///
+/// **Higher is better here**, which is a decision rather than a discovery. The
+/// argument was accepted and then thrown away (`let _ = quality`) from the day
+/// it was added until 2026-09-17, so no caller can have depended on the other
+/// reading, and 1..10 with a midpoint default is a scale people read as
+/// higher-is-better. The sensor's own `jpeg_quality` runs the other way; that
+/// one is set at init and is not this number.
+fn command_quality_to_jpge(q: u8) -> u8 {
+    let q = q.clamp(1, 10) as u32;
+    // 1 -> 15, 10 -> 96. Linear across a useful span: jpge below ~10 is
+    // unreadable and above ~96 is mostly bytes, so neither end is offered.
+    (15 + (q - 1) * 9) as u8
+}
+
+/// Where `fmt2jpg_cb` puts its output.
+///
+/// The vendor's own `callback_stream::put_buf` forwards whatever `jpge` hands
+/// it, including the end-of-image `NULL` that `memory_stream` checks for and
+/// this path does not — so the null check below is load-bearing, not defensive
+/// habit.
+///
+/// Returns the number of bytes accepted; the caller accumulates it as the
+/// stream index.
+unsafe extern "C" fn jpeg_sink(
+    arg: *mut core::ffi::c_void,
+    _index: usize,
+    data: *const core::ffi::c_void,
+    len: usize,
+) -> usize {
+    if arg.is_null() || data.is_null() || len == 0 {
+        return 0;
+    }
+    let out = &mut *(arg as *mut Vec<u8>);
+    out.extend_from_slice(core::slice::from_raw_parts(data as *const u8, len));
+    len
 }
 
 /// Minimal standard base64 encoder (no external crate in the firmware deps).
