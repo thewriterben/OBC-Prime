@@ -198,7 +198,7 @@ finds against README and ROADMAP. Result: **17 unwired files, 6,698 LOC, of whic
   ROADMAP had it as `[x] Sensor fusion`.
 - **`memory/heartbeat.rs`** and **`memory/journal.rs`** — both named in the
   README's Memory paragraph. `has_tasks`, `actionable_tasks`, `build_prompt`,
-  `append_task`: no callers.
+  `append_task`: no callers. Both were deleted upstream on 2026-10-30.
 
 And a third shape that **neither** survey can see, which is the one that matters
 most:

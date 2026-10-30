@@ -25,7 +25,7 @@ and the lists below say which is which.
 
 ## What you can run today
 
-- **Twenty-eight vendored crates.** `cargo test --workspace` runs **1223 tests**
+- **Twenty-eight vendored crates.** `cargo test --workspace` runs **1273 tests**
   of real agent code — the bitemporal world model, Track 0, the perception and
   reach gates, the reflex engine and the predictive layer above it, the wire
   between brain and nodes, the tool layer, the model backends, the navigation
@@ -194,7 +194,7 @@ hash. Everything else vendored here is data or a build; this is source, and
 source that is never compiled is a listing:
 
 ```bash
-cargo test --workspace     # 1223 tests
+cargo test --workspace     # 1273 tests
 cargo test -p obc-navigation # and once more per crate, with no siblings
 ```
 
@@ -216,7 +216,7 @@ nothing: the gate is `obc_safety::SafetyGate`, the planner is
 `obc_navigation::planning::plan`, the conscience is `obc_conscience::Conscience`.
 When `gate` prints REFUSED, a deterministic limit table refused it.
 
-That matters because "1223 tests pass" and "you can see it refuse" are different
+That matters because "1273 tests pass" and "you can see it refuse" are different
 kinds of evidence, and only the second one survives someone who does not trust
 the person showing it to them.
 

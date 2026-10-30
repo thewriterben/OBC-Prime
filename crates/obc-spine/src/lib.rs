@@ -80,7 +80,7 @@ pub fn topic_broadcast() -> String {
 // ── Node Announcement ────────────────────────────────────────────────────────
 
 /// A description of a single tool exposed by a peripheral node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeToolSpec {
     pub name: String,
     pub description: String,
@@ -126,15 +126,43 @@ pub struct ToolCallRequest {
     /// Truncated HMAC over the request body, hex.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mac: Option<String>,
+    /// Ed25519 signature by `from`'s own key, hex: on P2P, the proof of who
+    /// is calling, which `mac` under the shared mesh secret is not
+    /// (`obc_safety::node_identity`). Absent on MQTT.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sig: Option<String>,
 }
 
 impl ToolCallRequest {
-    /// The bytes the tag covers: this request with `ctr` and `mac` removed.
+    /// The bytes the tag covers: this request with `ctr`, `mac` and `sig`
+    /// removed. Unchanged on MQTT, where `sig` is never set.
     pub fn signed_bytes(&self) -> Vec<u8> {
         let mut unsigned = self.clone();
         unsigned.ctr = None;
         unsigned.mac = None;
+        unsigned.sig = None;
         serde_json::to_vec(&unsigned).unwrap_or_default()
+    }
+
+    /// Sign a P2P call from `from` to `to`: the tag [`ToolCallRequest::sign`]
+    /// attaches, then `identity`'s signature over the same counter. Nothing,
+    /// like `sign`, when `frame_auth` has no secret.
+    pub fn sign_p2p(
+        &mut self,
+        frame_auth: &obc_safety::frame_auth::FrameAuth,
+        identity: &obc_safety::node_identity::NodeIdentity,
+        counters: &obc_safety::frame_auth::OutboundCounters,
+        from: &str,
+        to: &str,
+    ) {
+        self.sign(frame_auth, counters, from);
+        self.sig = p2p_signature(
+            identity,
+            obc_safety::node_identity::FrameKind::Request,
+            (from, to),
+            self.ctr,
+            &self.signed_bytes(),
+        );
     }
 
     /// Attach a counter and tag for `key_node`, if `frame_auth` has a secret.
@@ -193,6 +221,10 @@ pub struct ToolCallResult {
     /// Truncated HMAC over the result body, hex. See `obc_safety::frame_auth`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mac: Option<String>,
+    /// Ed25519 signature by the answering node's own key, hex. P2P only; see
+    /// [`ToolCallRequest::sig`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sig: Option<String>,
 }
 
 impl ToolCallResult {
@@ -206,8 +238,62 @@ impl ToolCallResult {
         let mut unsigned = self.clone();
         unsigned.ctr = None;
         unsigned.mac = None;
+        unsigned.sig = None;
         serde_json::to_vec(&unsigned).unwrap_or_default()
     }
+
+    /// Sign `from`'s answer to `to`, as [`ToolCallRequest::sign_p2p`] does.
+    pub fn sign_p2p(
+        &mut self,
+        frame_auth: &obc_safety::frame_auth::FrameAuth,
+        identity: &obc_safety::node_identity::NodeIdentity,
+        counters: &obc_safety::frame_auth::OutboundCounters,
+        from: &str,
+        to: &str,
+    ) {
+        self.sign(frame_auth, counters, from);
+        self.sig = p2p_signature(
+            identity,
+            obc_safety::node_identity::FrameKind::Result,
+            (from, to),
+            self.ctr,
+            &self.signed_bytes(),
+        );
+    }
+
+    /// Attach a counter and tag for `key_node`, as [`ToolCallRequest::sign`]
+    /// does. A P2P node answering a call signs as itself.
+    pub fn sign(
+        &mut self,
+        frame_auth: &obc_safety::frame_auth::FrameAuth,
+        counters: &obc_safety::frame_auth::OutboundCounters,
+        key_node: &str,
+    ) {
+        if !frame_auth.is_enabled() {
+            return;
+        }
+        let Some(ctr) = counters.next(key_node) else {
+            tracing::error!(
+                node = %key_node,
+                "Outbound counter exhausted; sending unsigned. Re-provision this node's key."
+            );
+            return;
+        };
+        self.ctr = Some(ctr);
+        self.mac = frame_auth.tag_outbound(key_node, ctr, &self.signed_bytes());
+    }
+}
+
+/// `identity`'s signature over a P2P frame `sign` gave counter `ctr`; none
+/// when it gave none (no secret, or the counter ran out).
+fn p2p_signature(
+    identity: &obc_safety::node_identity::NodeIdentity,
+    kind: obc_safety::node_identity::FrameKind,
+    (from, to): (&str, &str),
+    ctr: Option<u32>,
+    payload: &[u8],
+) -> Option<String> {
+    ctr.map(|ctr| identity.sign_frame(kind, from, to, ctr, payload))
 }
 
 // ── Pending Call Registry ────────────────────────────────────────────────────
@@ -225,6 +311,18 @@ pub type MessageHandler = Arc<dyn Fn(&str, &[u8]) + Send + Sync>;
 
 /// Registered `(topic_filter, handler)` pairs the event loop dispatches to.
 type Handlers = Arc<std::sync::Mutex<Vec<(String, MessageHandler)>>>;
+
+/// Every filter the brain must hold on the broker: the two it always needs
+/// (announcements, tool results) followed by the handlers' own. Re-issued on
+/// each ConnAck, because a clean session forgets them across a reconnect.
+fn subscription_filters(handler_filters: &[String]) -> Vec<String> {
+    let mut filters = vec![
+        format!("{TOPIC_PREFIX}/nodes/+/announce"),
+        format!("{TOPIC_PREFIX}/tools/+/result/+"),
+    ];
+    filters.extend(handler_filters.iter().cloned());
+    filters
+}
 
 /// MQTT topic-filter match (`+` = one level, `#` = rest).
 pub fn topic_matches(filter: &str, topic: &str) -> bool {
@@ -369,13 +467,12 @@ impl SpineClient {
         let (client, mut event_loop) = AsyncClient::new(opts, 128);
         self.mqtt_client = Some(client.clone());
 
-        // Subscribe to node announcements and tool results
-        client
-            .subscribe(format!("{TOPIC_PREFIX}/nodes/+/announce"), QoS::AtLeastOnce)
-            .await?;
-        client
-            .subscribe(format!("{TOPIC_PREFIX}/tools/+/result/+"), QoS::AtLeastOnce)
-            .await?;
+        // Subscribe to node announcements and tool results. These are queued
+        // before the first ConnAck; every later ConnAck re-issues them (below).
+        for filter in subscription_filters(&[]) {
+            client.subscribe(filter, QoS::AtLeastOnce).await?;
+        }
+        let resubscriber = client.clone();
 
         let pending_calls = Arc::clone(&self.pending_calls);
         let node_registry = Arc::clone(&self.node_registry);
@@ -471,6 +568,25 @@ impl SpineClient {
                             }
                         }
                     }
+                    // The session is clean, so a broker that drops us forgets our
+                    // subscriptions, and rumqttc does not restore them. Without
+                    // this, announcements and results stop arriving after the
+                    // first reconnect and every tool call times out. `try_` because
+                    // this task is the request channel's only consumer: awaiting a
+                    // full channel here would wait on ourselves.
+                    Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                        let extra: Vec<String> = handlers
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .iter()
+                            .map(|(filter, _)| filter.clone())
+                            .collect();
+                        for filter in subscription_filters(&extra) {
+                            if let Err(e) = resubscriber.try_subscribe(&filter, QoS::AtLeastOnce) {
+                                tracing::warn!(%filter, "MQTT resubscribe after connect failed: {e}");
+                            }
+                        }
+                    }
                     Ok(_) => {}
                     Err(e) => {
                         tracing::warn!("MQTT event loop error: {}", e);
@@ -527,6 +643,7 @@ impl SpineClient {
             from: None,
             ctr: None,
             mac: None,
+            sig: None,
         };
         request.sign(&self.frame_auth, &self.out_counters, node_id);
 
@@ -535,9 +652,14 @@ impl SpineClient {
 
         let request_topic = topic_tool_call(node_id, tool_name);
         let payload = serde_json::to_vec(&request)?;
-        client
+        if let Err(e) = client
             .publish(request_topic, QoS::AtLeastOnce, false, payload)
-            .await?;
+            .await
+        {
+            // Nothing will ever answer a call that was never sent.
+            self.pending_calls.lock().await.remove(&call_id);
+            return Err(e.into());
+        }
 
         let timeout = Duration::from_secs(self.config.tool_timeout_secs);
         match tokio::time::timeout(timeout, rx).await {
@@ -709,6 +831,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn resubscription_covers_announces_results_and_every_handler() {
+        let filters = subscription_filters(&["obc/fleet/heartbeat/+".to_string()]);
+        // What a reconnect restores must still route what the brain listens for.
+        assert!(filters
+            .iter()
+            .any(|f| topic_matches(f, &topic_announce("node-1"))));
+        assert!(filters
+            .iter()
+            .any(|f| topic_matches(f, &topic_tool_result("node-1", "c-1"))));
+        assert!(filters.iter().any(|f| f == "obc/fleet/heartbeat/+"));
+    }
+
+    #[test]
     fn topic_matching_handles_wildcards() {
         assert!(topic_matches(
             "obc/fleet/heartbeat/+",
@@ -856,7 +991,8 @@ pub struct SpineConfig {
     /// Timeout in seconds for tool call responses from peripheral nodes.
     #[serde(default = "default_tool_timeout_secs")]
     pub tool_timeout_secs: u64,
-    // ── P2P-specific fields (used when `kind = "p2p"`) ─────────────────────
+    // ── P2P-specific fields (used when `[edge].p2p_enabled` joins the mesh) ──
+    // Read by `SpineConfig::p2p_config` (p2p.rs). `kind = "p2p"` is still refused.
     /// Unique identifier for this node in the P2P mesh.
     /// Defaults to a random UUID prefix if not set.
     #[serde(default)]

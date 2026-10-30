@@ -31,6 +31,11 @@ pub struct Board {
     pub i2c: Option<(i32, i32)>,
     /// Whether an I2S microphone is wirable and compiled in.
     pub has_mic: bool,
+    /// The DHT22 single-wire data pin, when this board has a free pad for one.
+    /// `None` means the reflex tick never touches the pin (2026-09-26): until
+    /// then the tick pulsed GPIO9 low every 2 s on every board, and on the
+    /// LILYGO T-CameraPlus-S3 GPIO9 is the camera's data line Y7.
+    pub dht22_gpio: Option<i32>,
 }
 
 /// Seeed XIAO ESP32-S3 (Sense) — the default build.
@@ -59,6 +64,9 @@ pub const XIAO_ESP32_S3: Board = Board {
     output_pins: &[21, 3, 7, 8],
     i2c: Some((5, 6)),
     has_mic: true,
+    // D10 (GPIO9): a free exposed pad clear of the outputs, the I2C bus and the
+    // I2S pins. Wire `out` here, `+`→3V3, `-`→GND.
+    dht22_gpio: Some(9),
 };
 
 /// Waveshare ESP32-S3-Touch-LCD-2.1 (`--features board-waveshare-21`).
@@ -72,6 +80,9 @@ pub const WAVESHARE_ESP32_S3_TOUCH_LCD_21: Board = Board {
     output_pins: &[43, 44],
     i2c: Some((15, 7)),
     has_mic: false,
+    // Header pin IO0, the board's one spare pin; needs a 10 kΩ pull-up to 3V3,
+    // which doubles as the BOOT strapping hold-high.
+    dht22_gpio: Some(0),
 };
 
 /// LILYGO T-CameraPlus-S3, revision **V1.0/V1.1** (`--features board-lilygo-tcam-s3-v11`).
@@ -111,6 +122,8 @@ pub const LILYGO_T_CAMERA_PLUS_S3_V11: Board = Board {
     output_pins: &[],
     i2c: None,
     has_mic: false,
+    // GPIO9 is camera Y7 here (`camera.rs`), and no other pad is documented free.
+    dht22_gpio: None,
 };
 
 /// The board this build targets. The only `#[cfg]` in this module.
@@ -129,8 +142,8 @@ pub const ACTIVE: Board = XIAO_ESP32_S3;
 
 /// The `tools` array, pre-rendered.
 ///
-/// It is the bulk of the reply and it never varies: ten objects, twenty string
-/// fields, identical on every board and every build. Building it as a `Value`
+/// It is the bulk of the reply and it never varies: eleven objects, twenty-two
+/// string fields, identical on every board and every build. Building it as a `Value`
 /// and serialising it cost more stack than the node had (see `describe_json`).
 /// As a `&'static str` it lives in flash and costs a memcpy.
 const TOOLS_JSON: &str = concat!(
@@ -140,6 +153,12 @@ const TOOLS_JSON: &str = concat!(
     // the Lilygo T-CameraPlus-S3 has an OV5640 (`Camera PID=0x5640`, measured).
     // A node announcing "OV2640" to a host on that board is simply wrong.
     r#"{"name":"camera_capture","description":"Capture a JPEG image from the camera."},"#,
+    // Added 2026-09-17. The node decides for itself whether something happened,
+    // because G2 is a summary on the air and 228 bytes will not carry a picture.
+    // The description says "reports" rather than "detects motion" on purpose: a
+    // lamp switching and the camera being knocked are reportable states, not
+    // detections, and the reply distinguishes them.
+    r#"{"name":"camera_detect","description":"Compare this frame to the last one and report what changed."},"#,
     r#"{"name":"audio_sample","description":"Sample audio from the I2S microphone."},"#,
     r#"{"name":"sensor_read","description":"Read a value from an I2C/SPI sensor."},"#,
     r#"{"name":"set_reflex_rules","description":"Push the on-MCU reflex (System 1) rule set."},"#,
@@ -243,6 +262,7 @@ pub fn describe(
             {"name": "gpio_read", "description": "Read a GPIO pin value (0 or 1)."},
             {"name": "gpio_write", "description": "Set a GPIO pin high (1) or low (0)."},
             {"name": "camera_capture", "description": "Capture a JPEG image from the camera."},
+            {"name": "camera_detect", "description": "Compare this frame to the last one and report what changed."},
             {"name": "audio_sample", "description": "Sample audio from the I2S microphone."},
             {"name": "sensor_read", "description": "Read a value from an I2C/SPI sensor."},
             {"name": "set_reflex_rules", "description": "Push the on-MCU reflex (System 1) rule set."},

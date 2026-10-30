@@ -34,6 +34,25 @@ pub const ROSTER: &[(&str, &str)] = &[
     // what the fallback is for, and it is also why rostering is not urgent —
     // only tidy. The derived name is correct, just unreadable.
     ("48:CA:43:4B:95:F8", "obc-esp32-s3-003"),
+    // Spare XIAO ESP32S3. MAC read from Windows PnP 2026-09-25, where native
+    // USB carries it as the composite device's serial:
+    //   USB\VID_303A&PID_1001\64:E8:33:7F:84:CC
+    //
+    // It had been on the bench unrostered, self-naming `obc-esp32-s3-7f84cc`.
+    // Same OUI as 001 and 002; its fourth byte (7F) is the first to differ from
+    // theirs (7E), so it was never at risk of a name collision either way.
+    ("64:E8:33:7F:84:CC", "obc-esp32-s3-004"),
+    // Second XIAO ESP32S3 Sense, fitted with an OV3660 (PID 0x3660 at SCCB
+    // 0x3c) where 002 has an OV2640. MAC read by espflash while flashing it,
+    // 2026-09-25:
+    //   MAC address: ac:27:6e:a8:4d:e4
+    //
+    // A different OUI from the other XIAOs (AC:27:6E rather than 64:E8:33),
+    // so the Seeed parts on this bench come from more than one batch. It ran
+    // unrostered as `obc-esp32-s3-a84de4` while it served as the second board
+    // that cleared the Sense capture fault: 10/10 frames once the I2S mic
+    // stopped resetting the camera's GDMA channel.
+    ("AC:27:6E:A8:4D:E4", "obc-esp32-s3-005"),
 ];
 
 /// What a board calls itself when its MAC cannot be read at all.

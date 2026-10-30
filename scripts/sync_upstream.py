@@ -22,7 +22,7 @@ Usage
     python scripts/sync_upstream.py selftest
 
 `sync`  copies upstream -> here, rewrites parity/MANIFEST.json, and with --peer
-        also updates the generator app's mirrors (12 of the 237 artifacts).
+        also updates the generator app's mirrors (12 of the 242 artifacts).
         With --rebuild-wasm it runs wasm-pack in the upstream repo first and
         records what the bundle was compiled from. Without it, the previous
         build-input hashes are carried forward unchanged — and it now REFUSES
@@ -187,12 +187,11 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-memory/src/embed.rs",
      "crates/obc-memory/src/embed.rs",
      None),
-    ("crates/obc-memory/src/heartbeat.rs",
-     "crates/obc-memory/src/heartbeat.rs",
-     None),
-    ("crates/obc-memory/src/journal.rs",
-     "crates/obc-memory/src/journal.rs",
-     None),
+    # `heartbeat.rs` and `journal.rs` were deleted upstream on 2026-10-30
+    # (70e080d, "roadmap: settle the last eight [~] rows"): neither had a
+    # caller, and `lib.rs` no longer declares them. Removed here in the same
+    # sync, because `sync` never deletes and a file nothing declares is the
+    # drift `undeclared_vendored_files` exists to catch.
     # `vector.rs` (VectorStore, EmbeddingClient — zero callers since the tool
     # impls were struck on 2026-07-30) was deleted upstream on 2026-09-12 and
     # `mushroom.rs` arrived in the same change: the sparse-expansion memory
@@ -359,6 +358,13 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
      None),
     ("crates/obc-safety/src/pairing.rs",
      "crates/obc-safety/src/pairing.rs",
+     None),
+    # Per-node Ed25519 identities (2026-10-30, 445d050, "p2p: a frame proves
+    # which node sent it"). `lib.rs` declares `pub mod node_identity;`, so
+    # vendoring the new `lib.rs` without this entry leaves a tree that cannot
+    # compile. Pure logic like `pairing.rs` beside it, and tested here.
+    ("crates/obc-safety/src/node_identity.rs",
+     "crates/obc-safety/src/node_identity.rs",
      None),
     ("crates/obc-safety/src/policy.rs",
      "crates/obc-safety/src/policy.rs",
@@ -1236,6 +1242,24 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     ("crates/obc-vision/src/clawcam_spatial.rs",
      "crates/obc-vision/src/clawcam_spatial.rs",
      None),
+    # The camera's own condition and what it saw move (2026-09-16 to
+    # 2026-10-13: b749dba motion, 6b53a74 jpeg, 73fe239 camera_percepts,
+    # 4dd1261 camera_health). `lib.rs` declares all four as `pub mod`, so the
+    # crate does not compile without them. Their fixture tests are recorded
+    # in UPSTREAM_TREES instead: they read 1.6 MB of bench JPEGs from
+    # upstream `tests/fixtures/`, outside every vendored tree.
+    ("crates/obc-vision/src/motion.rs",
+     "crates/obc-vision/src/motion.rs",
+     None),
+    ("crates/obc-vision/src/jpeg.rs",
+     "crates/obc-vision/src/jpeg.rs",
+     None),
+    ("crates/obc-vision/src/camera_percepts.rs",
+     "crates/obc-vision/src/camera_percepts.rs",
+     None),
+    ("crates/obc-vision/src/camera_health.rs",
+     "crates/obc-vision/src/camera_health.rs",
+     None),
 
     # ── A bound that traces to a datasheet ───────────────────────────────────
     # Vendored 2026-09-06, the twenty-eighth crate. `obc-body` reads ClawBot's
@@ -1475,6 +1499,17 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     # has earned itself in one day.
     ("firmware/obc-esp32-s3/src/sensor_math.rs",
      "firmware/obc-esp32-s3/src/sensor_math.rs",
+     None),
+    # Added 2026-10-30, caught by the same gate a third time: `main.rs` now
+    # declares `mod detector_math;` (664bda2, 2026-09-17, "detector: the node
+    # decides for itself, and says when it cannot") and `mod mesh_reply;`
+    # (a0edc94, 2026-10-30). `check` reported every artifact identical with both
+    # missing.
+    ("firmware/obc-esp32-s3/src/detector_math.rs",
+     "firmware/obc-esp32-s3/src/detector_math.rs",
+     None),
+    ("firmware/obc-esp32-s3/src/mesh_reply.rs",
+     "firmware/obc-esp32-s3/src/mesh_reply.rs",
      None),
     ("firmware/obc-esp32-s3/src/safety.rs",
      "firmware/obc-esp32-s3/src/safety.rs",
@@ -1785,6 +1820,16 @@ UPSTREAM_TREES: dict[str, set[str]] = {
         # were already all here, which is the practical half of the same fact.
         "crates/obc-channels/",
         "crates/obc-gateway/",
+        # Added 2026-10-30. Not a crate this time: three test files in a crate
+        # that is vendored. Each reads `../../tests/fixtures/vision-bench-
+        # 2026-09-16`, 152 files and 1.6 MB of bench JPEGs that sit outside
+        # every vendored tree. Vendoring the tests without the bench fails to
+        # build; vendoring the bench makes this repository a photo archive to
+        # carry one detector's regression fixture. The detectors themselves
+        # are vendored and keep their unit tests.
+        "crates/obc-vision/tests/camera_health_fixture.rs",
+        "crates/obc-vision/tests/motion_fixture.rs",
+        "crates/obc-vision/tests/common/mod.rs",
     },
 }
 

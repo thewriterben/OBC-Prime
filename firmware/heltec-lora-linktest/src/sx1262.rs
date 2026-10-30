@@ -54,6 +54,16 @@ const OP_GET_IRQ_STATUS: u8 = 0x12;
 const OP_CLEAR_IRQ_STATUS: u8 = 0x02;
 const OP_GET_RX_BUFFER_STATUS: u8 = 0x13;
 const OP_GET_PACKET_STATUS: u8 = 0x14;
+const OP_SET_CAD_PARAMS: u8 = 0x88;
+const OP_SET_CAD: u8 = 0xC5;
+
+// Channel Activity Detection at SF7 / BW125, per Semtech AN1200.48's table for
+// that pair: two symbols (~2 ms), detection peak 22, minimum 10, CAD only (the
+// chip returns to standby, and `receive` re-arms RX on its next call).
+const CAD_ON_2_SYMB: u8 = 0x01;
+const CAD_DET_PEAK: u8 = 22;
+const CAD_DET_MIN: u8 = 10;
+const CAD_EXIT_CAD_ONLY: u8 = 0x00;
 
 // LoRa sync-word register (private network = 0x1424).
 const REG_LORA_SYNCWORD_MSB: u16 = 0x0740;
@@ -61,7 +71,11 @@ const REG_LORA_SYNCWORD_MSB: u16 = 0x0740;
 // IRQ bits.
 const IRQ_TX_DONE: u16 = 0x0001;
 const IRQ_RX_DONE: u16 = 0x0002;
+const IRQ_HEADER_VALID: u16 = 0x0010;
+const IRQ_HEADER_ERR: u16 = 0x0020;
 const IRQ_CRC_ERR: u16 = 0x0040;
+const IRQ_CAD_DONE: u16 = 0x0080;
+const IRQ_CAD_DETECTED: u16 = 0x0100;
 const IRQ_TIMEOUT: u16 = 0x0200;
 
 #[inline]
@@ -243,8 +257,32 @@ impl Sx1262 {
         // Private-network sync word 0x1424 (both nodes must match).
         self.write_register(REG_LORA_SYNCWORD_MSB, &[0x14, 0x24])?;
 
-        // Route TxDone | RxDone | Timeout to the IRQ register (and DIO1).
-        let mask = IRQ_TX_DONE | IRQ_RX_DONE | IRQ_TIMEOUT;
+        // Route TxDone | RxDone | HeaderErr | CrcErr | Timeout to the IRQ
+        // register (and DIO1).
+        //
+        // The IrqMask decides which bits the chip ever sets in the status
+        // register, not just which ones reach DIO1: a masked IRQ is never raised
+        // (SX1261/2 datasheet, SetDioIrqParams). Until 2026-09-25 the mask was
+        // TxDone | RxDone | Timeout only. `receive` tested IRQ_CRC_ERR anyway, so
+        // its "CRC error" warning could not fire, and no bench log has ever shown
+        // one. A frame that failed its CRC still raised RxDone, was read out as if
+        // it were good, and died later as `REJECTED … bad tag` or `runt` (which
+        // nothing counted). A frame whose *header* failed raises HeaderErr and never
+        // RxDone, so it vanished with no line at all. Both are now visible, which is
+        // what the baseline-loss hunt (scripts/mesh_loss.py) needs in order to tell
+        // "arrived broken" from "never arrived".
+        //
+        // HeaderValid, CadDone and CadDetected are in the mask for `channel_busy`,
+        // for the same reason: a bit left out of the mask never latches, so a
+        // listen-before-talk that polled them would always read "clear".
+        let mask = IRQ_TX_DONE
+            | IRQ_RX_DONE
+            | IRQ_HEADER_VALID
+            | IRQ_HEADER_ERR
+            | IRQ_CRC_ERR
+            | IRQ_CAD_DONE
+            | IRQ_CAD_DETECTED
+            | IRQ_TIMEOUT;
         self.cmd(
             OP_SET_DIO_IRQ_PARAMS,
             &[
@@ -295,6 +333,62 @@ impl Sx1262 {
         }
     }
 
+    /// Is another radio on the air right now? Listen-before-talk.
+    ///
+    /// Measured 2026-09-25 (`scripts/mesh_loss.py`, 545 frames, 45 min): every
+    /// one of the 50 frames gw-40 lost from gw-D8 was on the air while gw-40 was
+    /// transmitting its own keepalive. A half-duplex radio cannot hear while it
+    /// talks, so a station that talks over an incoming frame loses it outright.
+    ///
+    /// Two checks, cheapest and least disruptive first:
+    ///
+    /// 1. **Already receiving.** In continuous RX the chip raises HeaderValid as
+    ///    soon as a frame with our sync word and a good header starts arriving,
+    ///    and it stays set until `receive` clears it at RxDone. If it is set, a
+    ///    frame is on its way in (or waiting to be read). Answer "busy" WITHOUT
+    ///    touching the radio: a trip through standby for CAD would abort the
+    ///    very frame this check exists to protect.
+    /// 2. **CAD.** Otherwise run Channel Activity Detection (~2 ms). It also
+    ///    catches a frame whose preamble went by while this radio was
+    ///    transmitting or in standby, and LoRa from any network, not just ours.
+    ///
+    /// Afterwards the chip is in standby, and the next `receive` call re-arms
+    /// continuous RX, the same hand-back `transmit` already relies on.
+    pub fn channel_busy(&mut self) -> Result<bool> {
+        if self.listening && self.irq_status()? & IRQ_HEADER_VALID != 0 {
+            return Ok(true);
+        }
+        self.listening = false;
+        self.cmd(OP_SET_STANDBY, &[0x00])?;
+        self.cmd(
+            OP_SET_CAD_PARAMS,
+            &[
+                CAD_ON_2_SYMB,
+                CAD_DET_PEAK,
+                CAD_DET_MIN,
+                CAD_EXIT_CAD_ONLY,
+                0x00,
+                0x00,
+                0x00, // cadTimeout: only used by CAD_RX exit mode
+            ],
+        )?;
+        self.clear_irq()?;
+        self.cmd(OP_SET_CAD, &[])?;
+        let start = now_us();
+        loop {
+            let irq = self.irq_status()?;
+            if irq & IRQ_CAD_DONE != 0 {
+                self.clear_irq()?;
+                return Ok(irq & IRQ_CAD_DETECTED != 0);
+            }
+            if now_us() - start > 50_000 {
+                self.clear_irq()?;
+                bail!("SX1262 CadDone timeout");
+            }
+            Ets::delay_us(200);
+        }
+    }
+
     /// Poll for a frame for up to `timeout_ms`, keeping the radio in
     /// **continuous RX** between calls. `Ok(None)` when nothing usable arrived —
     /// but the ways that happens are not equivalent, and the noisy one is logged:
@@ -332,6 +426,12 @@ impl Sx1262 {
             let irq = self.irq_status()?;
             if irq & IRQ_RX_DONE != 0 {
                 self.clear_irq()?;
+                if irq & IRQ_HEADER_ERR != 0 {
+                    // A header error latched earlier in this poll and a frame has
+                    // since arrived. RxDone is handled first so that frame is not
+                    // lost; the clear above erases the header error, so count it here.
+                    warn!("SX1262 RX: header error — frame arrived with a corrupt header and was dropped");
+                }
                 if irq & IRQ_CRC_ERR != 0 {
                     // A frame arrived and was corrupt. Dropping it silently is what made
                     // the 2026-07-17 saturation hunt cost an evening: 205-byte report
@@ -364,6 +464,18 @@ impl Sx1262 {
                     rssi_dbm: -(ps[1] as i16) / 2,
                     snr_db: (ps[2] as i8) / 4,
                 }));
+            }
+            if irq & IRQ_HEADER_ERR != 0 {
+                // A LoRa header failed its checksum: a frame started and was
+                // unreadable from its first bytes. RxDone never follows, and in
+                // continuous RX the chip stays listening. The packet-status RSSI
+                // is not defined for a packet that was never received, so none is
+                // printed; the line's presence is the measurement.
+                self.clear_irq()?;
+                warn!(
+                    "SX1262 RX: header error — frame arrived with a corrupt header and was dropped"
+                );
+                return Ok(None);
             }
             if irq & IRQ_TIMEOUT != 0 {
                 // Continuous RX never times out on its own; if the chip says it
