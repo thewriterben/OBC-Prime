@@ -1155,17 +1155,20 @@ ARTIFACTS: list[tuple[str, str, dict[str, str] | None]] = [
     # and arming is all this tool does. A scheduled `gpio_write` is gated as
     # `gpio_write`.
     #
-    # Two things that trace turned up, neither a blocker, both upstream's:
-    #   * **Nothing tests it.** The property holds by construction; no test
-    #     asserts that a scheduled physical action meets the gate. A refactor
-    #     giving the scheduler its own execution path would remove Track 0 from
-    #     every deferred action silently.
-    #   * **`taint` is None on this path.** Justified upstream as "a standalone
-    #     call has no prior in-run external content to be tainted by", which was
-    #     written for the gateway's POST endpoint. A scheduled call's args were
-    #     authored in an earlier turn that may well have held external content,
-    #     so the taint pool does not cross the scheduling boundary. The safety
-    #     gate and the audit still run; it is the scanning layer that does not.
+    # Two things that trace turned up, both since settled upstream (Oh-Ben-Claw
+    # #205, merged 2026-10-30):
+    #   * **It is tested now.** Upstream `crates/obc-agent/tests/
+    #     scheduled_track0.rs` drives the real scheduler loop: an in-limit
+    #     physical call is audited before it runs, an over-limit one is refused,
+    #     audited and not run. The tests live in obc-agent, so they run there,
+    #     not here.
+    #   * **`taint` is None on this path, by decision.** The args are scanned
+    #     when the call is *scheduled*: `schedule` is irreversible, so the taint
+    #     gate covers it and the scan walks into the nested `tool_args`. A pin
+    #     lifted from fetched text is refused before the task is stored. Two
+    #     gaps stay open on upstream's ROADMAP Track 0: an explicit grant on
+    #     `schedule` waives the scan for whatever it stores, and a fired
+    #     `prompt` turn starts with an empty pool.
     ("crates/obc-tools/src/builtin/schedule.rs",
      "crates/obc-tools/src/builtin/schedule.rs",
      None),
